@@ -1,0 +1,5 @@
+tqdm
+scipy
+matplotlib
+configargparse
+tensorflow

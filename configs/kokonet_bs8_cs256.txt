@@ -1,0 +1,22 @@
+# settings for kokonet
+
+data-folder = /scratch/project_2006339/rahmanau/aerialimages
+
+model = kokonet
+
+train-crop-size = 256
+test-crop-size = 512
+
+input-channels = 4
+output-channels = 1
+
+epochs = 100
+
+train-batch-size = 8
+test-batch-size = 8
+
+output-dir = output
+
+model-weights = best # available options [best, latest, retrain]
+
+val-size = 0.2
