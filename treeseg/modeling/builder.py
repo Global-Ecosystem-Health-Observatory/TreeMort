@@ -18,6 +18,6 @@ def build_model(model_name, input_channels, output_channels):
 
     optimizer = tf.keras.optimizers.Adam(learning_rate=2e-4)
 
-    model.compile(optimizer=optimizer, loss="mse")
+    model.compile(optimizer=optimizer, loss="binary_crossentropy", metrics=['accuracy'])
 
     return model

@@ -30,10 +30,9 @@ def load_numpy(image_path, label_path, crop_size):
 
 
 def normalize_inputs(image_tf, label_tf):
-    image_tf = (image_tf / 127.5) - 1.0  # rescale to range [-1, +1]
+    image_tf = image_tf / 255.0
 
-    label_tf = label_tf / 255.0  # rescale to range [0, +1]
-    label_tf = label_tf - tf.cast(label_tf == 0, tf.float32)  # set 0 (background) to -1
+    label_tf = tf.cast(label_tf > 0, tf.float32)
 
     return image_tf, label_tf
 

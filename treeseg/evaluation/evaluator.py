@@ -3,7 +3,7 @@ from treeseg.utils.iou import IOUCallback
 
 def evaluator(model, dataset, num_samples, batch_size):
     iou_callback = IOUCallback(
-        model, dataset=dataset, num_samples=num_samples, batch_size=batch_size
+        model, dataset=dataset, num_samples=num_samples, batch_size=batch_size, threshold=0.5
     )
 
     iou_results = iou_callback.evaluate()

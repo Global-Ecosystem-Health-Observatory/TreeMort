@@ -67,7 +67,7 @@ def ASPP(inputs, num_filters, atrous_rates):
     return x
 
 
-def Kokonet(input_shape=[512, 512, 8], output_channels=1, activation="tanh"):
+def Kokonet(input_shape=[512, 512, 8], output_channels=1, activation="sigmoid"):
     input = tf.keras.layers.Input(shape=input_shape)
     x_1 = cbr(input, 32, size=1, strides=1)
     # to 1/2 size
@@ -97,7 +97,6 @@ def Kokonet(input_shape=[512, 512, 8], output_channels=1, activation="tanh"):
         padding="same",
         name="segmentationmap",
         activation=activation,
-    )(
-        fex_out
-    )  # activation from -1...1
+    )(fex_out)
+
     return tf.keras.Model(inputs=input, outputs=output)
