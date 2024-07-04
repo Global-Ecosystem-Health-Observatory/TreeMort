@@ -10,6 +10,8 @@ def get_checkpoint(model_weights, output_dir):
     checkpoint = None
     if model_weights == "best":
         checkpoint = os.path.join(checkpoint_dir, "best.weights.h5")
+        
+        assert os.path.exists(checkpoint), f"Best weights file {checkpoint} does not exist."
 
     elif model_weights == "latest":
         checkpoint = tf.train.latest_checkpoint(checkpoint_dir)

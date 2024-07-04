@@ -2,15 +2,16 @@ import tensorflow as tf
 from segmentation_models import Unet
 from segmentation_models import get_preprocessing
 
-# Define the HRNet backbone
-BACKBONE = 'efficientnetb0'
+BACKBONE = "efficientnetb0"
 preprocess_input = get_preprocessing(BACKBONE)
+
 
 def cbr(x, filters, size=1, strides=1):
     x = tf.keras.layers.Conv2D(filters, size, strides=strides, padding="same")(x)
     x = tf.keras.layers.BatchNormalization()(x)
     x = tf.keras.layers.Activation(tf.nn.relu6)(x)
     return x
+
 
 def up_cbr(input_tensor, n_filters, name, kernel_size=3):
     x = tf.keras.layers.Conv2DTranspose(
@@ -25,6 +26,7 @@ def up_cbr(input_tensor, n_filters, name, kernel_size=3):
     x = tf.keras.layers.BatchNormalization(name=(name + "_conv2dT_BN"))(x)
     x = tf.keras.layers.Activation("relu", name=(name + "_conv2dT_RELU"))(x)
     return x
+
 
 def ASPP(inputs, num_filters, atrous_rates):
     x = inputs
@@ -42,6 +44,7 @@ def ASPP(inputs, num_filters, atrous_rates):
     x = tf.keras.layers.Activation("relu")(x)
     return x
 
+
 def Kokonet_hrnet(input_shape=(256, 256, 4), output_channels=1, activation="tanh"):
     # Input layer to match aerial imagery shape (256, 256, 4)
     inputs = tf.keras.layers.Input(shape=input_shape)
@@ -51,12 +54,18 @@ def Kokonet_hrnet(input_shape=(256, 256, 4), output_channels=1, activation="tanh
     adjusted_inputs = preprocess_input(adjusted_inputs)
 
     # Create the HRNet backbone model
-    base_model = Unet(BACKBONE, input_shape=(input_shape[0], input_shape[1], 3), encoder_weights='imagenet', classes=output_channels, activation=None)
+    base_model = Unet(
+        BACKBONE,
+        input_shape=(input_shape[0], input_shape[1], 3),
+        encoder_weights="imagenet",
+        classes=output_channels,
+        activation=None,
+    )
 
     # Extract intermediate layers
     hrnet_features = [
         base_model.get_layer(name).output
-        for name in ['block1a_activation', 'block2a_activation', 'block3a_activation']
+        for name in ["block1a_activation", "block2a_activation", "block3a_activation"]
     ]
 
     # Ensure the HRNet model is properly connected
@@ -90,7 +99,7 @@ def Kokonet_hrnet(input_shape=(256, 256, 4), output_channels=1, activation="tanh
         (1, 1),
         padding="same",
         name="segmentationmap",
-        activation=activation
+        activation=activation,
     )(u_0)
 
     return tf.keras.Model(inputs=inputs, outputs=output)
