@@ -45,7 +45,7 @@ def prepare_dataset(
         train_dataset_paths.map(load_and_crop, num_parallel_calls=tf.data.AUTOTUNE)
         .map(apply_augmentation, num_parallel_calls=tf.data.AUTOTUNE)
         .map(preprocess, num_parallel_calls=tf.data.AUTOTUNE)
-        .repeat(2)
+        .repeat()
         .batch(batch_size)
         .prefetch(tf.data.AUTOTUNE)
     )
@@ -54,7 +54,7 @@ def prepare_dataset(
         val_dataset = (
             val_dataset_paths.map(load_and_crop, num_parallel_calls=tf.data.AUTOTUNE)
             .map(preprocess, num_parallel_calls=tf.data.AUTOTUNE)
-            .repeat(2)
+            .repeat()
             .batch(batch_size)
             .prefetch(tf.data.AUTOTUNE)
         )

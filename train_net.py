@@ -9,7 +9,6 @@ from treeseg.data.imagepaths import get_image_label_paths
 from treeseg.modeling.trainer import resume_or_load, trainer
 from treeseg.evaluation.evaluator import evaluator
 
-
 def run(conf, eval_only):
     assert os.path.exists(
         conf.data_folder

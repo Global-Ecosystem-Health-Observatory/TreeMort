@@ -6,48 +6,6 @@ from segmentation_models import get_preprocessing
 BACKBONE = 'efficientnetb0'
 preprocess_input = get_preprocessing(BACKBONE)
 
-def Kokonet_hrnet(input_shape=(256, 256, 4), output_channels=1, activation="tanh"):
-    # Input layer to match aerial imagery shape (256, 256, 4)
-    inputs = tf.keras.layers.Input(shape=input_shape)
-
-    # Adjust input channels to 3 to match HRNet requirements
-    adjusted_inputs = tf.keras.layers.Conv2D(3, (1, 1), padding="same")(inputs)
-    adjusted_inputs = preprocess_input(adjusted_inputs)
-
-    # Create the HRNet backbone model
-    hrnet_backbone = Unet(BACKBONE, input_shape=(256, 256, 3), encoder_weights='imagenet', classes=output_channels, activation=None)
-    
-    # Extract features from the HRNet backbone
-    hrnet_features = hrnet_backbone.encoder(adjusted_inputs)
-    
-    # Example feature layers extraction
-    x_1 = hrnet_features[0]  # Extract intermediate feature layer
-    x_2 = hrnet_features[1]
-    x_4 = hrnet_features[2]
-
-    # Apply ASPP
-    aspp = ASPP(x_4, 256, atrous_rates=[2, 4, 8])
-
-    # Decoder: upsampling and concatenation
-    concat = tf.keras.layers.Concatenate()
-    u_2 = up_cbr(aspp, n_filters=128, name="up_cbr_2", kernel_size=3)
-    u_2 = concat([u_2, x_2])
-    u_2 = cbr(u_2, 64, size=1, strides=1)
-    u_1 = up_cbr(u_2, n_filters=32, name="up_cbr_1", kernel_size=3)
-    u_1 = concat([u_1, x_1])
-    u_1 = cbr(u_1, 32, size=1, strides=1)
-    
-    # Final output layer
-    output = tf.keras.layers.Conv2D(
-        output_channels,
-        (1, 1),
-        padding="same",
-        name="segmentationmap",
-        activation=activation
-    )(u_1)
-
-    return tf.keras.Model(inputs=inputs, outputs=output)
-
 def cbr(x, filters, size=1, strides=1):
     x = tf.keras.layers.Conv2D(filters, size, strides=strides, padding="same")(x)
     x = tf.keras.layers.BatchNormalization()(x)
@@ -83,3 +41,56 @@ def ASPP(inputs, num_filters, atrous_rates):
     x = tf.keras.layers.BatchNormalization()(x)
     x = tf.keras.layers.Activation("relu")(x)
     return x
+
+def Kokonet_hrnet(input_shape=(256, 256, 4), output_channels=1, activation="tanh"):
+    # Input layer to match aerial imagery shape (256, 256, 4)
+    inputs = tf.keras.layers.Input(shape=input_shape)
+
+    # Adjust input channels to 3 to match HRNet requirements
+    adjusted_inputs = tf.keras.layers.Conv2D(3, (1, 1), padding="same")(inputs)
+    adjusted_inputs = preprocess_input(adjusted_inputs)
+
+    # Create the HRNet backbone model
+    base_model = Unet(BACKBONE, input_shape=(256, 256, 3), encoder_weights='imagenet', classes=output_channels, activation=None)
+
+    # Extract intermediate layers
+    hrnet_features = [
+        base_model.get_layer(name).output
+        for name in ['block1a_activation', 'block2a_activation', 'block3a_activation']
+    ]
+
+    # Ensure the HRNet model is properly connected
+    model = tf.keras.Model(inputs=base_model.input, outputs=hrnet_features)
+    model_out = model(adjusted_inputs)
+
+    # Example feature layers extraction
+    x_1 = model_out[0]  # Extract intermediate feature layer
+    x_2 = model_out[1]
+    x_4 = model_out[2]
+
+    # Apply ASPP
+    aspp = ASPP(x_4, 256, atrous_rates=[2, 4, 8])
+
+    # Decoder: upsampling and concatenation
+    concat = tf.keras.layers.Concatenate()
+    u_2 = up_cbr(aspp, n_filters=128, name="up_cbr_2", kernel_size=3)
+    u_2 = concat([u_2, x_2])
+    u_2 = cbr(u_2, 64, size=1, strides=1)
+    u_1 = up_cbr(u_2, n_filters=32, name="up_cbr_1", kernel_size=3)
+    u_1 = concat([u_1, x_1])
+    u_1 = cbr(u_1, 32, size=1, strides=1)
+
+    # Ensure the final upsampling to match the input dimensions
+    u_0 = up_cbr(u_1, n_filters=32, name="up_cbr_0", kernel_size=3)
+    u_0 = cbr(u_0, 32, size=1, strides=1)
+
+    # Final output layer
+    output = tf.keras.layers.Conv2D(
+        output_channels,
+        (1, 1),
+        padding="same",
+        name="segmentationmap",
+        activation=activation
+    )(u_0)
+
+    return tf.keras.Model(inputs=inputs, outputs=output)
