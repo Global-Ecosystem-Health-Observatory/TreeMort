@@ -51,7 +51,7 @@ def Kokonet_hrnet(input_shape=(256, 256, 4), output_channels=1, activation="tanh
     adjusted_inputs = preprocess_input(adjusted_inputs)
 
     # Create the HRNet backbone model
-    base_model = Unet(BACKBONE, input_shape=(256, 256, 3), encoder_weights='imagenet', classes=output_channels, activation=None)
+    base_model = Unet(BACKBONE, input_shape=(input_shape[0], input_shape[1], 3), encoder_weights='imagenet', classes=output_channels, activation=None)
 
     # Extract intermediate layers
     hrnet_features = [
