@@ -13,7 +13,7 @@ def build_model(model_name, input_channels, output_channels):
         model = Kokonet(
             input_shape=[None, None, input_channels],
             output_channels=output_channels,
-            activation="tanh",
+            activation="sigmoid",
         )
 
     optimizer = tf.keras.optimizers.Adam(learning_rate=2e-4)

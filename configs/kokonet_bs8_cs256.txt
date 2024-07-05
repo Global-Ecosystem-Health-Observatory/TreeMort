@@ -1,6 +1,6 @@
 # settings for kokonet
 
-data-folder = /scratch/project_2006339/rahmanau/aerialimages
+data-folder = /scratch/project_2008436/rahmanan/AerialImageModel_ITD
 
 model = kokonet
 
@@ -17,6 +17,6 @@ test-batch-size = 8
 
 output-dir = output
 
-model-weights = best # available options [best, latest, retrain]
+model-weights = retrain # available options [best, latest, retrain]
 
 val-size = 0.2
