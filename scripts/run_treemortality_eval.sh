@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=tree-mortality
-#SBATCH --account=project_2006339
+#SBATCH --account=project_2008436
 #SBATCH --output=output/stdout/%A_%a
 #SBATCH --ntasks=1 --cpus-per-task=4
 #SBATCH --mem-per-cpu=32G

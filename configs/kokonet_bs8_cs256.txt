@@ -1,6 +1,7 @@
 # settings for kokonet
 
-data-folder = /scratch/project_2006339/rahmanau/aerialimages
+data-folder = /Users/anis/Documents/AerialImageModel_ITD
+# data-folder = /scratch/project_2008436/rahmanan/AerialImageModel_ITD
 
 model = kokonet
 
@@ -15,8 +16,10 @@ epochs = 100
 train-batch-size = 8
 test-batch-size = 8
 
-output-dir = output
-
-model-weights = best # available options [best, latest, retrain]
+learning-rate = 1e-4
 
 val-size = 0.2
+
+output-dir = output
+
+model-weights = best # available options [best, latest]

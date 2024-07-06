@@ -3,35 +3,20 @@ import math
 
 import tensorflow as tf
 
-from treeseg.modeling.builder import build_model
 from treeseg.utils.callbacks import build_callbacks
-from treeseg.utils.checkpoints import get_checkpoint
 
 
-def resume_or_load(conf):
-    model = build_model(conf.model, conf.input_channels, conf.output_channels)
-
-    checkpoint = get_checkpoint(conf.model_weights, conf.output_dir)
-
-    if checkpoint:
-        model.load_weights(checkpoint, skip_mismatch=True)
-        print(f"Loaded weights from {checkpoint}")
-
-    else:
-        print("No checkpoint found. Proceeding without loading weights.")
-
-        # assert not conf.eval_only, "The number of image and label paths should be the same."
-
-    return model
-
-
-def trainer(model, train_dataset, val_dataset, num_train_samples, conf):
+def trainer(model, train_dataset, val_dataset, num_train_samples, conf, experiment_name="training_1"):
     num_val_samples = int(conf.val_size * num_train_samples)
     num_train_batches = math.ceil(
         (num_train_samples - num_val_samples) / conf.train_batch_size
     )
 
-    callbacks = build_callbacks(num_train_batches, conf.output_dir)
+    output_dir = os.path.join(conf.output_dir, experiment_name)
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    callbacks = build_callbacks(num_train_batches, output_dir)
 
     model.fit(
         train_dataset,

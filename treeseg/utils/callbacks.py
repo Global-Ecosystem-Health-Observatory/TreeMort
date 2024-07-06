@@ -16,7 +16,7 @@ def build_callbacks(n_batches, output_dir):
     )
 
     best_checkpoint_cb = tf.keras.callbacks.ModelCheckpoint(
-        os.path.join(checkpoint_dir, "best.weights.h5"),
+        os.path.join(output_dir, "best.weights.h5"),
         monitor="val_loss",
         mode="min",
         save_weights_only=True,
@@ -29,14 +29,14 @@ def build_callbacks(n_batches, output_dir):
     )
 
     early_stop_cb = tf.keras.callbacks.EarlyStopping(
-        patience=25, verbose=1, restore_best_weights=False
+        patience=25, restore_best_weights=False, verbose=1
     )
 
     callbacks = [
         checkpoint_cb,
         best_checkpoint_cb,
         reduce_lr_cb,
-        # early_stop_cb,
+        early_stop_cb,
     ]
 
     return callbacks
