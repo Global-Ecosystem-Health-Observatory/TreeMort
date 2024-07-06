@@ -5,7 +5,7 @@ data-folder = /scratch/project_2008436/rahmanan/AerialImageModel_ITD
 model = kokonet_hrnet
 
 train-crop-size = 256
-test-crop-size = 512
+test-crop-size = 256
 
 input-channels = 4
 output-channels = 1

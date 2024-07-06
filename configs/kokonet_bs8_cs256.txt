@@ -15,8 +15,10 @@ epochs = 100
 train-batch-size = 8
 test-batch-size = 8
 
-output-dir = output
-
-model-weights = best # available options [best, latest, retrain]
+learning-rate = 1e-4
 
 val-size = 0.2
+
+output-dir = output
+
+model-weights = best # available options [best, latest]

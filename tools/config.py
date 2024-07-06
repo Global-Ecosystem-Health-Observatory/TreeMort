@@ -17,8 +17,9 @@ def setup(config_file_path):
     parser.add("-oc",   "--output-channels",    type=int,   required=True,      help="output channels for training")
     parser.add("-o",    "--output-dir",         type=str,   default="output",   help="output dir for TensorBoard and models")
     parser.add("-mw",   "--model-weights",      type=str,   default="latest",   help="weights file of trained model for training continuation")
+    parser.add("-lr",   "--learning-rate",      type=float, default=2e-4,       help="learning rate of Adam optimizer for training")
 
-    conf, unknown = parser.parse_known_args()
+    conf, _ = parser.parse_known_args()
 
     return conf
 
