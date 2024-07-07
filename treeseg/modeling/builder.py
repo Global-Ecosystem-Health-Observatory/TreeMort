@@ -1,4 +1,5 @@
 import tensorflow as tf
+import segmentation_models as sm
 
 from treeseg.modeling.network.kokonet import Kokonet
 from treeseg.utils.checkpoints import get_checkpoint
@@ -38,6 +39,7 @@ def build_model(model_name, input_channels, output_channels, activation, learnin
             activation=activation,
         )
 
+    '''
     if loss == "mse":
         loss_fn = tf.keras.losses.mean_squared_error()
     elif loss == "bce":
@@ -45,9 +47,18 @@ def build_model(model_name, input_channels, output_channels, activation, learnin
     elif loss == "focal":
         #loss_fn = focal_loss(gamma=2., alpha=0.25)
         loss_fn = tf.keras.losses.BinaryFocalCrossentropy()
+    '''
     
     optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
 
-    model.compile(optimizer=optimizer, loss=loss_fn)
+    iou_score = sm.metrics.IOUScore(threshold=0.5)
+    f_score = sm.metrics.FScore(threshold=0.5)
+    hybrid_metrics = [iou_score, f_score]
+
+    dice_loss = sm.losses.DiceLoss()
+    focal_loss = sm.losses.BinaryFocalLoss()
+    hybrid_loss = dice_loss + (1 * focal_loss)
+
+    model.compile(optimizer=optimizer, loss=hybrid_loss, metrics=[hybrid_metrics])
 
     return model
