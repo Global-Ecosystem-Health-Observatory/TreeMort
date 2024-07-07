@@ -1,7 +1,6 @@
 # settings for kokonet
 
-data-folder = /Users/anis/Documents/AerialImageModel_ITD
-# data-folder = /scratch/project_2008436/rahmanan/AerialImageModel_ITD
+data-folder = /scratch/project_2008436/rahmanan/AerialImageModel_ITD
 
 model = kokonet
 
