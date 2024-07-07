@@ -7,7 +7,7 @@ from scipy import ndimage
 
 class IOUCallback(tf.keras.callbacks.Callback):
 
-    def __init__(self, model, dataset, num_samples, batch_size, threshold=-0.5):
+    def __init__(self, model, dataset, num_samples, batch_size, threshold):
         super().__init__()
         self.model = model
         self.dataset = dataset

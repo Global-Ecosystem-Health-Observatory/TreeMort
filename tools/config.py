@@ -18,7 +18,11 @@ def setup(config_file_path):
     parser.add("-o",    "--output-dir",         type=str,   default="output",   help="output dir for TensorBoard and models")
     parser.add("-mw",   "--model-weights",      type=str,   default="latest",   help="weights file of trained model for training continuation")
     parser.add("-lr",   "--learning-rate",      type=float, default=2e-4,       help="learning rate of Adam optimizer for training")
-
+    parser.add("-th",   "--threshold",          type=float, default=-0.5,       help="threshold for foreground/background classifier")
+    parser.add("-av",   "--activation",         type=str,   default="tanh",     help="activation function of output layer of network")
+    parser.add("-lf",   "--loss",               type=str,   default="mse",      help="loss function used by network")
+    parser.add("-bn",   "--binarize",           action="store_false",           help="binarize input to foreground and background mask")
+    
     conf, _ = parser.parse_known_args()
 
     return conf

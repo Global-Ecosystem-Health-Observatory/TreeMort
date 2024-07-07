@@ -67,9 +67,10 @@ def ASPP(inputs, num_filters, atrous_rates):
     return x
 
 
-def Kokonet(input_shape=[512, 512, 8], output_channels=1, activation="tanh"):
+def Kokonet(input_shape, output_channels, activation):
     input = tf.keras.layers.Input(shape=input_shape)
     x_1 = cbr(input, 32, size=1, strides=1)
+
     # to 1/2 size
     x_2 = mobile_res_block(
         x_1, filters=128, expansion=1, name="bottleneck_2", strides=2
@@ -81,8 +82,11 @@ def Kokonet(input_shape=[512, 512, 8], output_channels=1, activation="tanh"):
     x_4 = mobile_res_block(
         x_4, filters=256, expansion=6, name="bottleneck_4_output", strides=1
     )
+
     aspp = ASPP(x_4, 256, atrous_rates=[2, 4, 8])  # dilated convolutions 2,3,4
+
     bottleneck_4 = cbr(aspp, 256, size=1, strides=1)
+
     # # upsample
     concat = tf.keras.layers.Concatenate()
     u_2 = up_cbr(bottleneck_4, n_filters=128, name="up_cbr_2", kernel_size=3)
@@ -90,6 +94,7 @@ def Kokonet(input_shape=[512, 512, 8], output_channels=1, activation="tanh"):
     u_2 = cbr(u_2, 64, size=1, strides=1)
     u_1 = up_cbr(u_2, n_filters=32, name="up_cbr_1", kernel_size=3)
     u_1 = cbr(u_1, 32, size=1, strides=1)
+
     fex_out = concat([u_1, x_1])
     output = tf.keras.layers.Conv2D(
         output_channels,

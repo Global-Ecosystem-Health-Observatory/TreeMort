@@ -38,6 +38,14 @@ def normalize_inputs(image_tf, label_tf):
     return image_tf, label_tf
 
 
+def normalize_inputs_bin(image_tf, label_tf):
+    image_tf = image_tf / 255.0
+
+    label_tf = tf.cast(label_tf > 0, tf.float32)
+
+    return image_tf, label_tf
+
+
 def random_crop_tf(image_tf, label_tf, crop_size, image_channels):
     concat = tf.concat([image_tf, tf.expand_dims(label_tf, axis=-1)], axis=-1)
 
@@ -66,7 +74,10 @@ def load_and_crop_image(image_path, label_path, crop_size, input_channels):
     return image, label
 
 
-def preprocess_image(image, label, crop_size):
-    image, label = normalize_inputs(image, label)
+def preprocess_image(image, label, binarize=False):
+    if binarize:
+        image, label = normalize_inputs_bin(image, label)
+    else:
+        image, label = normalize_inputs(image, label)
 
     return image, label

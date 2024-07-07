@@ -10,4 +10,4 @@
 module load tensorflow
 export PYTHONPATH=$PWD:$PYTHONPATH
 
-srun python3 train_net.py ./configs/kokonet_bs8_cs256.txt --eval-only 
+srun python3 train_net.py ./configs/kokonet_bs8_cs256.txt --binarize --eval-only 

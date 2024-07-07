@@ -5,8 +5,8 @@ from treeseg.utils.checkpoints import get_checkpoint
 from treeseg.utils.loss import focal_loss
 
 
-def resume_or_load(conf, resume):
-    model = build_model(conf.model, conf.input_channels, conf.output_channels, conf.learning_rate)
+def resume_or_load(conf, resume, binarize):
+    model = build_model(conf.model, conf.input_channels, conf.output_channels, conf.activation, conf.learning_rate, conf.loss)
 
     if resume:
         checkpoint = get_checkpoint(conf.model_weights, conf.output_dir)
@@ -24,8 +24,9 @@ def resume_or_load(conf, resume):
     return model
 
 
-def build_model(model_name, input_channels, output_channels, learning_rate):
+def build_model(model_name, input_channels, output_channels, activation, learning_rate, loss):
     assert model_name in ["unet", "kokonet"]
+    assert model_name in ["focal", "bce", "mse"]
 
     if model_name == "unet":
         pass
@@ -34,12 +35,19 @@ def build_model(model_name, input_channels, output_channels, learning_rate):
         model = Kokonet(
             input_shape=[None, None, input_channels],
             output_channels=output_channels,
-            activation="tanh",
+            activation=activation,
         )
 
+    if loss == "mse":
+        loss_fn = tf.keras.losses.mean_squared_error()
+    elif loss == "bce":
+        loss_fn = tf.keras.losses.BinaryCrossentropy()
+    elif loss == "focal":
+        #loss_fn = focal_loss(gamma=2., alpha=0.25)
+        loss_fn = tf.keras.losses.BinaryFocalCrossentropy()
+    
     optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
 
-    #model.compile(optimizer=optimizer, loss="mse")
-    model.compile(optimizer=optimizer, loss=focal_loss(gamma=2., alpha=0.25), metrics=['accuracy'])
+    model.compile(optimizer=optimizer, loss=loss_fn)
 
     return model

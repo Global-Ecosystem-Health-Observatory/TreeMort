@@ -1,6 +1,7 @@
 # settings for kokonet
 
-data-folder = /scratch/project_2008436/rahmanan/AerialImageModel_ITD
+# data-folder = /scratch/project_2008436/rahmanan/AerialImageModel_ITD
+data-folder = /Users/anis/Documents/AerialImageModel_ITD
 
 model = kokonet
 
@@ -16,6 +17,14 @@ train-batch-size = 8
 test-batch-size = 8
 
 learning-rate = 1e-4
+
+binarize = True
+
+threshold = 0.5
+
+activation = sigmoid # available options [tanh, sigmoid]
+
+loss = focal # [mse, bce, focal]
 
 val-size = 0.2
 
