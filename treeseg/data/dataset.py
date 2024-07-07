@@ -65,7 +65,7 @@ def prepare_dataset(
     return train_dataset, val_dataset
 
 
-def prepare_datasets(train_images, train_labels, test_images, test_labels, conf, binarize):
+def prepare_datasets(train_images, train_labels, test_images, test_labels, conf):
 
     train_dataset, val_dataset = prepare_dataset(
         train_images,
@@ -74,7 +74,7 @@ def prepare_datasets(train_images, train_labels, test_images, test_labels, conf,
         conf.train_batch_size,
         conf.input_channels,
         augment=True,
-        binarize=binarize,
+        binarize=conf.binarize,
         val_split_ratio=conf.val_size,
     )
 
@@ -85,7 +85,7 @@ def prepare_datasets(train_images, train_labels, test_images, test_labels, conf,
         conf.test_batch_size,
         conf.input_channels,
         augment=False,
-        binarize=binarize,
+        binarize=conf.binarize,
         val_split_ratio=0,
     )[0]
 

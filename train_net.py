@@ -11,7 +11,7 @@ from treeseg.modeling.trainer import trainer
 from treeseg.evaluation.evaluator import evaluator
 
 
-def run(conf, eval_only, resume, binarize, experiment_name):
+def run(conf, eval_only, resume, experiment_name):
     assert os.path.exists(
         conf.data_folder
     ), f"Data folder {conf.data_folder} does not exist."
@@ -21,10 +21,10 @@ def run(conf, eval_only, resume, binarize, experiment_name):
     )
 
     train_dataset, val_dataset, test_dataset = prepare_datasets(
-        train_images, train_labels, test_images, test_labels, conf, binarize
+        train_images, train_labels, test_images, test_labels, conf
     )
 
-    model = resume_or_load(conf, resume, binarize)
+    model = resume_or_load(conf, resume)
 
     if eval_only:
         print("Evaluation only mode")
@@ -43,10 +43,9 @@ if __name__ == "__main__":
     parser.add_argument("--name",       type=str, required=False,   help="Name of the experiment")
     parser.add_argument("--eval-only",  action="store_true",        help="If set, only evaluate the model without training")
     parser.add_argument("--resume",     action="store_true",        help="If set, resume the model training")
-    parser.add_argument("--binarize",   action="store_false",       help="If set, binarize the input label to 0/1 mask")
 
     args = parser.parse_args()
 
     conf = setup(args.config)
     
-    run(conf, args.eval_only, args.resume, args.binarize, args.name)
+    run(conf, args.eval_only, args.resume, args.name)
