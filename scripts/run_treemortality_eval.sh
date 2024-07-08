@@ -9,5 +9,6 @@
 
 module load tensorflow
 export PYTHONPATH=$PWD:$PYTHONPATH
+export SM_FRAMEWORK="tf.keras"
 
-srun python3 train_net.py ./configs/kokonet_bs8_cs256.txt --binarize --eval-only 
+srun python3 train_net.py ./configs/kokonet_bs8_cs256.txt --eval-only --name kokonet_focal
