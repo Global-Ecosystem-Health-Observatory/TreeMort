@@ -21,7 +21,7 @@ def setup(config_file_path):
     parser.add("-th",   "--threshold",          type=float, default=-0.5,       help="threshold for foreground/background classifier")
     parser.add("-av",   "--activation",         type=str,   default="tanh",     help="activation function of output layer of network")
     parser.add("-lf",   "--loss",               type=str,   default="mse",      help="loss function used by network")
-    parser.add("-bn",   "--binarize",           action="store_false",           help="binarize input to foreground and background mask")
+    parser.add("-bn",   "--binarize",           action="store_true",            help="binarize input to foreground and background mask")
     
     conf, _ = parser.parse_known_args()
 

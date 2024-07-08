@@ -27,7 +27,7 @@ def resume_or_load(conf, resume):
 
 def build_model(model_name, input_channels, output_channels, activation, learning_rate, loss):
     assert model_name in ["unet", "kokonet"]
-    assert model_name in ["focal", "bce", "mse"]
+    assert loss in ["focal", "bce", "mse"]
 
     if model_name == "unet":
         pass

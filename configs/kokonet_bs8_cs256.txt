@@ -18,7 +18,7 @@ test-batch-size = 8
 
 learning-rate = 1e-4
 
-binarize = True
+binarize
 
 threshold = 0.5
 
