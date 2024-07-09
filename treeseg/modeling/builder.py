@@ -6,7 +6,7 @@ from treeseg.utils.checkpoints import get_checkpoint
 from treeseg.utils.loss import focal_loss
 
 
-def resume_or_load(conf, resume):
+def resume_or_load(conf, resume=True):
     model = build_model(conf.model, conf.input_channels, conf.output_channels, conf.activation, conf.learning_rate, conf.loss)
 
     if resume:

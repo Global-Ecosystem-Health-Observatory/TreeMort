@@ -24,14 +24,18 @@ def run(conf, eval_only, resume, experiment_name):
         train_images, train_labels, test_images, test_labels, conf
     )
 
-    model = resume_or_load(conf, resume)
-
     if eval_only:
         print("Evaluation only mode")
+
+        model = resume_or_load(conf)
+
         evaluator(model, test_dataset, len(test_images), conf.test_batch_size, conf.threshold)
 
     else:
         print("Training mode")
+
+        model = resume_or_load(conf, resume)
+        
         trainer(model, train_dataset, val_dataset, len(train_images), conf, experiment_name)
 
     return model
