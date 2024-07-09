@@ -1,3 +1,5 @@
+import os
+
 import tensorflow as tf
 import segmentation_models as sm
 
@@ -6,11 +8,12 @@ from treeseg.utils.checkpoints import get_checkpoint
 from treeseg.utils.loss import focal_loss
 
 
-def resume_or_load(conf, resume=True):
-    model = build_model(conf.model, conf.input_channels, conf.output_channels, conf.activation, conf.learning_rate, conf.loss)
+def resume_or_load(conf, output_dir, resume=True):
+    model = build_model(
+        conf.model, conf.input_channels, conf.output_channels, conf.activation, conf.learning_rate, conf.loss)
 
     if resume:
-        checkpoint = get_checkpoint(conf.model_weights, conf.output_dir)
+        checkpoint = get_checkpoint(conf.model_weights, output_dir)
 
         if checkpoint:
             model.load_weights(checkpoint, skip_mismatch=True)

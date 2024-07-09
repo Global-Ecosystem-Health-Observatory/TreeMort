@@ -16,6 +16,10 @@ def run(conf, eval_only, resume, experiment_name):
         conf.data_folder
     ), f"Data folder {conf.data_folder} does not exist."
 
+    output_dir = os.path.join(conf.output_dir, experiment_name)
+    if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+
     train_images, train_labels, test_images, test_labels = get_image_label_paths(
         conf.data_folder
     )
@@ -27,16 +31,16 @@ def run(conf, eval_only, resume, experiment_name):
     if eval_only:
         print("Evaluation only mode")
 
-        model = resume_or_load(conf)
+        model = resume_or_load(conf, output_dir)
 
         evaluator(model, test_dataset, len(test_images), conf.test_batch_size, conf.threshold)
 
     else:
         print("Training mode")
 
-        model = resume_or_load(conf, resume)
+        model = resume_or_load(conf, output_dir, resume)
         
-        trainer(model, train_dataset, val_dataset, len(train_images), conf, experiment_name)
+        trainer(model, train_dataset, val_dataset, len(train_images), conf, output_dir)
 
     return model
 
