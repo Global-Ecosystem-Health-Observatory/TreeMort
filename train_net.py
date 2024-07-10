@@ -11,14 +11,13 @@ from treeseg.modeling.trainer import trainer
 from treeseg.evaluation.evaluator import evaluator
 
 
-def run(conf, eval_only, resume, experiment_name):
+def run(conf, eval_only):
     assert os.path.exists(
         conf.data_folder
     ), f"Data folder {conf.data_folder} does not exist."
 
-    output_dir = os.path.join(conf.output_dir, experiment_name)
-    if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
+    if not os.path.exists(conf.output_dir):
+            os.makedirs(conf.output_dir)
 
     train_images, train_labels, test_images, test_labels = get_image_label_paths(
         conf.data_folder
@@ -28,32 +27,26 @@ def run(conf, eval_only, resume, experiment_name):
         train_images, train_labels, test_images, test_labels, conf
     )
 
-    if eval_only:
-        print("Evaluation only mode")
+    model = resume_or_load(conf)
 
-        model = resume_or_load(conf, output_dir)
+    if eval_only:
+        print("Evaluation-only mode started.")
 
         evaluator(model, test_dataset, len(test_images), conf.test_batch_size, conf.threshold)
 
     else:
-        print("Training mode")
-
-        model = resume_or_load(conf, output_dir, resume)
+        print("Training mode started.")
         
-        trainer(model, train_dataset, val_dataset, len(train_images), conf, output_dir)
-
-    return model
+        trainer(model, train_dataset, val_dataset, len(train_images), conf)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Configuration setup for network.")
     parser.add_argument("config",       type=str,                   help="Path to the configuration file")
-    parser.add_argument("--name",       type=str, required=False,   help="Name of the experiment")
     parser.add_argument("--eval-only",  action="store_true",        help="If set, only evaluate the model without training")
-    parser.add_argument("--resume",     action="store_true",        help="If set, resume the model training")
-
+    
     args = parser.parse_args()
 
     conf = setup(args.config)
     
-    run(conf, args.eval_only, args.resume, args.name)
+    run(conf, args.eval_only)

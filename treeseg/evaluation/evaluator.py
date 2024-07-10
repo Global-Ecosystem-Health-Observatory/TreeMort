@@ -8,5 +8,5 @@ def evaluator(model, dataset, num_samples, batch_size, threshold):
 
     iou_results = iou_callback.evaluate()
 
-    print(f"IOU Pixels: {iou_results['iou_pixels']:.3f}")
-    print(f"IOU Trees: {iou_results['iou_trees']:.3f}")
+    print(f" IOU Pixels: {iou_results['iou_pixels']:.3f}")
+    print(f" IOU Trees: {iou_results['iou_trees']:.3f}")

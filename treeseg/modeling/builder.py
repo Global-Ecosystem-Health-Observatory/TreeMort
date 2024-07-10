@@ -5,15 +5,13 @@ import segmentation_models as sm
 
 from treeseg.modeling.network.kokonet import Kokonet
 from treeseg.utils.checkpoints import get_checkpoint
-from treeseg.utils.loss import focal_loss
 
 
-def resume_or_load(conf, output_dir, resume=True):
-    model = build_model(
-        conf.model, conf.input_channels, conf.output_channels, conf.activation, conf.learning_rate, conf.loss)
+def resume_or_load(conf):
+    model = build_model(conf.model, conf.input_channels, conf.output_channels, conf.activation, conf.learning_rate, conf.threshold)
 
-    if resume:
-        checkpoint = get_checkpoint(conf.model_weights, output_dir)
+    if conf.resume:
+        checkpoint = get_checkpoint(conf.model_weights, conf.output_dir)
 
         if checkpoint:
             model.load_weights(checkpoint, skip_mismatch=True)
@@ -28,9 +26,9 @@ def resume_or_load(conf, output_dir, resume=True):
     return model
 
 
-def build_model(model_name, input_channels, output_channels, activation, learning_rate, loss):
-    assert model_name in ["unet", "kokonet"]
-    assert loss in ["focal", "bce", "mse"]
+def build_model(model_name, input_channels, output_channels, activation, learning_rate, threshold):
+    assert model_name in ["unet", "kokonet"], f"Model {model_name} unavailable."
+    assert activation in ["tanh", "sigmoid"], f"Model activation {activation} unavailable."
 
     if model_name == "unet":
         pass
@@ -41,21 +39,11 @@ def build_model(model_name, input_channels, output_channels, activation, learnin
             output_channels=output_channels,
             activation=activation,
         )
-
-    '''
-    if loss == "mse":
-        loss_fn = tf.keras.losses.mean_squared_error()
-    elif loss == "bce":
-        loss_fn = tf.keras.losses.BinaryCrossentropy()
-    elif loss == "focal":
-        #loss_fn = focal_loss(gamma=2., alpha=0.25)
-        loss_fn = tf.keras.losses.BinaryFocalCrossentropy()
-    '''
     
     optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
 
-    iou_score = sm.metrics.IOUScore(threshold=0.5)
-    f_score = sm.metrics.FScore(threshold=0.5)
+    iou_score = sm.metrics.IOUScore(threshold=threshold)
+    f_score = sm.metrics.FScore(threshold=threshold)
     hybrid_metrics = [iou_score, f_score]
 
     dice_loss = sm.losses.DiceLoss()
