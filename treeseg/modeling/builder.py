@@ -4,6 +4,7 @@ import tensorflow as tf
 import segmentation_models as sm
 
 from treeseg.modeling.network.kokonet import Kokonet
+from treeseg.modeling.network.kokonet_hrnet import Kokonet_hrnet
 from treeseg.utils.checkpoints import get_checkpoint
 
 
@@ -27,7 +28,7 @@ def resume_or_load(conf):
 
 
 def build_model(model_name, input_channels, output_channels, activation, learning_rate, threshold):
-    assert model_name in ["unet", "kokonet"], f"Model {model_name} unavailable."
+    assert model_name in ["unet", "kokonet", "kokonet_hrnet"], f"Model {model_name} unavailable."
     assert activation in ["tanh", "sigmoid"], f"Model activation {activation} unavailable."
 
     if model_name == "unet":
@@ -40,6 +41,13 @@ def build_model(model_name, input_channels, output_channels, activation, learnin
             activation=activation,
         )
     
+    elif model_name == "kokonet_hrnet":
+        model = Kokonet_hrnet(
+            input_shape=[None, None, input_channels],
+            output_channels=output_channels,
+            activation=activation,
+        )
+
     optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
 
     iou_score = sm.metrics.IOUScore(threshold=threshold)

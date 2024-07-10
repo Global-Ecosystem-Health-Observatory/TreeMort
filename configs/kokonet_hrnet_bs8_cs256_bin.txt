@@ -2,9 +2,9 @@
 
 data-folder = /scratch/project_2008436/rahmanan/AerialImageModel_ITD
 
-model = kokonet
+model = kokonet_hrnet
 
-output-dir = output/kokonet_bin
+output-dir = output/kokonet_hrnet_bin
 
 train-crop-size = 256
 test-crop-size = 512
