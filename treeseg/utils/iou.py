@@ -2,7 +2,6 @@ import tensorflow as tf
 from tqdm import tqdm
 from scipy import ndimage
 
-
 class IOUCallback(tf.keras.callbacks.Callback):
 
     def __init__(self, model, dataset, num_samples, batch_size, threshold):
@@ -61,8 +60,8 @@ class IOUCallback(tf.keras.callbacks.Callback):
                     # Tree-wise IoU
                     labeled_array_pred, num_features_pred = ndimage.label(y_pred_binary.numpy())
                     labeled_array_true, num_features_true = ndimage.label(y_true_binary.numpy())
-                    predicted_contour_numbers = tf.unique(labeled_array_pred)
-                    true_contour_numbers = tf.unique(labeled_array_true)
+                    predicted_contour_numbers = tf.unique(tf.reshape(labeled_array_pred, [-1]))[0]
+                    true_contour_numbers = tf.unique(tf.reshape(labeled_array_true, [-1]))[0]
 
                     tp_trees, fp_trees, fn_trees = 0, 0, 0
 
@@ -70,7 +69,7 @@ class IOUCallback(tf.keras.callbacks.Callback):
                         if predicted_contour_number == 0:
                             continue
                         predicted_contour_mask = (labeled_array_pred == predicted_contour_number)
-                        prediction_exists = tf.reduce_any(y_true_binary[predicted_contour_mask])
+                        prediction_exists = tf.reduce_any(tf.boolean_mask(y_true_binary, predicted_contour_mask))
                         if prediction_exists:
                             tp_trees += 1
                         else:
@@ -79,8 +78,8 @@ class IOUCallback(tf.keras.callbacks.Callback):
                     for true_contour_number in true_contour_numbers:
                         if true_contour_number == 0:
                             continue
-                        true_contour_mask = labeled_array_true == true_contour_number
-                        prediction_exists = tf.reduce_any(y_pred_binary[true_contour_mask])
+                        true_contour_mask = (labeled_array_true == true_contour_number)
+                        prediction_exists = tf.reduce_any(tf.boolean_mask(y_pred_binary, true_contour_mask))
                         if not prediction_exists:
                             fn_trees += 1
 
