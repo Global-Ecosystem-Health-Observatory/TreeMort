@@ -30,7 +30,7 @@ def resume_or_load(conf):
 def build_model(model_name, input_channels, output_channels, activation, loss, learning_rate, threshold):
     assert model_name in ["unet", "kokonet", "kokonet_hrnet"], f"Model {model_name} unavailable."
     assert activation in ["tanh", "sigmoid"], f"Model activation {activation} unavailable."
-    assert activation in ["mse", "hybrid"], f"Model loss {loss} unavailable."
+    assert loss in ["mse", "hybrid"], f"Model loss {loss} unavailable."
 
     if model_name == "unet":
         pass
