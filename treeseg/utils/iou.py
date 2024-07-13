@@ -1,3 +1,4 @@
+import numpy as np
 import tensorflow as tf
 from tqdm import tqdm
 from scipy import ndimage
@@ -40,25 +41,25 @@ class IOUCallback(tf.keras.callbacks.Callback):
                     y_pred = predictions[i]
                     y_true = labels[i]
 
-                    y_pred_binary = tf.squeeze(y_pred[:, :, 0] > self.threshold)
-                    y_true_binary = tf.squeeze(y_true > self.threshold)
+                    y_pred_binary = np.squeeze(y_pred[:, :, 0] > self.threshold)
+                    y_true_binary = np.squeeze(y_true > self.threshold)
 
                     # Pixel-wise IoU
-                    tp_pixels = tf.reduce_sum(tf.cast(tf.logical_and(y_pred_binary, y_true_binary), tf.float32))
-                    fp_pixels = tf.reduce_sum(tf.cast(tf.logical_and(y_pred_binary, tf.logical_not(y_true_binary)), tf.float32))
-                    fn_pixels = tf.reduce_sum(tf.cast(tf.logical_and(tf.logical_not(y_pred_binary), y_true_binary), tf.float32))
+                    tp_pixels = np.sum(np.logical_and(y_pred_binary, y_true_binary))
+                    fp_pixels = np.sum(np.logical_and(y_pred_binary, np.logical_not(y_true_binary)))
+                    fn_pixels = np.sum(np.logical_and(np.logical_not(y_pred_binary), y_true_binary))
 
-                    if tf.equal(tp_pixels + fp_pixels + fn_pixels, 0):
-                        iou_pixels = tf.cond(tf.equal(tf.reduce_sum(y_true_binary), 0), lambda: tf.constant(1.0), lambda: tf.constant(0.0))
+                    if (tp_pixels + fp_pixels + fn_pixels) == 0:
+                        iou_pixels = 1.0 if np.sum(y_true_binary) == 0 else 0.0
                     else:
                         iou_pixels = tp_pixels / (tp_pixels + fp_pixels + fn_pixels)
                     pixel_ious.append(iou_pixels)
 
                     # Tree-wise IoU
-                    labeled_array_pred, num_features_pred = ndimage.label(y_pred_binary.numpy())
-                    labeled_array_true, num_features_true = ndimage.label(y_true_binary.numpy())
-                    predicted_contour_numbers = tf.unique(tf.reshape(labeled_array_pred, [-1]))[0]
-                    true_contour_numbers = tf.unique(tf.reshape(labeled_array_true, [-1]))[0]
+                    labeled_array_pred, num_features_pred = ndimage.label(y_pred_binary)
+                    labeled_array_true, num_features_true = ndimage.label(y_true_binary)
+                    predicted_contour_numbers = np.unique(labeled_array_pred)
+                    true_contour_numbers = np.unique(labeled_array_true)
 
                     tp_trees, fp_trees, fn_trees = 0, 0, 0
 
@@ -66,7 +67,7 @@ class IOUCallback(tf.keras.callbacks.Callback):
                         if predicted_contour_number == 0:
                             continue
                         predicted_contour_mask = (labeled_array_pred == predicted_contour_number)
-                        prediction_exists = tf.reduce_any(tf.boolean_mask(y_true_binary, predicted_contour_mask))
+                        prediction_exists = y_true_binary[predicted_contour_mask].any()
                         if prediction_exists:
                             tp_trees += 1
                         else:
@@ -76,12 +77,12 @@ class IOUCallback(tf.keras.callbacks.Callback):
                         if true_contour_number == 0:
                             continue
                         true_contour_mask = (labeled_array_true == true_contour_number)
-                        prediction_exists = tf.reduce_any(tf.boolean_mask(y_pred_binary, true_contour_mask))
+                        prediction_exists = y_pred_binary[true_contour_mask].any()
                         if not prediction_exists:
                             fn_trees += 1
 
-                    if tf.equal(tp_trees + fp_trees + fn_trees, 0):
-                        iou_trees = tf.cond(tf.equal(num_features_true, 0), lambda: tf.constant(1.0), lambda: tf.constant(0.0))
+                    if (tp_trees + fp_trees + fn_trees) == 0:
+                        iou_trees = 1.0 if num_features_true == 0 else 0.0
                     else:
                         iou_trees = tp_trees / (tp_trees + fp_trees + fn_trees)
                     tree_ious.append(iou_trees)
@@ -90,7 +91,7 @@ class IOUCallback(tf.keras.callbacks.Callback):
                 pbar.update(1)
                 pbar.set_postfix(iterations_left=total_batches - pbar.n)
 
-        mean_iou_pixels = tf.reduce_mean([iou for iou in pixel_ious if iou != -1])
-        mean_iou_trees = tf.reduce_mean([iou for iou in tree_ious if iou != -1])
+        mean_iou_pixels = np.mean([iou for iou in pixel_ious if iou != -1])
+        mean_iou_trees = np.mean([iou for iou in tree_ious if iou != -1])
 
         return {"mean_iou_pixels": mean_iou_pixels, "mean_iou_trees": mean_iou_trees}
