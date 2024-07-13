@@ -9,7 +9,7 @@ from treeseg.utils.checkpoints import get_checkpoint
 
 
 def resume_or_load(conf):
-    model = build_model(conf.model, conf.input_channels, conf.output_channels, conf.activation, conf.learning_rate, conf.threshold)
+    model = build_model(conf.model, conf.input_channels, conf.output_channels, conf.activation, conf.loss, conf.learning_rate, conf.threshold)
 
     if conf.resume:
         checkpoint = get_checkpoint(conf.model_weights, conf.output_dir)
@@ -27,9 +27,10 @@ def resume_or_load(conf):
     return model
 
 
-def build_model(model_name, input_channels, output_channels, activation, learning_rate, threshold):
+def build_model(model_name, input_channels, output_channels, activation, loss, learning_rate, threshold):
     assert model_name in ["unet", "kokonet", "kokonet_hrnet"], f"Model {model_name} unavailable."
     assert activation in ["tanh", "sigmoid"], f"Model activation {activation} unavailable."
+    assert activation in ["mse", "hybrid"], f"Model loss {loss} unavailable."
 
     if model_name == "unet":
         pass
@@ -50,14 +51,22 @@ def build_model(model_name, input_channels, output_channels, activation, learnin
 
     optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
 
-    iou_score = sm.metrics.IOUScore(threshold=threshold)
-    f_score = sm.metrics.FScore(threshold=threshold)
-    hybrid_metrics = [iou_score, f_score]
+    if loss == "hybrid":
+        iou_score = sm.metrics.IOUScore(threshold=threshold)
+        f_score = sm.metrics.FScore(threshold=threshold)
+        hybrid_metrics = [iou_score, f_score]
 
-    dice_loss = sm.losses.DiceLoss()
-    focal_loss = sm.losses.BinaryFocalLoss()
-    hybrid_loss = dice_loss + (1 * focal_loss)
+        dice_loss = sm.losses.DiceLoss()
+        focal_loss = sm.losses.BinaryFocalLoss()
+        hybrid_loss = dice_loss + (1 * focal_loss)
 
-    model.compile(optimizer=optimizer, loss=hybrid_loss, metrics=[hybrid_metrics])
+        model.compile(optimizer=optimizer, loss=hybrid_loss, metrics=[hybrid_metrics])
+
+    elif loss == "mse":
+        mse_metric = tf.keras.metrics.MeanSquaredError(name='mse')
+        mae_metric = tf.keras.metrics.MeanAbsoluteError(name='mae')
+        rmse_metric = tf.keras.metrics.RootMeanSquaredError(name='rmse')
+
+        model.compile(optimizer=optimizer, loss='mse', metrics=[mse_metric, mae_metric, rmse_metric])
 
     return model
