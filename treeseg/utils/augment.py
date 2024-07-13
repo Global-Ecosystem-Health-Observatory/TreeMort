@@ -1,3 +1,86 @@
+import torch
+import torchvision.transforms.functional as F
+import random
+
+class CustomAugmentation:
+    def __init__(self):
+        pass
+
+    def __call__(self, image, label):
+        # Ensure label has shape (H, W, 1)
+        if label.ndim == 2:
+            label = label.unsqueeze(-1)
+
+        # Concatenate image and label along the last dimension
+        combined = torch.cat((image, label.float()), dim=-1)
+
+        # Apply augmentations that affect both image and label
+        combined = self.random_flip(combined)
+        combined = self.random_rotation(combined)
+
+        # Split back into image and label tensors
+        image = combined[..., :image.shape[-1]]  # Assuming image has shape (H, W, 4)
+        label = combined[..., image.shape[-1]:].squeeze(-1)  # Assuming label has shape (H, W, 1)
+
+        # Apply augmentations that affect only image
+        image = self.random_brightness(image)
+        image = self.random_contrast(image)
+        image = self.random_multiplicative_noise(image)
+        image = self.random_gamma(image)
+
+        return image, label
+
+    def random_flip(self, combined):
+        if random.random() > 0.5:
+            combined = torch.flip(combined, dims=[1])
+        if random.random() > 0.5:
+            combined = torch.flip(combined, dims=[2])
+        return combined
+
+    def random_rotation(self, combined):
+        k = random.randint(0, 3)
+        combined = torch.rot90(combined, k, dims=[1, 2])
+        return combined
+
+    def random_brightness(self, image):
+        brightness_factor = random.uniform(0.8, 1.2)
+
+        # Apply brightness adjustment channel-wise
+        for c in range(image.shape[-1]):
+            image[..., c] = self.adjust_brightness(image[..., c], brightness_factor)
+
+        return image
+
+    def adjust_brightness(self, img, brightness_factor):
+        # Custom implementation of brightness adjustment
+        return torch.clamp(img * brightness_factor, 0, 1)
+
+    def random_contrast(self, image):
+        contrast_factor = random.uniform(0.8, 1.2)
+
+        # Apply contrast adjustment channel-wise
+        for c in range(image.shape[-1]):
+            image[..., c] = self.adjust_contrast(image[..., c], contrast_factor)
+
+        return image
+
+    def adjust_contrast(self, img, contrast_factor):
+        # Custom implementation of contrast adjustment
+        mean = img.mean(dim=[-2, -1], keepdim=True)
+        return torch.clamp((img - mean) * contrast_factor + mean, 0, 1)
+
+    def random_multiplicative_noise(self, image):
+        noise = torch.empty_like(image).uniform_(0.8, 1.2)
+        return image * noise
+
+    def random_gamma(self, image):
+        gamma = random.uniform(0.8, 1.2)
+        image = torch.pow(image, gamma)
+        image = torch.clamp(image, 0, 1)
+        return image
+
+
+'''
 import tensorflow as tf
 
 
@@ -48,3 +131,4 @@ class CustomAugmentation(tf.keras.layers.Layer):
         image = tf.where(tf.math.is_nan(image), tf.zeros_like(image), image)
 
         return image
+'''

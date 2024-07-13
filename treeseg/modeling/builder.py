@@ -1,15 +1,15 @@
 import os
 
-import tensorflow as tf
-import segmentation_models as sm
+#import tensorflow as tf
+#import segmentation_models as sm
 
-from treeseg.modeling.network.kokonet import Kokonet
-from treeseg.modeling.network.kokonet_hrnet import Kokonet_hrnet
+from treeseg.modeling.network.self_attention_unet import SelfAttentionUNet
 from treeseg.utils.checkpoints import get_checkpoint
 
 
 def resume_or_load(conf):
-    model = build_model(conf.model, conf.input_channels, conf.output_channels, conf.activation, conf.learning_rate, conf.threshold)
+    model = SelfAttentionUNet(conf.input_channels, conf.output_channels, depth=4, wf=6, batch_norm=True)
+    #model = build_model(conf.model, conf.input_channels, conf.output_channels, conf.activation, conf.learning_rate, conf.threshold)
 
     if conf.resume:
         checkpoint = get_checkpoint(conf.model_weights, conf.output_dir)

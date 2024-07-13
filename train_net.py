@@ -8,7 +8,7 @@ from treeseg.data.imagepaths import get_image_label_paths
 
 from treeseg.modeling.builder import resume_or_load
 from treeseg.modeling.trainer import trainer
-from treeseg.evaluation.evaluator import evaluator
+# from treeseg.evaluation.evaluator import evaluator
 
 
 def run(conf, eval_only):
@@ -28,7 +28,7 @@ def run(conf, eval_only):
     )
 
     model = resume_or_load(conf)
-
+    
     if eval_only:
         print("Evaluation-only mode started.")
 
