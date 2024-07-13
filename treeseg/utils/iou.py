@@ -45,9 +45,9 @@ class IOUCallback(tf.keras.callbacks.Callback):
                     y_true_binary = tf.squeeze(y_true > self.threshold)
 
                     # Pixel-wise IoU
-                    tp_pixels = tf.reduce_sum(tf.logical_and(y_pred_binary, y_true_binary))
-                    fp_pixels = tf.reduce_sum(tf.logical_and(y_pred_binary, tf.logical_not(y_true_binary)))
-                    fn_pixels = tf.reduce_sum(tf.logical_and(tf.logical_not(y_pred_binary), y_true_binary))
+                    tp_pixels = tf.reduce_sum(tf.cast(tf.logical_and(y_pred_binary, y_true_binary), tf.int32))
+                    fp_pixels = tf.reduce_sum(tf.cast(tf.logical_and(y_pred_binary, tf.logical_not(y_true_binary)), tf.int32))
+                    fn_pixels = tf.reduce_sum(tf.cast(tf.logical_and(tf.logical_not(y_pred_binary), y_true_binary), tf.int32))
 
                     if (tp_pixels + fp_pixels + fn_pixels) == 0:
                         if tf.reduce_sum(y_true_binary) == 0:
