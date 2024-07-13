@@ -44,15 +44,12 @@ class IOUCallback(tf.keras.callbacks.Callback):
                     y_true_binary = tf.squeeze(y_true > self.threshold)
 
                     # Pixel-wise IoU
-                    tp_pixels = tf.reduce_sum(tf.cast(tf.logical_and(y_pred_binary, y_true_binary), tf.int32))
-                    fp_pixels = tf.reduce_sum(tf.cast(tf.logical_and(y_pred_binary, tf.logical_not(y_true_binary)), tf.int32))
-                    fn_pixels = tf.reduce_sum(tf.cast(tf.logical_and(tf.logical_not(y_pred_binary), y_true_binary), tf.int32))
+                    tp_pixels = tf.reduce_sum(tf.cast(tf.logical_and(y_pred_binary, y_true_binary), tf.float32))
+                    fp_pixels = tf.reduce_sum(tf.cast(tf.logical_and(y_pred_binary, tf.logical_not(y_true_binary)), tf.float32))
+                    fn_pixels = tf.reduce_sum(tf.cast(tf.logical_and(tf.logical_not(y_pred_binary), y_true_binary), tf.float32))
 
-                    if (tp_pixels + fp_pixels + fn_pixels) == 0:
-                        if tf.reduce_sum(y_true_binary) == 0:
-                            iou_pixels = 1.0  # All true negatives
-                        else:
-                            iou_pixels = 0.0  # Shouldn't happen, but handle gracefully
+                    if tf.equal(tp_pixels + fp_pixels + fn_pixels, 0):
+                        iou_pixels = tf.cond(tf.equal(tf.reduce_sum(y_true_binary), 0), lambda: tf.constant(1.0), lambda: tf.constant(0.0))
                     else:
                         iou_pixels = tp_pixels / (tp_pixels + fp_pixels + fn_pixels)
                     pixel_ious.append(iou_pixels)
@@ -83,11 +80,8 @@ class IOUCallback(tf.keras.callbacks.Callback):
                         if not prediction_exists:
                             fn_trees += 1
 
-                    if (tp_trees + fp_trees + fn_trees) == 0:
-                        if num_features_true == 0:
-                            iou_trees = 1.0  # All true negatives
-                        else:
-                            iou_trees = 0.0  # Shouldn't happen, but handle gracefully
+                    if tf.equal(tp_trees + fp_trees + fn_trees, 0):
+                        iou_trees = tf.cond(tf.equal(num_features_true, 0), lambda: tf.constant(1.0), lambda: tf.constant(0.0))
                     else:
                         iou_trees = tp_trees / (tp_trees + fp_trees + fn_trees)
                     tree_ious.append(iou_trees)
