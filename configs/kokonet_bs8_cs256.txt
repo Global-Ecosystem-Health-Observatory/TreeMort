@@ -25,6 +25,8 @@ threshold = -0.5
 
 activation = tanh # available options [tanh, sigmoid]
 
+loss = mse # available options [mse, hybrid]
+
 val-size = 0.2
 
 resume

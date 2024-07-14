@@ -20,6 +20,7 @@ def setup(config_file_path):
     parser.add("-lr",   "--learning-rate",      type=float, default=2e-4,       help="learning rate of Adam optimizer for training")
     parser.add("-th",   "--threshold",          type=float, default=-0.5,       help="threshold for foreground/background classifier")
     parser.add("-av",   "--activation",         type=str,   default="tanh",     help="activation function of output layer of network")
+    parser.add("-ls",   "--loss",               type=str,   default="mse",      help="loss function of network")
     parser.add("-rs",   "--resume",             action="store_true",            help="resume training using stored model weights")
     parser.add("-bn",   "--binarize",           action="store_true",            help="binarize data labels to foreground and background mask")
     

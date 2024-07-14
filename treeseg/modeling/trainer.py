@@ -5,80 +5,90 @@ from torch.utils.data import DataLoader
 
 from treeseg.utils.callbacks import build_callbacks
 
-def trainer(model, train_loader, val_loader, num_train_samples, conf):
-    num_val_samples = int(conf.val_size * num_train_samples)
-    num_train_batches = math.ceil((num_train_samples - num_val_samples) / conf.train_batch_size)
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = model.to(device)
-
-    optimizer = torch.optim.Adam(model.parameters(), lr=conf.learning_rate)
-    criterion = torch.nn.BCELoss()
-
-    callbacks = build_callbacks(num_train_batches, conf.output_dir, optimizer)
+def trainer(model, optimizer, criterion, metrics, train_loader, val_loader, conf, callbacks):
 
     for epoch in range(conf.epochs):
         model.train()
         train_loss = 0.0
-
-        for batch_idx, (inputs, targets) in enumerate(train_loader):
-            inputs, targets = inputs.to(device), targets.to(device)
-
+        train_metrics = {}
+        for batch_idx, (images, labels) in enumerate(train_loader):
             optimizer.zero_grad()
-            outputs = model(inputs)
-            loss = criterion(outputs, targets)
+            labels = labels.float()  # Ensure labels are float
+            outputs = model(images)
+            loss = criterion(outputs, labels)
             loss.backward()
             optimizer.step()
 
             train_loss += loss.item()
+            batch_metrics = metrics(outputs, labels)
+            for key, value in batch_metrics.items():
+                if key not in train_metrics:
+                    train_metrics[key] = 0.0
+                train_metrics[key] += value.item()
 
-            if batch_idx % conf.log_interval == 0:
-                print(f"Train Epoch: {epoch} [{batch_idx * len(inputs)}/{len(train_loader.dataset)} "
-                      f"({100. * batch_idx / len(train_loader):.0f}%)]\tLoss: {loss.item():.6f}")
+        # Average train loss and metrics
+        train_loss /= len(train_loader)
+        for key in train_metrics:
+            train_metrics[key] /= len(train_loader)
 
-        train_loss /= len(train_loader.dataset)
-        print(f"====> Epoch: {epoch} Average loss: {train_loss:.4f}")
+        model.eval()
+        val_loss = 0.0
+        val_metrics = {}
+        with torch.no_grad():
+            for images, labels in val_loader:
+                labels = labels.float()  # Ensure labels are float
+                outputs = model(images)
+                loss = criterion(outputs, labels)
+                val_loss += loss.item()
+                batch_metrics = metrics(outputs, labels)
+                for key, value in batch_metrics.items():
+                    if key not in val_metrics:
+                        val_metrics[key] = 0.0
+                    val_metrics[key] += value.item()
 
-        if val_loader is not None:
-            model.eval()
-            val_loss = 0.0
-            with torch.no_grad():
-                for inputs, targets in val_loader:
-                    inputs, targets = inputs.to(device), targets.to(device)
-                    outputs = model(inputs)
-                    val_loss += criterion(outputs, targets).item()
+        # Average validation loss and metrics
+        val_loss /= len(val_loader)
+        for key in val_metrics:
+            val_metrics[key] /= len(val_loader)
 
-            val_loss /= len(val_loader.dataset)
-            print(f"====> Validation loss: {val_loss:.4f}")
+        # Print epoch metrics
+        print(f"Epoch {epoch + 1}/{conf.epochs}")
+        print(f"Train Loss: {train_loss:.4f} | Validation Loss: {val_loss:.4f}")
+        print(f"Train Metrics: {train_metrics}")
+        print(f"Validation Metrics: {val_metrics}")
 
+        # Call callbacks
         for callback in callbacks:
-            callback.on_epoch_end(epoch, logs={'loss': train_loss, 'val_loss': val_loss if val_loader else None})
+            if isinstance(callback, ModelCheckpoint):
+                callback(epoch + 1, model, optimizer, val_loss)
+            elif isinstance(callback, ReduceLROnPlateau):
+                callback(val_loss)
+            elif isinstance(callback, EarlyStopping):
+                callback(epoch + 1, val_loss)
+                if callback.stop_training:
+                    print("Early stopping")
+                    return
 
-
-
+from treeseg.utils.callbacks import ModelCheckpoint, ReduceLROnPlateau, EarlyStopping
 '''
-import os
-import math
+    for epoch in range(conf.epochs):
+        model.train()
+        for images, labels in train_loader:
+            optimizer.zero_grad()                       
+            outputs = model(images)
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
 
-import tensorflow as tf
+            metric_values = metrics(outputs, labels)
+            print(f"Loss: {loss.item()} | Metrics: {metric_values}")
 
-from treeseg.utils.callbacks import build_callbacks
+        model.eval()
+        with torch.no_grad():
+            for images, labels in val_loader:
+                outputs = model(images)
+                val_loss = criterion(outputs, labels)
+                val_metric_values = metrics(outputs, labels)
+                print(f"Val Loss: {val_loss.item()} | Val Metrics: {val_metric_values}")
 
-
-def trainer(model, train_dataset, val_dataset, num_train_samples, conf):
-    num_val_samples = int(conf.val_size * num_train_samples)
-    num_train_batches = math.ceil(
-        (num_train_samples - num_val_samples) / conf.train_batch_size
-    )
-
-    callbacks = build_callbacks(num_train_batches, conf.output_dir)
-
-    model.fit(
-        train_dataset,
-        validation_data=val_dataset,
-        steps_per_epoch=num_train_batches,
-        epochs=conf.epochs,
-        validation_steps=num_val_samples,
-        callbacks=callbacks,
-    )
 '''
