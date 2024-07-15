@@ -43,9 +43,8 @@ fi
 # Add the rest of the script
 cat <<EOT >> $SBATCH_SCRIPT
 
-module load tensorflow
+module load pytorch
 export PYTHONPATH=\$PWD:\$PYTHONPATH
-export SM_FRAMEWORK="tf.keras"
 
 EOT
 
