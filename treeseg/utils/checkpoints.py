@@ -1,6 +1,7 @@
 import os
 import torch
 
+
 def get_checkpoint(model_weights, output_dir):
     checkpoint = None
 
@@ -10,9 +11,18 @@ def get_checkpoint(model_weights, output_dir):
             checkpoint = None
 
     elif model_weights == "latest":
-        checkpoints = [f for f in os.listdir(os.path.join(output_dir, "Checkpoints")) if f.endswith(".pth")]
+        checkpoints = [
+            f
+            for f in os.listdir(os.path.join(output_dir, "Checkpoints"))
+            if f.endswith(".pth")
+        ]
         if checkpoints:
-            latest_checkpoint = max(checkpoints, key=lambda f: os.path.getmtime(os.path.join(output_dir, "Checkpoints", f)))
+            latest_checkpoint = max(
+                checkpoints,
+                key=lambda f: os.path.getmtime(
+                    os.path.join(output_dir, "Checkpoints", f)
+                ),
+            )
             checkpoint = os.path.join(output_dir, "Checkpoints", latest_checkpoint)
         else:
             checkpoint = None
@@ -20,7 +30,7 @@ def get_checkpoint(model_weights, output_dir):
     return checkpoint
 
 
-'''
+"""
 import os
 
 import tensorflow as tf
@@ -39,4 +49,4 @@ def get_checkpoint(model_weights, output_dir):
         checkpoint = tf.train.latest_checkpoint(os.path.join(output_dir, "Checkpoints"))
 
     return checkpoint
-'''
+"""

@@ -6,7 +6,10 @@ from torch.utils.data import DataLoader
 from treeseg.utils.callbacks import build_callbacks
 from treeseg.utils.callbacks import ModelCheckpoint, ReduceLROnPlateau, EarlyStopping
 
-def trainer(model, optimizer, criterion, metrics, train_loader, val_loader, conf, callbacks):
+
+def trainer(
+    model, optimizer, criterion, metrics, train_loader, val_loader, conf, callbacks
+):
 
     for epoch in range(conf.epochs):
         model.train()

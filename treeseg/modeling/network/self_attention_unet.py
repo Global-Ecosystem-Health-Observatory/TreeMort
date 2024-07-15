@@ -15,7 +15,7 @@ class SelfAttentionUNet(nn.Module):
         wf=6,
         padding=True,
         batch_norm=False,
-        up_mode='upconv',
+        up_mode="upconv",
         kernel_size=3,
     ):
         """
@@ -44,14 +44,16 @@ class SelfAttentionUNet(nn.Module):
                            'upsample' will use bilinear upsampling.
         """
         super(SelfAttentionUNet, self).__init__()
-        assert up_mode in ('upconv', 'upsample')
+        assert up_mode in ("upconv", "upsample")
         self.padding = padding
         self.depth = depth
         prev_channels = in_channels
         self.down_path = nn.ModuleList()
         for i in range(depth):
             self.down_path.append(
-                UNetConvBlock(prev_channels, 2 ** (wf + i), padding, batch_norm, kernel_size)
+                UNetConvBlock(
+                    prev_channels, 2 ** (wf + i), padding, batch_norm, kernel_size
+                )
             )
             prev_channels = 2 ** (wf + i)
 
@@ -82,9 +84,22 @@ class SelfAttentionBlock(nn.Module):
     def __init__(self, in_size, out_size, padding, kernel_size=3):
         super(SelfAttentionBlock, self).__init__()
 
-        padding_ = int(padding)*(kernel_size-1)//2
-        self.conv = nn.Conv2d(in_size, out_size, kernel_size=kernel_size, padding=padding_, padding_mode='reflect')
-        self.attention = nn.Conv2d(in_size, out_size, kernel_size=kernel_size, padding=padding_, padding_mode='reflect', bias=False)
+        padding_ = int(padding) * (kernel_size - 1) // 2
+        self.conv = nn.Conv2d(
+            in_size,
+            out_size,
+            kernel_size=kernel_size,
+            padding=padding_,
+            padding_mode="reflect",
+        )
+        self.attention = nn.Conv2d(
+            in_size,
+            out_size,
+            kernel_size=kernel_size,
+            padding=padding_,
+            padding_mode="reflect",
+            bias=False,
+        )
         with torch.no_grad():
             self.attention.weight.copy_(torch.zeros_like(self.attention.weight))
 
@@ -98,8 +113,12 @@ class UNetConvBlock(nn.Module):
     def __init__(self, in_size, out_size, padding, batch_norm, kernel_size=3):
         super(UNetConvBlock, self).__init__()
 
-        self.self_attention1 = SelfAttentionBlock(in_size, out_size, padding, kernel_size)
-        self.self_attention2 = SelfAttentionBlock(out_size, out_size, padding, kernel_size)
+        self.self_attention1 = SelfAttentionBlock(
+            in_size, out_size, padding, kernel_size
+        )
+        self.self_attention2 = SelfAttentionBlock(
+            out_size, out_size, padding, kernel_size
+        )
         self.batch_norm = batch_norm
         if batch_norm:
             self.batch_norm1 = nn.BatchNorm2d(out_size)
@@ -119,11 +138,11 @@ class UNetConvBlock(nn.Module):
 class UNetUpBlock(nn.Module):
     def __init__(self, in_size, out_size, up_mode, padding, batch_norm):
         super(UNetUpBlock, self).__init__()
-        if up_mode == 'upconv':
+        if up_mode == "upconv":
             self.up = nn.ConvTranspose2d(in_size, out_size, kernel_size=2, stride=2)
-        elif up_mode == 'upsample':
+        elif up_mode == "upsample":
             self.up = nn.Sequential(
-                nn.Upsample(mode='bilinear', scale_factor=2),
+                nn.Upsample(mode="bilinear", scale_factor=2),
                 nn.Conv2d(in_size, out_size, kernel_size=1),
             )
 

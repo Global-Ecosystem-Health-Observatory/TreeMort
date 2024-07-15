@@ -2,6 +2,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
+
 def load_numpy(image_path, label_path, crop_size):
     image_np = np.load(image_path)
     label_np = np.load(label_path)
@@ -34,7 +35,9 @@ def load_numpy(image_path, label_path, crop_size):
 def normalize_inputs(image_tensor, label_tensor):
     image_tensor = (image_tensor / 127.5) - 1.0  # rescale to range [-1, +1]
     label_tensor = label_tensor / 255.0  # rescale to range [0, +1]
-    label_tensor = label_tensor - (label_tensor == 0).float()  # set 0 (background) to -1
+    label_tensor = (
+        label_tensor - (label_tensor == 0).float()
+    )  # set 0 (background) to -1
 
     return image_tensor, label_tensor
 
@@ -49,7 +52,9 @@ def normalize_inputs_bin(image_tensor, label_tensor):
 def random_crop(image_tensor, label_tensor, crop_size, image_channels):
     # Ensure that the label tensor has the same height and width as the image tensor
     if image_tensor.shape[:2] != label_tensor.shape[:2]:
-        raise ValueError(f"Image shape {image_tensor.shape[:2]} and label shape {label_tensor.shape[:2]} do not match.")
+        raise ValueError(
+            f"Image shape {image_tensor.shape[:2]} and label shape {label_tensor.shape[:2]} do not match."
+        )
 
     concat = torch.cat([image_tensor, label_tensor], dim=-1)
 
@@ -62,7 +67,7 @@ def random_crop(image_tensor, label_tensor, crop_size, image_channels):
     top = torch.randint(0, height - crop_size + 1, (1,)).item()
     left = torch.randint(0, width - crop_size + 1, (1,)).item()
 
-    cropped_concat = concat[top:top + crop_size, left:left + crop_size, :]
+    cropped_concat = concat[top : top + crop_size, left : left + crop_size, :]
     cropped_image_tensor = cropped_concat[:, :, :image_channels]
     cropped_label_tensor = cropped_concat[:, :, image_channels:]
 
@@ -85,7 +90,7 @@ def preprocess_image(image, label, binarize=False):
     return image, label
 
 
-'''
+"""
 import numpy as np
 import tensorflow as tf
 
@@ -169,4 +174,4 @@ def preprocess_image(image, label, binarize=False):
         image, label = normalize_inputs(image, label)
 
     return image, label
-'''
+"""
