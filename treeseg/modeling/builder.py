@@ -6,23 +6,20 @@ import torch.optim as optim
 import segmentation_models_pytorch as smp
 
 from treeseg.utils.checkpoints import get_checkpoint
-
-# from treeseg.modeling.network.kokonet import Kokonet
-# from treeseg.modeling.network.kokonet_hrnet import Kokonet_hrnet
 from treeseg.modeling.network.self_attention_unet import SelfAttentionUNet
-
 from treeseg.utils.loss import hybrid_loss, mse_loss, iou_score, f_score
 
 
-def resume_or_load(conf):
+def resume_or_load(conf, device):
     model, optimizer, criterion, metrics = build_model(
-        conf.model,
-        conf.input_channels,
-        conf.output_channels,
-        conf.activation,
-        conf.loss,
-        conf.learning_rate,
-        conf.threshold,
+        model_name=conf.model,
+        input_channels=conf.input_channels,
+        output_channels=conf.output_channels,
+        activation=conf.activation,
+        loss=conf.loss,
+        learning_rate=conf.learning_rate,
+        threshold=conf.threshold,
+        device=device
     )
 
     if conf.resume:
@@ -49,6 +46,7 @@ def build_model(
     loss,
     learning_rate,
     threshold,
+    device,
 ):
     assert model_name in [
         "unet",
@@ -86,6 +84,8 @@ def build_model(
     elif model_name == "kokonet_hrnet":
         # model = Kokonet_hrnet(input_channels=input_channels, output_channels=output_channels, activation=activation)
         pass
+
+    model.to(device)
 
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 

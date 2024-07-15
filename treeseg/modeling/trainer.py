@@ -8,22 +8,27 @@ from treeseg.utils.callbacks import ModelCheckpoint, ReduceLROnPlateau, EarlySto
 
 
 def trainer(
-    model, optimizer, criterion, metrics, train_loader, val_loader, conf, callbacks
+    model, optimizer, criterion, metrics, train_loader, val_loader, conf, callbacks, device
 ):
-
     for epoch in range(conf.epochs):
         model.train()
         train_loss = 0.0
         train_metrics = {}
+
         for batch_idx, (images, labels) in enumerate(train_loader):
+            images, labels = images.to(device), labels.to(device)
+
             optimizer.zero_grad()
-            labels = labels.float()  # Ensure labels are float
+    
             outputs = model(images)
+
             loss = criterion(outputs, labels)
             loss.backward()
+
             optimizer.step()
 
             train_loss += loss.item()
+
             batch_metrics = metrics(outputs, labels)
             for key, value in batch_metrics.items():
                 if key not in train_metrics:
@@ -40,10 +45,14 @@ def trainer(
         val_metrics = {}
         with torch.no_grad():
             for images, labels in val_loader:
-                labels = labels.float()  # Ensure labels are float
+                images, labels = images.to(device), labels.to(device)
+
                 outputs = model(images)
+
                 loss = criterion(outputs, labels)
+
                 val_loss += loss.item()
+
                 batch_metrics = metrics(outputs, labels)
                 for key, value in batch_metrics.items():
                     if key not in val_metrics:
@@ -55,13 +64,11 @@ def trainer(
         for key in val_metrics:
             val_metrics[key] /= len(val_loader)
 
-        # Print epoch metrics
         print(f"Epoch {epoch + 1}/{conf.epochs}")
         print(f"Train Loss: {train_loss:.4f} | Validation Loss: {val_loss:.4f}")
         print(f"Train Metrics: {train_metrics}")
         print(f"Validation Metrics: {val_metrics}")
 
-        # Call callbacks
         for callback in callbacks:
             if isinstance(callback, ModelCheckpoint):
                 callback(epoch + 1, model, optimizer, val_loss)
