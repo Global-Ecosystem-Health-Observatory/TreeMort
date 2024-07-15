@@ -1,5 +1,7 @@
 import random
 
+import numpy as np
+
 
 def random_flip(image, label):
     if random.random() > 0.5:

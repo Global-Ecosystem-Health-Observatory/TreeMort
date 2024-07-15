@@ -26,7 +26,7 @@ def resume_or_load(conf, device):
         checkpoint = get_checkpoint(conf.model_weights, conf.output_dir)
 
         if checkpoint:
-            model.load_weights(checkpoint, skip_mismatch=True)
+            model.load_state_dict(torch.load(checkpoint))
             print(f"Loaded weights from {checkpoint}")
 
         else:

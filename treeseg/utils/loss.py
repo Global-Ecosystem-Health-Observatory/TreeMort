@@ -3,11 +3,17 @@ import torch.nn as nn
 
 
 def dice_loss(pred, target):
-    smooth = 1.0
-    iflat = pred.view(-1)
-    tflat = target.view(-1)
+    smooth = 1.
+
+    # have to use contiguous since they may from a torch.view op
+    iflat = pred.contiguous().view(-1)
+    tflat = target.contiguous().view(-1)
     intersection = (iflat * tflat).sum()
-    return 1 - ((2.0 * intersection + smooth) / (iflat.sum() + tflat.sum() + smooth))
+
+    A_sum = torch.sum(iflat * iflat)
+    B_sum = torch.sum(tflat * tflat)
+    
+    return 1 - ((2. * intersection + smooth) / (A_sum + B_sum + smooth) )
 
 
 def focal_loss(pred, target, alpha=0.8, gamma=2):
