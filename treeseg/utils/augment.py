@@ -1,50 +1,50 @@
-import tensorflow as tf
+import random
 
+def random_flip(image, label):
+    if random.random() > 0.5:
+        image = np.flip(image, axis=1).copy()  # Horizontal flip
+        label = np.flip(label, axis=1).copy()
+    if random.random() > 0.5:
+        image = np.flip(image, axis=0).copy()  # Vertical flip
+        label = np.flip(label, axis=0).copy()
+    return image, label
 
-class CustomAugmentation(tf.keras.layers.Layer):
-    def __init__(self):
-        super(CustomAugmentation, self).__init__()
+def random_rotation(image, label):
+    k = random.randint(0, 3)
+    image = np.rot90(image, k).copy()
+    label = np.rot90(label, k).copy()
+    return image, label
 
-    def call(self, image, label):
-        combined = tf.concat([image, tf.expand_dims(label, axis=-1)], axis=-1)
-        combined = self.random_flip(combined)
-        combined = self.random_rotation(combined)
+def random_brightness(image, label):
+    factor = 1.0 + random.uniform(-0.2, 0.2)
+    image = np.clip(image * factor, 0, 1).astype(np.float32)  # Adjust to normalized range
+    return image, label
 
-        image = combined[:, :, : image.shape[-1]]
-        label = tf.squeeze(combined[:, :, image.shape[-1] :], axis=-1)
+def random_contrast(image, label):
+    factor = 1.0 + random.uniform(-0.2, 0.2)
+    mean = np.mean(image, axis=(0, 1), keepdims=True)
+    image = np.clip((image - mean) * factor + mean, 0, 1).astype(np.float32)  # Adjust to normalized range
+    return image, label
 
-        image = self.random_brightness_contrast(image)
-        image = self.random_multiplicative_noise(image)
-        image = self.random_gamma(image)
+def random_multiplicative_noise(image, label):
+    noise = np.random.uniform(0.9, 1.1, size=image.shape)
+    image = np.clip(image * noise, 0, 1).astype(np.float32)  # Adjust to normalized range
+    return image, label
 
-        return image, label
+def random_gamma(image, label):
+    gamma = random.uniform(0.8, 1.2)
+    image = np.clip((image ** gamma), 0, 1).astype(np.float32)  # Adjust to normalized range
+    return image, label
 
-    def random_flip(self, combined):
-        combined = tf.image.random_flip_left_right(combined)
-        combined = tf.image.random_flip_up_down(combined)
-        return combined
+def apply_augmentations(image, label):
+    image, label = random_flip(image, label)
+    image, label = random_rotation(image, label)
+    image, label = random_brightness(image, label)
+    image, label = random_contrast(image, label)
+    image, label = random_multiplicative_noise(image, label)
+    image, label = random_gamma(image, label)
+    return image, label
 
-    def random_rotation(self, combined):
-        k = tf.random.uniform(shape=[], minval=0, maxval=4, dtype=tf.int32)
-        combined = tf.image.rot90(combined, k)
-        return combined
-
-    def random_brightness_contrast(self, image):
-        image = tf.image.random_brightness(image, max_delta=0.2)
-        image = tf.image.random_contrast(image, lower=0.8, upper=1.2)
-        return image
-
-    def random_multiplicative_noise(self, image):
-        multiplier = tf.random.uniform(tf.shape(image), 0.8, 1.2)
-        image = image * multiplier
-        return image
-
-    def random_gamma(self, image):
-        gamma = tf.random.uniform([], 0.8, 1.2)
-        image = tf.image.adjust_gamma(image, gamma=gamma)
-        image = tf.clip_by_value(image, 0.0, 255.0)
-
-        # Handle NaNs by replacing them with zero
-        image = tf.where(tf.math.is_nan(image), tf.zeros_like(image), image)
-
-        return image
+class Augmentations:
+    def __call__(self, image, label):
+        return apply_augmentations(image, label)

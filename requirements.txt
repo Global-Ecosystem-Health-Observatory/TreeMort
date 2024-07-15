@@ -2,5 +2,6 @@ tqdm
 scipy
 matplotlib
 configargparse
-tensorflow
+torch
+torchvision
 segmentation_models
