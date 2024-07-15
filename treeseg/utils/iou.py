@@ -1,40 +1,48 @@
 import numpy as np
+import tensorflow as tf
 from tqdm import tqdm
 from scipy import ndimage
-import torch
 
-class IOUCallback:
+class IOUCallback(tf.keras.callbacks.Callback):
+
     def __init__(self, model, dataset, num_samples, batch_size, threshold):
+        super().__init__()
         self.model = model
         self.dataset = dataset
         self.num_samples = num_samples
         self.batch_size = batch_size
         self.threshold = threshold
 
+    @property
+    def model(self):
+        return self._model
+
+    @model.setter
+    def model(self, model):
+        self._model = model
+
     def evaluate(self):
-        self.model.eval()  # Set model to evaluation mode
         pixel_ious = []
         tree_ious = []
 
         total_batches = self.num_samples // self.batch_size
 
         with tqdm(total=total_batches, desc="Evaluating") as pbar:
-            for images, labels in self.dataset:
-                if torch.cuda.is_available():
-                    images = images.cuda()
-                    labels = labels.cuda()
-                with torch.no_grad():
-                    predictions = self.model(images)
-                
-                predictions = predictions.cpu().numpy()
-                labels = labels.cpu().numpy()
+
+            batch_iter = iter(self.dataset)
+
+            for _ in range(total_batches):
+                batch = next(batch_iter)
+                images, labels = batch
+
+                predictions = self.model.predict(images, verbose=0)
 
                 for i in range(len(predictions)):
                     y_pred = predictions[i]
                     y_true = labels[i]
 
-                    y_pred_binary = np.squeeze(y_pred[0] > self.threshold)
-                    y_true_binary = np.squeeze(y_true[0] > self.threshold)
+                    y_pred_binary = np.squeeze(y_pred[:, :, 0] > self.threshold)
+                    y_true_binary = np.squeeze(y_true > self.threshold)
 
                     # Pixel-wise IoU
                     tp_pixels = np.sum(np.logical_and(y_pred_binary, y_true_binary))
@@ -87,4 +95,3 @@ class IOUCallback:
         mean_iou_trees = np.mean([iou for iou in tree_ious if iou != -1])
 
         return {"mean_iou_pixels": mean_iou_pixels, "mean_iou_trees": mean_iou_trees}
-

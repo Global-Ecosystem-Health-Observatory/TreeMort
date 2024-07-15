@@ -2,11 +2,13 @@ import os
 import argparse
 
 from tools.config import setup
+
 from treeseg.data.dataset import prepare_datasets
-from treeseg.modeling.trainer import trainer
+from treeseg.data.imagepaths import get_image_label_paths
+
 from treeseg.modeling.builder import resume_or_load
+from treeseg.modeling.trainer import trainer
 from treeseg.evaluation.evaluator import evaluator
-from treeseg.utils.callbacks import build_callbacks
 
 
 def run(conf, eval_only):
@@ -17,23 +19,26 @@ def run(conf, eval_only):
     if not os.path.exists(conf.output_dir):
             os.makedirs(conf.output_dir)
 
-    train_dataset, val_dataset, test_dataset = prepare_datasets(conf.data_folder, conf)
+    train_images, train_labels, test_images, test_labels = get_image_label_paths(
+        conf.data_folder
+    )
 
-    model, optimizer, criterion, metrics = resume_or_load(conf)
-    
-    n_batches = len(train_dataset)
+    train_dataset, val_dataset, test_dataset = prepare_datasets(
+        train_images, train_labels, test_images, test_labels, conf
+    )
 
-    callbacks = build_callbacks(n_batches, conf.output_dir, optimizer)
+    model = resume_or_load(conf)
 
     if eval_only:
         print("Evaluation-only mode started.")
 
-        evaluator(model, test_dataset, len(test_dataset), conf.test_batch_size, conf.threshold)
+        evaluator(model, test_dataset, len(test_images), conf.test_batch_size, conf.threshold)
 
     else:
         print("Training mode started.")
         
-        trainer(model, optimizer, criterion, metrics, train_dataset, val_dataset, conf, callbacks)
+        trainer(model, train_dataset, val_dataset, len(train_images), conf)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Configuration setup for network.")
