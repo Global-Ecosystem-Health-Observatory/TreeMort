@@ -8,6 +8,8 @@ import segmentation_models_pytorch as smp
 from treeseg.utils.checkpoints import get_checkpoint
 #from treeseg.modeling.network.kokonet import Kokonet
 #from treeseg.modeling.network.kokonet_hrnet import Kokonet_hrnet
+from treeseg.modeling.network.self_attention_unet import SelfAttentionUNet
+
 from treeseg.utils.loss import hybrid_loss, mse_loss, iou_score, f_score
 
 def resume_or_load(conf):
@@ -29,13 +31,16 @@ def resume_or_load(conf):
     return model, optimizer, criterion, metrics
 
 def build_model(model_name, input_channels, output_channels, activation, loss, learning_rate, threshold):
-    assert model_name in ["unet", "kokonet", "kokonet_hrnet"], f"Model {model_name} unavailable."
+    assert model_name in ["unet", "kokonet", "kokonet_hrnet", "unet-self-attention"], f"Model {model_name} unavailable."
     assert activation in ["tanh", "sigmoid"], f"Model activation {activation} unavailable."
     assert loss in ["mse", "hybrid"], f"Model loss {loss} unavailable."
 
     if model_name == "unet":
         model = smp.Unet(encoder_name="resnet34", in_channels=input_channels, classes=output_channels, activation=None)
     
+    elif model_name == "unet-self-attention":
+        model = SelfAttentionUNet(in_channels=input_channels, n_classes=output_channels, depth=4, wf=6, batch_norm=True)
+        
     elif model_name == "kokonet":
         #model = Kokonet(input_channels=input_channels, output_channels=output_channels, activation=activation)
         pass

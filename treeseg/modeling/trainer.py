@@ -4,6 +4,7 @@ import torch
 from torch.utils.data import DataLoader
 
 from treeseg.utils.callbacks import build_callbacks
+from treeseg.utils.callbacks import ModelCheckpoint, ReduceLROnPlateau, EarlyStopping
 
 def trainer(model, optimizer, criterion, metrics, train_loader, val_loader, conf, callbacks):
 
@@ -68,27 +69,3 @@ def trainer(model, optimizer, criterion, metrics, train_loader, val_loader, conf
                 if callback.stop_training:
                     print("Early stopping")
                     return
-
-from treeseg.utils.callbacks import ModelCheckpoint, ReduceLROnPlateau, EarlyStopping
-'''
-    for epoch in range(conf.epochs):
-        model.train()
-        for images, labels in train_loader:
-            optimizer.zero_grad()                       
-            outputs = model(images)
-            loss = criterion(outputs, labels)
-            loss.backward()
-            optimizer.step()
-
-            metric_values = metrics(outputs, labels)
-            print(f"Loss: {loss.item()} | Metrics: {metric_values}")
-
-        model.eval()
-        with torch.no_grad():
-            for images, labels in val_loader:
-                outputs = model(images)
-                val_loss = criterion(outputs, labels)
-                val_metric_values = metrics(outputs, labels)
-                print(f"Val Loss: {val_loss.item()} | Val Metrics: {val_metric_values}")
-
-'''
