@@ -2,10 +2,9 @@ import os
 import math
 import torch
 from torch.utils.data import DataLoader
-
+from tqdm import tqdm
 from treeseg.utils.callbacks import build_callbacks
 from treeseg.utils.callbacks import ModelCheckpoint, ReduceLROnPlateau, EarlyStopping
-
 
 def trainer(
     model, optimizer, criterion, metrics, train_loader, val_loader, conf, callbacks, device
@@ -15,7 +14,8 @@ def trainer(
         train_loss = 0.0
         train_metrics = {}
 
-        for batch_idx, (images, labels) in enumerate(train_loader):
+        train_progress_bar = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{conf.epochs} [Training]", unit="batch")
+        for batch_idx, (images, labels) in enumerate(train_progress_bar):
             images, labels = images.to(device), labels.to(device)
 
             optimizer.zero_grad()
@@ -35,6 +35,8 @@ def trainer(
                     train_metrics[key] = 0.0
                 train_metrics[key] += value.item()
 
+            train_progress_bar.set_postfix({"Train Loss": train_loss / (batch_idx + 1)})
+
         # Average train loss and metrics
         train_loss /= len(train_loader)
         for key in train_metrics:
@@ -43,8 +45,9 @@ def trainer(
         model.eval()
         val_loss = 0.0
         val_metrics = {}
+        val_progress_bar = tqdm(val_loader, desc=f"Epoch {epoch + 1}/{conf.epochs} [Validation]", unit="batch")
         with torch.no_grad():
-            for images, labels in val_loader:
+            for batch_idx, (images, labels) in enumerate(val_progress_bar):
                 images, labels = images.to(device), labels.to(device)
 
                 outputs = model(images)
@@ -58,6 +61,8 @@ def trainer(
                     if key not in val_metrics:
                         val_metrics[key] = 0.0
                     val_metrics[key] += value.item()
+
+                val_progress_bar.set_postfix({"Val Loss": val_loss / (batch_idx + 1)})
 
         # Average validation loss and metrics
         val_loss /= len(val_loader)
