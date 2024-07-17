@@ -44,8 +44,7 @@ fi
 cat <<EOT >> $SBATCH_SCRIPT
 
 module load tensorflow
-export PYTHONPATH=\$PWD:\$PYTHONPATH
-export SM_FRAMEWORK="tf.keras"
+source venv/bin/activate
 
 EOT
 

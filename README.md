@@ -9,7 +9,7 @@ git clone https://github.com/Global-Ecosystem-Health-Observatory/TreeMort.git
 cd TreeMort
 ```
 
-- Install packages
+- Install TreeMort and its dependencies
 
 ```bash
 sh scripts/install_treemort.sh

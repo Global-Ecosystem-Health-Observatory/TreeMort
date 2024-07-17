@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="treemort",
+    name="TreeMort",
     version="0.1.0",
     author="@nis",
     license="GPLv3+",
@@ -10,8 +10,8 @@ setup(
         'tqdm',
         'scipy',
         'matplotlib',
-        'configargparse',
         'tensorflow',
+        'configargparse',
         'segmentation_models',
     ],
 )
