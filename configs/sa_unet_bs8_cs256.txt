@@ -1,0 +1,34 @@
+# settings for self attention unet
+
+data-folder = /scratch/project_2008436/rahmanan/AerialImageModel_ITD
+
+model = sa_unet
+
+output-dir = output/sa_unet
+
+train-crop-size = 256
+test-crop-size = 512
+
+input-channels = 4
+output-channels = 1
+
+train-batch-size = 8
+test-batch-size = 8
+
+epochs = 100
+
+model-weights = best # available options [best, latest]
+
+learning-rate = 1e-4
+
+threshold = 0.5
+
+# activation = sigmoid # available options [tanh, sigmoid]
+
+loss = hybrid # available options [mse, hybrid]
+
+val-size = 0.2
+
+resume
+
+binarize

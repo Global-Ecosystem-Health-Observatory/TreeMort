@@ -46,13 +46,13 @@ def build_model(
     loss,
     learning_rate,
     threshold,
+    backbone,
     device,
 ):
     assert model_name in [
         "unet",
-        "kokonet",
-        "kokonet_hrnet",
-        "unet-self-attention",
+        "sa_unet",
+        "deeplabv3+",
     ], f"Model {model_name} unavailable."
     assert activation in [
         "tanh",
@@ -68,7 +68,7 @@ def build_model(
             activation=None,
         )
 
-    elif model_name == "unet-self-attention":
+    elif model_name == "sa_unet":
         model = SelfAttentionUNet(
             in_channels=input_channels,
             n_classes=output_channels,
@@ -77,13 +77,9 @@ def build_model(
             batch_norm=True,
         )
 
-    elif model_name == "kokonet":
-        # model = Kokonet(input_channels=input_channels, output_channels=output_channels, activation=activation)
-        pass
-
-    elif model_name == "kokonet_hrnet":
-        # model = Kokonet_hrnet(input_channels=input_channels, output_channels=output_channels, activation=activation)
-        pass
+    elif model_name == "deeplabv3+":
+        backbone = "resnet50"
+        model = smp.DeepLabV3Plus(backbone, in_channels=input_channels, encoder_weights='imagenet')
 
     model.to(device)
 

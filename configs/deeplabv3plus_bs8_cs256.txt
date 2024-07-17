@@ -1,10 +1,10 @@
-# settings for kokonet
+# settings for deeplabv3+
 
 data-folder = /scratch/project_2008436/rahmanan/AerialImageModel_ITD
 
-model = unet-self-attention
+model = deeplabv3+
 
-output-dir = output/unet_self_attention
+output-dir = output/deeplabv3plus
 
 train-crop-size = 256
 test-crop-size = 512
