@@ -18,12 +18,12 @@ sh scripts/install_treemort.sh
 - Train a model
 
 ```bash
-sh ./scripts/run_treemort.sh ./configs/unet_self_attention_bs8_cs256.txt --eval-only false
+sh ./scripts/run_treemort.sh ./configs/kokonet_bs8_cs256.txt --eval-only false
 ```
 
 - Evaluate the model
 ```bash
-sh ./scripts/run_treemort.sh ./configs/unet_self_attention_bs8_cs256.txt --eval-only true
+sh ./scripts/run_treemort.sh ./configs/kokonet_bs8_cs256.txt --eval-only true
 ```
 
 ## Results
