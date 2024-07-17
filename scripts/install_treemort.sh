@@ -7,3 +7,5 @@ source venv/bin/activate
 
 python -m pip install --user --upgrade --no-deps --force-reinstall .
 python -c "import treemort; print(\"TreeMort imported successfully.\")"
+
+export SM_FRAMEWORK="tf.keras"
