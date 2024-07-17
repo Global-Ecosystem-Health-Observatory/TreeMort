@@ -46,8 +46,8 @@ def build_model(
     loss,
     learning_rate,
     threshold,
-    backbone,
     device,
+    backbone="resnet50",
 ):
     assert model_name in [
         "unet",
@@ -78,7 +78,6 @@ def build_model(
         )
 
     elif model_name == "deeplabv3+":
-        backbone = "resnet50"
         model = smp.DeepLabV3Plus(backbone, in_channels=input_channels, encoder_weights='imagenet')
 
     model.to(device)
