@@ -30,9 +30,10 @@ sh ./scripts/run_treemortality.sh ./configs/unet_self_attention_bs8_cs256.txt --
 
 | Model                             | Mean IOU Pixels   | Mean IOU Trees    |
 | :-------------------------------: | :---------------: | :---------------: |
-| Kokonet                           |   0.791           |   0.810           |
-| Kokonet Binarized                 |   0.796           |   0.818           |
-| Kokonet Binarized with Backbone   |   0.759           |   0.781           |
+| Kokonet                           | 0.791           | 0.810               |
+| Kokonet Binarized                 | 0.796           | 0.818               |
+| Kokonet Binarized with Backbone   | 0.759           | 0.781               |
+| Unet with Self Attention          | 0.844           | 0.862               |
 
 
 ## (Optional) Dataset Creation
