@@ -45,6 +45,7 @@ cat <<EOT >> $SBATCH_SCRIPT
 
 module load tensorflow
 source venv/bin/activate
+export SM_FRAMEWORK="tf.keras"
 
 EOT
 
