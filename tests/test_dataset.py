@@ -3,7 +3,7 @@ import tensorflow as tf
 
 from unittest.mock import patch
 
-from treeseg.data.dataset import prepare_dataset
+from treemort.data.dataset import prepare_dataset
 
 
 def test_prepare_dataset():

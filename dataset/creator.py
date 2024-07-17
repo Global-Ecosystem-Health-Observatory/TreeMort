@@ -178,5 +178,3 @@ if __name__ == "__main__":
 
     print("Removing Temp folder")
     shutil.rmtree(os.path.join(data_folder, "Temp"))
-
-#python3 ./dataset/creator.py /Users/anisr/Documents/AerialImages --no-of-samples 2

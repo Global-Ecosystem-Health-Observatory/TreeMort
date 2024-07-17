@@ -1,6 +1,0 @@
-tqdm
-scipy
-matplotlib
-configargparse
-tensorflow
-segmentation_models

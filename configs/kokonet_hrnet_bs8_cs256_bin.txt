@@ -1,4 +1,4 @@
-# settings for kokonet
+# settings for kokonet with backbone
 
 data-folder = /scratch/project_2008436/rahmanan/AerialImageModel_ITD
 

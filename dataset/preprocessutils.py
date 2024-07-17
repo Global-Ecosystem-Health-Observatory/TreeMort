@@ -1,15 +1,12 @@
-# Preprocessing helper functions that are used for all prepcessing scripts
-
-from PIL import Image
-import cv2, os, glob
-import random, json
-from matplotlib import pyplot as plt
-import numpy as np
-import tifffile as tiff
-from tqdm import tqdm
+import cv2
+import json
+import random
 import rasterio
+
+import numpy as np
+
+from tqdm import tqdm
 from rasterio.plot import show
-import tensorflow as tf
 
 
 # get the value from numpy array
@@ -127,7 +124,7 @@ def load_geotiff_reorder(
 
 def get_random_crop(exim_np, distancepoly, size=224):
     # pad to size if needed
-    concat = tf.concat([exim_np, tf.expand_dims(distancepoly, axis=-1)], -1).numpy()
+    concat = np.concatenate([exim_np, np.expand_dims(distancepoly, axis=-1)], axis=-1)
     row_pad_needed = np.max([0, size - concat.shape[0]])
     col_pad_needed = np.max([0, size - concat.shape[1]])
     padded_concat = np.pad(

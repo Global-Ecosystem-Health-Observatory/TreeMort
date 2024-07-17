@@ -1,4 +1,4 @@
-# settings for kokonet
+# settings for kokonet binarized
 
 data-folder = /scratch/project_2008436/rahmanan/AerialImageModel_ITD
 

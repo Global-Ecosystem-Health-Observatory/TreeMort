@@ -3,7 +3,7 @@ import os
 import numpy as np
 import tensorflow as tf
 
-from treeseg.utils.preprocess import load_numpy, normalize_inputs, random_crop_tf
+from treemort.utils.preprocess import load_numpy, normalize_inputs, random_crop_tf
 
 
 def test_load_numpy():

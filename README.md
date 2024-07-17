@@ -1,39 +1,39 @@
-# Tree Mortality Segmentation
+# TreeMort Segmentation
 
 ## Getting Started (Puhti)
 
 - Clone repository
 
 ```bash
-git clone https://github.com/Global-Ecosystem-Health-Observatory/TreeSeg.git
-cd TreeSeg
+git clone https://github.com/Global-Ecosystem-Health-Observatory/TreeMort.git
+cd TreeMort
 ```
 
 - Install packages
 
 ```bash
-sh scripts/install_treemortality.sh
+sh scripts/install_treemort.sh
 ```
 
 - Train a model
 
 ```bash
-sh ./scripts/run_treemortality.sh ./configs/unet_self_attention_bs8_cs256.txt --eval-only false
+sh ./scripts/run_treemort.sh ./configs/unet_self_attention_bs8_cs256.txt --eval-only false
 ```
 
 - Evaluate the model
 ```bash
-sh ./scripts/run_treemortality.sh ./configs/unet_self_attention_bs8_cs256.txt --eval-only true
+sh ./scripts/run_treemort.sh ./configs/unet_self_attention_bs8_cs256.txt --eval-only true
 ```
 
 ## Results
 
 | Model                             | Mean IOU Pixels   | Mean IOU Trees    |
 | :-------------------------------: | :---------------: | :---------------: |
-| Kokonet                           | 0.791           | 0.810               |
-| Kokonet Binarized                 | 0.796           | 0.818               |
-| Kokonet Binarized with Backbone   | 0.759           | 0.781               |
-| Unet with Self Attention          | 0.844           | 0.862               |
+| Kokonet                           | 0.791             | 0.810             |
+| Kokonet Binarized                 | 0.796             | 0.818             |
+| Kokonet Binarized with Backbone   | 0.759             | 0.781             |
+| Unet with Self Attention          | 0.844             | 0.862             |
 
 
 ## (Optional) Dataset Creation
@@ -63,8 +63,8 @@ scp -O -r ~/Documents/AerialImageModel_ITD/Test rahmanan@puhti.csc.fi:/scratch/p
 - Clone repository
 
 ```bash
-git clone https://github.com/Global-Ecosystem-Health-Observatory/TreeSeg.git
-cd TreeSeg
+git clone https://github.com/Global-Ecosystem-Health-Observatory/TreeMort.git
+cd TreeMort
 ```
 
 - Create a new environment
@@ -74,16 +74,20 @@ python3 -m venv venv
 source venv/bin/activate
 
 pip install --upgrade pip
-pip install --quiet -r requirements.txt
+pip install --upgrade --no-deps --force-reinstall .
+
+export SM_FRAMEWORK="tf.keras"
 ```
 
 - Train a model
 
 ```bash
-python train_net.py ./configs/unet_self_attention_bs8_cs256.txt
+python -m treemort.main ./configs/kokonet_bs8_cs256.txt
 ```
 
 - Evaluate the model
 ```bash
-python train_net.py ./configs/unet_self_attention_bs8_cs256.txt --eval-only
+python -m treemort.main ./configs/kokonet_bs8_cs256.txt --eval-only
 ```
+
+- Running from source, refer to ./colab/treemort_colab.ipynb
