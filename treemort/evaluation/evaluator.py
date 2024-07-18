@@ -1,4 +1,4 @@
-from treeseg.utils.iou import IOUCallback
+from treemort.utils.iou import IOUCallback
 
 
 def evaluator(model, dataset, num_samples, batch_size, threshold, device):

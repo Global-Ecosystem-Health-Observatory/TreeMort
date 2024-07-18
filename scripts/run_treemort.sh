@@ -2,7 +2,7 @@
 
 # Check if at least the config file is provided
 if [ "$#" -lt 1 ]; then
-    echo "Usage: ./submit_job.sh <config file> [--eval-only true|false]"
+    echo "Usage: ./run_treemort.sh <config file> [--eval-only true|false]"
     exit 1
 fi
 
@@ -23,7 +23,7 @@ SBATCH_SCRIPT=$(mktemp)
 # Common SBATCH script part
 cat <<EOT > $SBATCH_SCRIPT
 #!/bin/bash
-#SBATCH --job-name=tree-mortality
+#SBATCH --job-name=tree-mort
 #SBATCH --account=project_2008436
 #SBATCH --output=output/stdout/%A_%a
 #SBATCH --ntasks=1 --cpus-per-task=4
@@ -44,14 +44,14 @@ fi
 cat <<EOT >> $SBATCH_SCRIPT
 
 module load pytorch/2.3
-export PYTHONPATH=\$PWD:\$PYTHONPATH
+source venv/bin/activate
 
 EOT
 
 if [ "$EVAL_ONLY" = true ]; then
-    echo "srun python3 train_net.py \"$CONFIG_FILE\" --eval-only" >> $SBATCH_SCRIPT
+    echo "srun python3 -m treemort.main \"$CONFIG_FILE\" --eval-only" >> $SBATCH_SCRIPT
 else
-    echo "srun python3 train_net.py \"$CONFIG_FILE\"" >> $SBATCH_SCRIPT
+    echo "srun python3 -m treemort.main \"$CONFIG_FILE\"" >> $SBATCH_SCRIPT
 fi
 
 # Print the contents of the SBATCH script

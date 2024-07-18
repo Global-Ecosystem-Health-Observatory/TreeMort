@@ -2,12 +2,14 @@ import os
 import torch
 import argparse
 
-from tools.config import setup
-from treeseg.data.dataset import prepare_datasets
-from treeseg.modeling.trainer import trainer
-from treeseg.modeling.builder import resume_or_load
-from treeseg.evaluation.evaluator import evaluator
-from treeseg.utils.callbacks import build_callbacks
+from treemort.utils.config import setup
+from treemort.utils.callbacks import build_callbacks
+
+from treemort.data.dataset import prepare_datasets
+
+from treemort.modeling.builder import resume_or_load
+from treemort.modeling.trainer import trainer
+from treemort.evaluation.evaluator import evaluator
 
 
 def run(conf, eval_only):
