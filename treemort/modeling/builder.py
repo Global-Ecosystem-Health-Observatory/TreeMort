@@ -5,9 +5,15 @@ import torch.nn as nn
 import torch.optim as optim
 import segmentation_models_pytorch as smp
 
-from treeseg.utils.checkpoints import get_checkpoint
-from treeseg.modeling.network.self_attention_unet import SelfAttentionUNet
-from treeseg.utils.loss import hybrid_loss, mse_loss, iou_score, f_score
+from transformers import (
+            MaskFormerConfig,
+            MaskFormerModel,
+            MaskFormerForInstanceSegmentation,
+        )
+
+from treemort.utils.checkpoints import get_checkpoint
+from treemort.modeling.network.self_attention_unet import SelfAttentionUNet
+from treemort.utils.loss import hybrid_loss, mse_loss, iou_score, f_score
 
 
 def resume_or_load(conf, device):
@@ -53,6 +59,7 @@ def build_model(
         "unet",
         "sa_unet",
         "deeplabv3+",
+        "maskformer",
     ], f"Model {model_name} unavailable."
     assert activation in [
         "tanh",
@@ -80,6 +87,44 @@ def build_model(
     elif model_name == "deeplabv3+":
         model = smp.DeepLabV3Plus(backbone, in_channels=input_channels, encoder_weights='imagenet')
 
+    elif model_name == "maskformer":        
+        
+        # Define the name of the model
+        model_name = "facebook/maskformer-swin-base-ade"
+
+        # Get the MaskFormer config and print it
+        config = MaskFormerConfig.from_pretrained(model_name, id2label = {0: 'alive', 1: 'dead'}, ignore_mismatched_sizes=True)
+        print("[INFO] displaying the MaskFormer configuration...")
+        # print(config)
+
+        # Use the config object to initialize a MaskFormer model with randomized weights
+        model = MaskFormerForInstanceSegmentation(config)
+
+        # Replace the randomly initialized model with the pre-trained model weights
+        base_model = MaskFormerModel.from_pretrained(model_name)
+        model.model = base_model
+
+        # Modify the input layer to accept 4 channels instead of 3
+        class CustomMaskFormer(MaskFormerForInstanceSegmentation):
+            def __init__(self, config):
+                super().__init__(config)
+                self.model = MaskFormerModel(config)
+                self.conv1 = nn.Conv2d(4, 3, kernel_size=1)
+
+            def forward(self, pixel_values, pixel_mask=None):
+                # Map the 4-channel input to 3 channels
+                pixel_values = self.conv1(pixel_values)
+                return super().forward(pixel_values, pixel_mask)
+
+        # Initialize the custom model
+        model = CustomMaskFormer(config)
+
+        # Copy the weights from the pretrained model
+        model.model.load_state_dict(model.model.state_dict(), strict=False)
+
+        # Now custom_model can be used with 4-channel inputs
+        print("[INFO] Custom model created and weights loaded successfully.")
+        
     model.to(device)
 
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)

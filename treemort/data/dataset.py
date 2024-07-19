@@ -4,7 +4,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader, random_split
 import torchvision.transforms as T
 
-from treeseg.utils.augment import Augmentations
+from treemort.utils.augment import Augmentations
 
 
 class DeadTreeDataset(Dataset):

@@ -39,7 +39,7 @@ def run(conf, eval_only):
             num_samples=len(test_dataset),
             batch_size=conf.test_batch_size,
             threshold=conf.threshold,
-            device=device,
+            model_name=conf.model,
         )
 
     else:

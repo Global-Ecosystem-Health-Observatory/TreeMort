@@ -3,14 +3,18 @@ import numpy as np
 from tqdm import tqdm
 from scipy import ndimage
 
+from transformers import MaskFormerImageProcessor
+
+preprocessor = MaskFormerImageProcessor(ignore_index=0, do_resize=False, do_rescale=False, do_normalize=False)
 
 class IOUCallback:
-    def __init__(self, model, dataset, num_samples, batch_size, threshold):
+    def __init__(self, model, dataset, num_samples, batch_size, threshold, model_name):
         self.model = model
         self.dataset = dataset
         self.num_samples = num_samples
         self.batch_size = batch_size
         self.threshold = threshold
+        self.model_name = model_name
         self.device = next(model.parameters()).device  # Get the device of the model
 
     def evaluate(self):
@@ -28,6 +32,11 @@ class IOUCallback:
                     labels = labels.to(self.device)
 
                     predictions = self.model(images)
+
+                    if self.model_name == "maskformer":
+                        target_sizes = [(image.shape[1], image.shape[2]) for image in images]
+                        predictions = preprocessor.post_process_semantic_segmentation(predictions, target_sizes=target_sizes)
+                        predictions = torch.stack([prediction.unsqueeze(0) for prediction in predictions] , dim=0)
 
                     predictions = predictions.cpu().numpy()
                     labels = labels.cpu().numpy()
