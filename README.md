@@ -35,6 +35,7 @@ sh ./scripts/run_treemort.sh ./configs/kokonet_bs8_cs256.txt --eval-only true
 | Kokonet Binarized with Backbone   | 0.759             | 0.781             |
 | Unet with Self Attention          | 0.844             | 0.862             |
 | DeeplabV3+                        | 0.862             | 0.877             |
+| Maskformer                        | 0.814             | 0.814             |
 
 ## (Optional) Dataset Creation
 
