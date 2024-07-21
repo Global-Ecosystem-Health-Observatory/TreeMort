@@ -6,6 +6,11 @@ from tqdm import tqdm
 
 from treemort.utils.callbacks import ModelCheckpoint, ReduceLROnPlateau, EarlyStopping
 
+def extract_features(images, model, device):
+    images = images.to(device)
+    with torch.no_grad():
+        outputs = model(images)
+    return outputs.last_hidden_state  # Or the appropriate output layer
 
 def trainer(
     model,
@@ -17,6 +22,7 @@ def trainer(
     conf,
     callbacks,
     device,
+    feature_extractor
 ):
     for epoch in range(conf.epochs):
         model.train()
@@ -33,7 +39,12 @@ def trainer(
 
             optimizer.zero_grad()
 
-            outputs = model(images)
+            if feature_extractor is None:
+                outputs = model(images)
+            
+            else:
+                features = extract_features(images, feature_extractor, device)
+                outputs = model(features)
 
             loss = criterion(outputs, labels)
             loss.backward()
@@ -67,7 +78,12 @@ def trainer(
             for batch_idx, (images, labels) in enumerate(val_progress_bar):
                 images, labels = images.to(device), labels.to(device)
 
-                outputs = model(images)
+                if feature_extractor is None:
+                    outputs = model(images)
+                
+                else:
+                    features = extract_features(images, feature_extractor, device)
+                    outputs = model(features)
 
                 loss = criterion(outputs, labels)
 

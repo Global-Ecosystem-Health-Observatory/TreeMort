@@ -24,7 +24,7 @@ def run(conf, eval_only):
 
     train_dataset, val_dataset, test_dataset = prepare_datasets(conf.data_folder, conf)
 
-    model, optimizer, criterion, metrics = resume_or_load(conf, device=device)
+    model, optimizer, criterion, metrics, feature_extractor = resume_or_load(conf, device=device)
 
     n_batches = len(train_dataset)
 
@@ -55,6 +55,7 @@ def run(conf, eval_only):
             conf=conf,
             callbacks=callbacks,
             device=device,
+            feature_extractor=feature_extractor
         )
 
 
