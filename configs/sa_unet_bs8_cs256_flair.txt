@@ -29,7 +29,7 @@ loss = hybrid # available options [mse, hybrid]
 
 val-size = 0.2
 
-backbone = flair
+feature-extractor = flair
 
 resume
 
