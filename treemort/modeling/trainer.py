@@ -1,25 +1,38 @@
 import os
 import math
 import torch
-from torch.utils.data import DataLoader
+
 from tqdm import tqdm
-from treeseg.utils.callbacks import build_callbacks
-from treeseg.utils.callbacks import ModelCheckpoint, ReduceLROnPlateau, EarlyStopping
+
+from treemort.utils.callbacks import ModelCheckpoint, ReduceLROnPlateau, EarlyStopping
+
 
 def trainer(
-    model, optimizer, criterion, metrics, train_loader, val_loader, conf, callbacks, device
+    model,
+    optimizer,
+    criterion,
+    metrics,
+    train_loader,
+    val_loader,
+    conf,
+    callbacks,
+    device,
 ):
     for epoch in range(conf.epochs):
         model.train()
         train_loss = 0.0
         train_metrics = {}
 
-        train_progress_bar = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{conf.epochs} [Training]", unit="batch")
+        train_progress_bar = tqdm(
+            train_loader,
+            desc=f"Epoch {epoch + 1}/{conf.epochs} [Training]",
+            unit="batch",
+        )
         for batch_idx, (images, labels) in enumerate(train_progress_bar):
             images, labels = images.to(device), labels.to(device)
 
             optimizer.zero_grad()
-    
+
             outputs = model(images)
 
             loss = criterion(outputs, labels)
@@ -45,7 +58,11 @@ def trainer(
         model.eval()
         val_loss = 0.0
         val_metrics = {}
-        val_progress_bar = tqdm(val_loader, desc=f"Epoch {epoch + 1}/{conf.epochs} [Validation]", unit="batch")
+        val_progress_bar = tqdm(
+            val_loader,
+            desc=f"Epoch {epoch + 1}/{conf.epochs} [Validation]",
+            unit="batch",
+        )
         with torch.no_grad():
             for batch_idx, (images, labels) in enumerate(val_progress_bar):
                 images, labels = images.to(device), labels.to(device)

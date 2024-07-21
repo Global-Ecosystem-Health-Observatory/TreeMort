@@ -5,9 +5,9 @@ import torch.nn as nn
 import torch.optim as optim
 import segmentation_models_pytorch as smp
 
-from treeseg.utils.checkpoints import get_checkpoint
-from treeseg.modeling.network.self_attention_unet import SelfAttentionUNet
-from treeseg.utils.loss import hybrid_loss, mse_loss, iou_score, f_score
+from treemort.utils.checkpoints import get_checkpoint
+from treemort.modeling.network.self_attention_unet import SelfAttentionUNet
+from treemort.utils.loss import hybrid_loss, mse_loss, iou_score, f_score
 
 
 def resume_or_load(conf, device):
