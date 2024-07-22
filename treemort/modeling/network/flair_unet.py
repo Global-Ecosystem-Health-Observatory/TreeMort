@@ -194,8 +194,12 @@ class FeatureExtractor(nn.Module):
         return self.features
 
 
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
 class CombinedModel(nn.Module):
-    def __init__(self, pretrained_model, n_classes=3):
+    def __init__(self, pretrained_model, n_classes=3, output_size=256):
         super(CombinedModel, self).__init__()
         self.feature_extractor = FeatureExtractor(pretrained_model)
         self.decoder = SelfAttentionUNetDecoder(
@@ -207,8 +211,12 @@ class CombinedModel(nn.Module):
             up_mode="upconv",
             kernel_size=3,
         )
+        # Additional upsampling layer
+        self.upsample = nn.Upsample(size=(output_size, output_size), mode='bilinear', align_corners=False)
 
     def forward(self, x):
         encoder_features = self.feature_extractor(x)
-        output = self.decoder(encoder_features[-1], encoder_features)
-        return output
+        decoder_output = self.decoder(encoder_features[-1], encoder_features)
+        upsampled_output = self.upsample(decoder_output)
+        return upsampled_output
+

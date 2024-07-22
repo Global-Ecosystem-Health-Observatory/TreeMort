@@ -7,9 +7,9 @@ model = flair_unet
 output-dir = output/flair_unet
 
 train-crop-size = 256
-test-crop-size = 512
+test-crop-size = 256
 
-input-channels = 512
+input-channels = 4
 output-channels = 1
 
 train-batch-size = 8

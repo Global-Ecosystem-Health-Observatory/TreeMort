@@ -12,16 +12,7 @@ from treemort.utils.loss import hybrid_loss, mse_loss, iou_score, f_score
 
 def resume_or_load(conf, device):
 
-    model, optimizer, criterion, metrics = build_model(
-        model_name=conf.model,
-        input_channels=conf.input_channels,
-        output_channels=conf.output_channels,
-        activation=conf.activation,
-        loss=conf.loss,
-        learning_rate=conf.learning_rate,
-        threshold=conf.threshold,
-        device=device,
-    )
+    model, optimizer, criterion, metrics = build_model(conf, device=device)
 
     print("[INFO] Model built.")
 
@@ -43,52 +34,43 @@ def resume_or_load(conf, device):
     return model, optimizer, criterion, metrics
 
 
-def build_model(
-    model_name,
-    input_channels,
-    output_channels,
-    activation,
-    loss,
-    learning_rate,
-    threshold,
-    device,
-):
-    assert model_name in [
+def build_model(conf, device):
+    assert conf.model in [
         "unet",
         "sa_unet",
         "flair_unet",
         "deeplabv3+",
-    ], f"Model {model_name} unavailable."
-    assert activation in [
+    ], f"Model {conf.model} unavailable."
+    assert conf.activation in [
         "tanh",
         "sigmoid",
-    ], f"Model activation {activation} unavailable."
-    assert loss in ["mse", "hybrid"], f"Model loss {loss} unavailable."
+    ], f"Model activation {conf.activation} unavailable."
+    assert conf.loss in ["mse", "hybrid"], f"Model loss {conf.loss} unavailable."
 
-    if model_name == "unet":
+    if conf.model == "unet":
         model = smp.Unet(
             encoder_name="resnet34",
-            in_channels=input_channels,
-            classes=output_channels,
+            in_channels=conf.input_channels,
+            classes=conf.output_channels,
             activation=None,
         )
 
-    elif model_name == "sa_unet":
+    elif conf.model == "sa_unet":
 
         model = SelfAttentionUNet(
-            in_channels=input_channels,
-            n_classes=output_channels,
+            in_channels=conf.input_channels,
+            n_classes=conf.output_channels,
             depth=4,
             wf=6,
             batch_norm=True,
         )
 
-    elif model_name == "deeplabv3+":
+    elif conf.model == "deeplabv3+":
         model = smp.DeepLabV3Plus(
-            backbone="resnet50", in_channels=input_channels, encoder_weights="imagenet"
+            backbone="resnet50", in_channels=conf.input_channels, encoder_weights="imagenet"
         )
 
-    elif model_name == "flair_unet":
+    elif conf.model == "flair_unet":
 
         repo_id = "IGNF/FLAIR-INC_rgbi_15cl_resnet34-unet"
         filename = "FLAIR-INC_rgbi_15cl_resnet34-unet_weights.pth"
@@ -105,22 +87,22 @@ def build_model(
 
         pretrained_model = pretrained_model.get_model()
 
-        model = CombinedModel(pretrained_model=pretrained_model, n_classes=1)
+        model = CombinedModel(pretrained_model=pretrained_model, n_classes=1, output_size=conf.test_crop_size)
 
     model.to(device)
 
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    optimizer = optim.Adam(model.parameters(), lr=conf.learning_rate)
 
-    if loss == "hybrid":
+    if conf.loss == "hybrid":
         criterion = hybrid_loss
 
         def metrics(pred, target):
             return {
-                "iou_score": iou_score(pred, target, threshold),
-                "f_score": f_score(pred, target, threshold),
+                "iou_score": iou_score(pred, target, conf.threshold),
+                "f_score": f_score(pred, target, conf.threshold),
             }
 
-    elif loss == "mse":
+    elif conf.loss == "mse":
         criterion = mse_loss
 
         def metrics(pred, target):
