@@ -69,13 +69,17 @@ class SelfAttentionUNet(nn.Module):
     def forward(self, x):
         blocks = []
         for i, down in enumerate(self.down_path):
+            print('A0', i, x.shape)
             x = down(x)
             if i != len(self.down_path) - 1:
                 blocks.append(x)
                 x = F.max_pool2d(x, 2)
+            print('A1', i, x.shape)
 
         for i, up in enumerate(self.up_path):
+            print('B0', i, x.shape)
             x = up(x, blocks[-i - 1])
+            print('B1', i, x.shape)
 
         return self.last(x)
 

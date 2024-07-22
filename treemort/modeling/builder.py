@@ -1,33 +1,17 @@
-import os
-import timm
 import torch
 
 import torch.nn as nn
 import torch.optim as optim
 import segmentation_models_pytorch as smp
 
-from huggingface_hub import hf_hub_download
+from treemort.modeling.network.unet_mtd import smp_unet_mtd
+from treemort.modeling.network.sa_unet import SelfAttentionUNet
+from treemort.modeling.network.flair_unet import CombinedModel, PretrainedUNetModel
 
 from treemort.utils.checkpoints import get_checkpoint
-from treemort.modeling.network.self_attention_unet import SelfAttentionUNet
 from treemort.utils.loss import hybrid_loss, mse_loss, iou_score, f_score
 
-def create_feature_extractor(model_name, model_type, model_filename):
-
-    checkpoint_path = hf_hub_download(repo_id=model_name, filename=model_filename)
-
-    feature_extractor = timm.create_model(model_type, pretrained=False)
-    feature_extractor.load_state_dict(torch.load(checkpoint_path))
-
-    return feature_extractor
-
-
 def resume_or_load(conf, device):
-
-    if conf.feature_extractor == "flair":
-        feature_extractor = create_feature_extractor("IGNF/FLAIR-INC_rgbi_15cl_resnet34-unet", model_type='resnet34', model_filename="FLAIR-INC_rgbi_15cl_resnet34-unet_weights.pth")
-    else:
-        feature_extractor = None
 
     model, optimizer, criterion, metrics = build_model(
         model_name=conf.model,
@@ -37,25 +21,27 @@ def resume_or_load(conf, device):
         loss=conf.loss,
         learning_rate=conf.learning_rate,
         threshold=conf.threshold,
-        device=device
+        device=device,
     )
+
+    print("[INFO] Model built.")
 
     if conf.resume:
         checkpoint = get_checkpoint(conf.model_weights, conf.output_dir)
 
         if checkpoint:
             model.load_state_dict(torch.load(checkpoint))
-            print(f"Loaded weights from {checkpoint}")
+            print(f"[INFO] Loaded model weights from {checkpoint}")
 
         else:
-            print("No checkpoint found. Proceeding without loading weights.")
+            print(
+                "[INFO] No checkpoint found. Proceeding without loading model weights."
+            )
 
     else:
-        print("Model training from scratch.")
+        print("[INFO] Model training from scratch.")
 
-    return model, optimizer, criterion, metrics, feature_extractor
-
-
+    return model, optimizer, criterion, metrics
 
 
 def build_model(
@@ -67,11 +53,11 @@ def build_model(
     learning_rate,
     threshold,
     device,
-    
 ):
     assert model_name in [
         "unet",
         "sa_unet",
+        "flair_unet",
         "deeplabv3+",
     ], f"Model {model_name} unavailable."
     assert activation in [
@@ -89,7 +75,7 @@ def build_model(
         )
 
     elif model_name == "sa_unet":
-        
+
         model = SelfAttentionUNet(
             in_channels=input_channels,
             n_classes=output_channels,
@@ -99,7 +85,28 @@ def build_model(
         )
 
     elif model_name == "deeplabv3+":
-        model = smp.DeepLabV3Plus(backbone='resnet50', in_channels=input_channels, encoder_weights='imagenet')
+        model = smp.DeepLabV3Plus(
+            backbone="resnet50", in_channels=input_channels, encoder_weights="imagenet"
+        )
+
+    elif model_name == "flair_unet":
+
+        repo_id = "IGNF/FLAIR-INC_rgbi_15cl_resnet34-unet"
+        filename = "FLAIR-INC_rgbi_15cl_resnet34-unet_weights.pth"
+
+        pretrained_model = PretrainedUNetModel(
+            repo_id=repo_id,
+            filename=filename,
+            architecture="unet",
+            encoder="resnet34",
+            n_channels=4,
+            n_classes=15,
+            use_metadata=False
+        )
+
+        pretrained_model = pretrained_model.get_model()
+
+        model = CombinedModel(pretrained_model=pretrained_model, n_classes=1)
 
     model.to(device)
 

@@ -1,15 +1,15 @@
-# settings for self attention unet
+# settings for self attention unet with flair backbone
 
 data-folder = /scratch/project_2008436/rahmanan/AerialImageModel_ITD
 
-model = sa_unet
+model = flair_unet
 
-output-dir = output/sa_unet
+output-dir = output/flair_unet
 
 train-crop-size = 256
 test-crop-size = 512
 
-input-channels = 4
+input-channels = 512
 output-channels = 1
 
 train-batch-size = 8
@@ -28,8 +28,6 @@ threshold = 0.5
 loss = hybrid # available options [mse, hybrid]
 
 val-size = 0.2
-
-feature-extractor = flair
 
 resume
 

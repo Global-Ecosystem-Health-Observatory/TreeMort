@@ -23,8 +23,7 @@ def setup(config_file_path):
     parser.add("-ls",   "--loss",               type=str,   default="mse",      help="loss function of network")
     parser.add("-rs",   "--resume",             action="store_true",            help="resume training using stored model weights")
     parser.add("-bn",   "--binarize",           action="store_true",            help="binarize data labels to foreground and background mask")
-    parser.add("-fe",   "--feature-extractor",  type=str,   default=None,       help="feature extractor for model input")
-    
+
     conf, _ = parser.parse_known_args()
 
     return conf
