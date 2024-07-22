@@ -36,6 +36,7 @@ sh ./scripts/run_treemort.sh ./configs/kokonet_bs8_cs256.txt --eval-only true
 | Unet with Self Attention          | 0.844             | 0.862             |
 | DeeplabV3+                        | 0.862             | 0.877             |
 | Maskformer                        | 0.814             | 0.814             |
+| FLAIR (encoder) + UNet (decoder)  | 0.862             | 0.871             |
 
 ## (Optional) Dataset Creation
 
