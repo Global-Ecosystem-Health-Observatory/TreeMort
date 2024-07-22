@@ -17,6 +17,8 @@ def trainer(
     device,
 ):
     for epoch in range(conf.epochs):
+        print(f"[INFO] Epoch {epoch + 1}/{conf.epochs} - Training started.")
+
         model.train()
         train_loss = 0.0
         train_metrics = {}
@@ -53,6 +55,12 @@ def trainer(
         for key in train_metrics:
             train_metrics[key] /= len(train_loader)
 
+        print(f"[INFO] Epoch {epoch + 1} - Training completed.")
+        print(f"[INFO] Training Loss: {train_loss:.4f}")
+        print(f"[INFO] Training Metrics: {train_metrics}")
+
+        print(f"[INFO] Epoch {epoch + 1}/{conf.epochs} - Validation started.")
+
         model.eval()
         val_loss = 0.0
         val_metrics = {}
@@ -84,18 +92,25 @@ def trainer(
         for key in val_metrics:
             val_metrics[key] /= len(val_loader)
 
-        print(f"Epoch {epoch + 1}/{conf.epochs}")
-        print(f"Train Loss: {train_loss:.4f} | Validation Loss: {val_loss:.4f}")
-        print(f"Train Metrics: {train_metrics}")
-        print(f"Validation Metrics: {val_metrics}")
+        print(f"[INFO] Epoch {epoch + 1} - Validation completed.")
+        print(f"[INFO] Validation Loss: {val_loss:.4f}")
+        print(f"[INFO] Validation Metrics: {val_metrics}")
+
+        print(f"[INFO] Epoch {epoch + 1} completed.")
+        print(f"[INFO] Train Loss: {train_loss:.4f} | Validation Loss: {val_loss:.4f}")
 
         for callback in callbacks:
             if isinstance(callback, ModelCheckpoint):
+                print("[INFO] Invoking ModelCheckpoint callback.")
                 callback(epoch + 1, model, optimizer, val_loss)
             elif isinstance(callback, ReduceLROnPlateau):
+                print("[INFO] Invoking ReduceLROnPlateau callback.")
                 callback(val_loss)
             elif isinstance(callback, EarlyStopping):
+                print("[INFO] Invoking EarlyStopping callback.")
                 callback(epoch + 1, val_loss)
                 if callback.stop_training:
-                    print("Early stopping")
+                    print("[INFO] Early stopping triggered.")
                     return
+                
+    print("[INFO] Training process completed.")

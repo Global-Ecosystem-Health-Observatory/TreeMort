@@ -10,42 +10,33 @@ from treemort.modeling.network.flair_unet import CombinedModel, PretrainedUNetMo
 from treemort.utils.checkpoints import get_checkpoint
 from treemort.utils.loss import hybrid_loss, mse_loss, iou_score, f_score
 
+
 def resume_or_load(conf, device):
-
+    print("[INFO] Building model...")
     model, optimizer, criterion, metrics = build_model(conf, device=device)
-
-    print("[INFO] Model built.")
 
     if conf.resume:
         checkpoint = get_checkpoint(conf.model_weights, conf.output_dir)
 
         if checkpoint:
             model.load_state_dict(torch.load(checkpoint))
-            print(f"[INFO] Loaded model weights from {checkpoint}")
+            print(f"[INFO] Loaded weights from {checkpoint}.")
 
         else:
-            print(
-                "[INFO] No checkpoint found. Proceeding without loading model weights."
-            )
+            print("[INFO] No checkpoint found. Training from scratch.")
 
     else:
-        print("[INFO] Model training from scratch.")
+        print("[INFO] Training model from scratch.")
 
     return model, optimizer, criterion, metrics
 
 
 def build_model(conf, device):
-    assert conf.model in [
-        "unet",
-        "sa_unet",
-        "flair_unet",
-        "deeplabv3+",
-    ], f"Model {conf.model} unavailable."
-    assert conf.activation in [
-        "tanh",
-        "sigmoid",
-    ], f"Model activation {conf.activation} unavailable."
-    assert conf.loss in ["mse", "hybrid"], f"Model loss {conf.loss} unavailable."
+    print("[INFO] Configuring model...")
+
+    assert conf.model in ["unet", "sa_unet", "flair_unet", "deeplabv3+"], f"[ERROR] Invalid model: {conf.model}."
+    assert conf.activation in ["tanh", "sigmoid"], f"[ERROR] Invalid activation function: {conf.activation}."
+    assert conf.loss in ["mse", "hybrid"], f"[ERROR] Invalid loss function: {conf.loss}."
 
     if conf.model == "unet":
         model = smp.Unet(
@@ -54,9 +45,9 @@ def build_model(conf, device):
             classes=conf.output_channels,
             activation=None,
         )
+        print("[INFO] Unet model configured.")
 
     elif conf.model == "sa_unet":
-
         model = SelfAttentionUNet(
             in_channels=conf.input_channels,
             n_classes=conf.output_channels,
@@ -64,14 +55,17 @@ def build_model(conf, device):
             wf=6,
             batch_norm=True,
         )
+        print("[INFO] SelfAttentionUNet model configured.")
 
     elif conf.model == "deeplabv3+":
         model = smp.DeepLabV3Plus(
-            backbone="resnet50", in_channels=conf.input_channels, encoder_weights="imagenet"
+            backbone="resnet50",
+            in_channels=conf.input_channels,
+            encoder_weights="imagenet",
         )
+        print("[INFO] DeepLabV3+ model configured.")
 
     elif conf.model == "flair_unet":
-
         repo_id = "IGNF/FLAIR-INC_rgbi_15cl_resnet34-unet"
         filename = "FLAIR-INC_rgbi_15cl_resnet34-unet_weights.pth"
 
@@ -82,16 +76,25 @@ def build_model(conf, device):
             encoder="resnet34",
             n_channels=4,
             n_classes=15,
-            use_metadata=False
+            use_metadata=False,
         )
 
         pretrained_model = pretrained_model.get_model()
 
-        model = CombinedModel(pretrained_model=pretrained_model, n_classes=1, output_size=conf.test_crop_size)
+        model = CombinedModel(
+            pretrained_model=pretrained_model,
+            n_classes=1,
+            output_size=conf.test_crop_size,
+        )
+        print("[INFO] FLAIR-UNet model configured with pre-trained weights.")
 
     model.to(device)
+    print(f"[INFO] Model successfully moved to {device}.")
 
     optimizer = optim.Adam(model.parameters(), lr=conf.learning_rate)
+    print(
+        f"[INFO] {optimizer.__class__.__name__} optimizer configured with learning rate {optimizer.param_groups[0]['lr']}."
+    )
 
     if conf.loss == "hybrid":
         criterion = hybrid_loss
@@ -110,5 +113,7 @@ def build_model(conf, device):
             mae = nn.functional.l1_loss(pred, target)
             rmse = torch.sqrt(mse)
             return {"mse": mse, "mae": mae, "rmse": rmse}
+
+    print("[INFO] Model, optimizer, and loss function setup complete.")
 
     return model, optimizer, criterion, metrics

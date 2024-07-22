@@ -1,5 +1,4 @@
 import os
-import torch
 
 
 def get_checkpoint(model_weights, output_dir):
