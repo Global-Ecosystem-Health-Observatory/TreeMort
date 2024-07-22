@@ -4,7 +4,6 @@ import torch.nn as nn
 import torch.optim as optim
 import segmentation_models_pytorch as smp
 
-from treemort.modeling.network.unet_mtd import smp_unet_mtd
 from treemort.modeling.network.sa_unet import SelfAttentionUNet
 from treemort.modeling.network.flair_unet import CombinedModel, PretrainedUNetModel
 
