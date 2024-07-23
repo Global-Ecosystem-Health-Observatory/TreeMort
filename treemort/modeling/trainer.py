@@ -55,7 +55,7 @@ def trainer(
 
                 target_sizes = [(image.shape[1], image.shape[2]) for image in images]
                 predictions = preprocessor.post_process_panoptic_segmentation(outputs, target_sizes=target_sizes)
-                predictions = torch.stack([prediction['segmentation'].unsqueeze(0) for prediction in predictions], dim=0).float().to(device)
+                predictions = torch.stack([prediction['segmentation'].unsqueeze(0).to(device) for prediction in predictions], dim=0).float()
 
             else:
                 predictions = model(images)
@@ -106,7 +106,7 @@ def trainer(
 
                     target_sizes = [(image.shape[1], image.shape[2]) for image in images]
                     predictions = preprocessor.post_process_panoptic_segmentation(outputs, target_sizes=target_sizes)
-                    predictions = torch.stack([prediction['segmentation'].unsqueeze(0) for prediction in predictions], dim=0).float().to(device)
+                    predictions = torch.stack([prediction['segmentation'].unsqueeze(0).to(device) for prediction in predictions], dim=0).float()
 
                 else:
                     predictions = model(images)
