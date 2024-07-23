@@ -8,9 +8,7 @@ from torch.utils.data import DataLoader
 from treemort.utils.callbacks import build_callbacks
 from treemort.utils.callbacks import ModelCheckpoint, ReduceLROnPlateau, EarlyStopping
 
-from transformers import MaskFormerImageProcessor
-
-preprocessor = MaskFormerImageProcessor(ignore_index=0, do_resize=True, do_rescale=False, do_normalize=False)
+from transformers import MaskFormerImageProcessor, AutoImageProcessor
 
 def trainer(
     model,
@@ -23,6 +21,13 @@ def trainer(
     callbacks,
     device,
 ):
+    if conf.model == "maskformer":
+        preprocessor = MaskFormerImageProcessor(ignore_index=0, do_resize=True, do_rescale=False, do_normalize=False)
+    elif conf.model == "detr":
+        preprocessor = AutoImageProcessor.from_pretrained("facebook/detr-resnet-50-panoptic")
+    else:
+        preprocessor = None
+
     for epoch in range(conf.epochs):
         model.train()
         train_loss = 0.0
@@ -44,7 +49,14 @@ def trainer(
                 target_sizes = [(image.shape[1], image.shape[2]) for image in images]
                 predictions = preprocessor.post_process_semantic_segmentation(outputs, target_sizes=target_sizes)
                 predictions = torch.stack([prediction.unsqueeze(0) for prediction in predictions], dim=0).float().to(device)
-                
+            
+            elif conf.model == "detr":
+                outputs = model(images)
+
+                target_sizes = [(image.shape[1], image.shape[2]) for image in images]
+                predictions = preprocessor.post_process_panoptic_segmentation(outputs, target_sizes=target_sizes)
+                predictions = torch.stack([prediction['segmentation'].unsqueeze(0) for prediction in predictions], dim=0).float().to(device)
+
             else:
                 predictions = model(images)
             
@@ -82,14 +94,24 @@ def trainer(
             for batch_idx, (images, labels) in enumerate(val_progress_bar):
                 images, labels = images.to(device), labels.to(device)
 
-                outputs = model(images)
-
                 if conf.model == "maskformer":
+                    outputs = model(images)
+
                     target_sizes = [(image.shape[1], image.shape[2]) for image in images]
                     predictions = preprocessor.post_process_semantic_segmentation(outputs, target_sizes=target_sizes)
-                    outputs = torch.stack([prediction.unsqueeze(0) for prediction in predictions], dim=0).float().to(device)
+                    predictions = torch.stack([prediction.unsqueeze(0) for prediction in predictions], dim=0).float().to(device)
     
-                loss = criterion(outputs, labels)
+                elif conf.model == "detr":
+                    outputs = model(images)
+
+                    target_sizes = [(image.shape[1], image.shape[2]) for image in images]
+                    predictions = preprocessor.post_process_panoptic_segmentation(outputs, target_sizes=target_sizes)
+                    predictions = torch.stack([prediction['segmentation'].unsqueeze(0) for prediction in predictions], dim=0).float().to(device)
+
+                else:
+                    predictions = model(images)
+
+                loss = criterion(predictions, labels)
 
                 val_loss += loss.item()
 

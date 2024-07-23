@@ -9,6 +9,9 @@ from transformers import (
             MaskFormerConfig,
             MaskFormerModel,
             MaskFormerForInstanceSegmentation,
+            DetrModel,
+            DetrConfig,
+            DetrForSegmentation,
         )
 
 from treemort.utils.checkpoints import get_checkpoint
@@ -60,6 +63,7 @@ def build_model(
         "sa_unet",
         "deeplabv3+",
         "maskformer",
+        "detr",
     ], f"Model {model_name} unavailable."
     assert activation in [
         "tanh",
@@ -87,24 +91,18 @@ def build_model(
     elif model_name == "deeplabv3+":
         model = smp.DeepLabV3Plus(backbone, in_channels=input_channels, encoder_weights='imagenet')
 
-    elif model_name == "maskformer":        
+    elif model_name == "maskformer":     
         
-        # Define the name of the model
         model_name = "facebook/maskformer-swin-base-ade"
 
-        # Get the MaskFormer config and print it
         config = MaskFormerConfig.from_pretrained(model_name, id2label = {0: 'alive', 1: 'dead'}, ignore_mismatched_sizes=True)
         print("[INFO] displaying the MaskFormer configuration...")
-        # print(config)
 
-        # Use the config object to initialize a MaskFormer model with randomized weights
         model = MaskFormerForInstanceSegmentation(config)
 
-        # Replace the randomly initialized model with the pre-trained model weights
         base_model = MaskFormerModel.from_pretrained(model_name)
         model.model = base_model
 
-        # Modify the input layer to accept 4 channels instead of 3
         class CustomMaskFormer(MaskFormerForInstanceSegmentation):
             def __init__(self, config):
                 super().__init__(config)
@@ -116,7 +114,6 @@ def build_model(
                 pixel_values = self.conv1(pixel_values)
                 return super().forward(pixel_values, pixel_mask)
 
-        # Initialize the custom model
         model = CustomMaskFormer(config)
 
         # Copy the weights from the pretrained model
@@ -125,6 +122,37 @@ def build_model(
         # Now custom_model can be used with 4-channel inputs
         print("[INFO] Custom model created and weights loaded successfully.")
         
+    elif model_name == "detr":
+
+        model_name = "facebook/detr-resnet-50-panoptic"
+
+        config = DetrConfig.from_pretrained(model_name, id2label = {0: 'alive', 1: 'dead'}, ignore_mismatched_sizes=True)
+        print("[INFO] displaying the DETR configuration...")
+
+        model = DetrForSegmentation(config)
+
+        base_model = DetrModel.from_pretrained(model_name)
+        model.model = base_model
+
+        class CustomDetr(DetrForSegmentation):
+            def __init__(self, config):
+                super().__init__(config)
+                self.model = DetrModel(config)
+                self.conv1 = nn.Conv2d(4, 3, kernel_size=1)
+
+            def forward(self, pixel_values, pixel_mask=None):
+                # Map the 4-channel input to 3 channels
+                pixel_values = self.conv1(pixel_values)
+                return super().forward(pixel_values, pixel_mask)
+
+        model = CustomDetr(config)
+
+        # Copy the weights from the pretrained model
+        model.model.load_state_dict(model.model.state_dict(), strict=False)
+
+        # Now custom_model can be used with 4-channel inputs
+        print("[INFO] Custom model created and weights loaded successfully.")
+
     model.to(device)
 
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
