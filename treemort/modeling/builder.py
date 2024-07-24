@@ -12,6 +12,9 @@ from transformers import (
             DetrModel,
             DetrConfig,
             DetrForSegmentation,
+            BeitModel,
+            BeitConfig,
+            BeitForSemanticSegmentation,
         )
 
 from treemort.utils.checkpoints import get_checkpoint
@@ -64,6 +67,7 @@ def build_model(
         "deeplabv3+",
         "maskformer",
         "detr",
+        "beit",
     ], f"Model {model_name} unavailable."
     assert activation in [
         "tanh",
@@ -152,6 +156,34 @@ def build_model(
 
         # Now custom_model can be used with 4-channel inputs
         print("[INFO] Custom model created and weights loaded successfully.")
+
+    elif model_name == "beit":
+
+        class CustomBeit(BeitForSemanticSegmentation):
+            def __init__(self, config):
+                super().__init__(config)
+                self.model = BeitModel(config)
+                self.conv1 = nn.Conv2d(4, 3, kernel_size=1)
+
+            def forward(self, pixel_values, pixel_mask=None):
+                # Map the 4-channel input to 3 channels
+                pixel_values = self.conv1(pixel_values)
+                return super().forward(pixel_values, pixel_mask)
+
+        pretrained_model = "microsoft/beit-base-finetuned-ade-640-640"
+
+        config = BeitConfig.from_pretrained(pretrained_model, id2label = {0: 'alive', 1: 'dead'}, ignore_mismatched_sizes=True)
+        print("[INFO] displaying the BEiT configuration...")
+
+        print('A')
+        model = CustomBeit(config)
+
+        print('B')
+        base_model = BeitModel.from_pretrained(pretrained_model)
+        model.model = base_model
+        model.model.load_state_dict(model.model.state_dict(), strict=False)
+    
+        print("[INFO] Custom BEiT model created and weights loaded successfully.")
 
     model.to(device)
 

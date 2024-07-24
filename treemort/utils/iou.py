@@ -6,7 +6,7 @@ from scipy import ndimage
 from transformers import MaskFormerImageProcessor, AutoImageProcessor
 
 class IOUCallback:
-    def __init__(self, model, dataset, num_samples, batch_size, threshold, model_name):
+    def __init__(self, model, dataset, num_samples, batch_size, threshold, model_name, image_processor=None):
         self.model = model
         self.dataset = dataset
         self.num_samples = num_samples
@@ -14,18 +14,12 @@ class IOUCallback:
         self.threshold = threshold
         self.model_name = model_name
         self.device = next(model.parameters()).device  # Get the device of the model
+        self.image_processor = image_processor
 
     def evaluate(self):
         self.model.eval()  # Set the model to evaluation mode
         pixel_ious = []
         tree_ious = []
-
-        if self.model_name == "maskformer":
-            preprocessor = MaskFormerImageProcessor(ignore_index=0, do_resize=True, do_rescale=False, do_normalize=False)
-        elif self.model_name == "detr":
-            preprocessor = AutoImageProcessor.from_pretrained("facebook/detr-resnet-50-panoptic")
-        else:
-            preprocessor = None
             
         total_batches = self.num_samples // self.batch_size
 
@@ -36,17 +30,29 @@ class IOUCallback:
                     images = images.to(self.device)
                     labels = labels.to(self.device)
 
-                    predictions = self.model(images)
-
                     if self.model_name == "maskformer":
+                        outputs = self.model(images)
+
                         target_sizes = [(image.shape[1], image.shape[2]) for image in images]
-                        predictions = preprocessor.post_process_semantic_segmentation(predictions, target_sizes=target_sizes)
+                        predictions = self.image_processor.post_process_semantic_segmentation(outputs, target_sizes=target_sizes)
                         predictions = torch.stack([prediction.unsqueeze(0) for prediction in predictions] , dim=0)
 
                     elif self.model_name == "detr":
+                        outputs = self.model(images)
+
                         target_sizes = [(image.shape[1], image.shape[2]) for image in images]
-                        predictions = preprocessor.post_process_panoptic_segmentation(predictions, target_sizes=target_sizes)
+                        predictions = self.image_processor.post_process_panoptic_segmentation(outputs, target_sizes=target_sizes)
                         predictions = torch.stack([prediction['segmentation'].unsqueeze(0) for prediction in predictions], dim=0)
+
+                    elif self.model_name == "beit":
+                        outputs = self.model(images)
+
+                        target_sizes = [(image.shape[1], image.shape[2]) for image in images]
+                        predictions = self.image_processor.post_process_semantic_segmentation(outputs, target_sizes=target_sizes)
+                        predictions = torch.stack([prediction.unsqueeze(0) for prediction in predictions], dim=0).float()
+
+                    else:
+                        predictions = self.model(images)
 
                     predictions = predictions.cpu().numpy()
                     labels = labels.cpu().numpy()

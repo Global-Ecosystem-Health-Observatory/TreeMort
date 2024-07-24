@@ -1,15 +1,26 @@
 import os
-import numpy as np
 import torch
-from torch.utils.data import Dataset, DataLoader, random_split
+
+import numpy as np
+
 import torchvision.transforms as T
+import torchvision.transforms.functional as F
+
+from torch.utils.data import Dataset, DataLoader, random_split
+from transformers import AutoImageProcessor, MaskFormerImageProcessor
 
 from treemort.utils.augment import Augmentations
 
 
 class DeadTreeDataset(Dataset):
     def __init__(
-        self, root_dir, split="train", crop_size=256, transform=None, binarize=False
+        self,
+        root_dir,
+        split="train",
+        crop_size=256,
+        transform=None,
+        binarize=False,
+        image_processor=None,
     ):
         self.root_dir = root_dir
         self.split = split
@@ -21,6 +32,14 @@ class DeadTreeDataset(Dataset):
         self.image_files = [
             f for f in os.listdir(self.images_dir) if f.endswith(".npy")
         ]
+        self.image_processor = image_processor
+
+        # Ensure image_mean and image_std have four values
+        if image_processor:
+            if len(self.image_processor.image_mean) == 3:
+                self.image_processor.image_mean.append(0.5)
+            if len(self.image_processor.image_std) == 3:
+                self.image_processor.image_std.append(0.5)
 
     def __len__(self):
         return len(self.image_files)
@@ -29,24 +48,32 @@ class DeadTreeDataset(Dataset):
         image_path = os.path.join(self.images_dir, self.image_files[idx])
         label_path = os.path.join(self.labels_dir, self.image_files[idx])
 
-        image = np.load(image_path).astype(np.float32)
-        label = np.load(label_path).astype(np.float32)
+        image = torch.from_numpy(np.load(image_path).astype(np.float32))
+        label = torch.from_numpy(np.load(label_path).astype(np.float32))
 
         if self.binarize:
             image = image / 255.0
-            label = (label > 0).astype(np.float32)
-
-        else:
-            pass
+            label = (label > 0).float()
 
         image, label = self.center_crop_or_pad(image, label, self.crop_size)
 
+        image = image.permute(2, 0, 1)  # Convert to (C, H, W) format
+        label = label.unsqueeze(0)  # Convert to (1, H, W) format
+
+        if self.image_processor:
+            image = F.resize(
+                image,
+                [
+                    self.image_processor.size["height"],
+                    self.image_processor.size["width"],
+                ],
+            )
+            image = (
+                image - torch.tensor(self.image_processor.image_mean).view(-1, 1, 1)
+            ) / torch.tensor(self.image_processor.image_std).view(-1, 1, 1)
+
         if self.transform:
             image, label = self.transform(image, label)
-
-        # Convert to torch tensors
-        image = torch.tensor(image).permute(2, 0, 1)  # Convert to (C, H, W) format
-        label = torch.tensor(label).unsqueeze(0)
 
         return image, label
 
@@ -91,12 +118,29 @@ def prepare_datasets(root_dir, conf):
     val_transform = None
     test_transform = None
 
+    if conf.model == "maskformer":
+        image_processor = MaskFormerImageProcessor(
+            ignore_index=0, do_resize=True, do_rescale=False, do_normalize=False
+        )
+    elif conf.model == "detr":
+        image_processor = AutoImageProcessor.from_pretrained(
+            "facebook/detr-resnet-50-panoptic"
+        )
+    elif conf.model == "beit":
+        image_processor = AutoImageProcessor.from_pretrained(
+            "microsoft/beit-base-finetuned-ade-640-640", do_rescale=False
+        )
+
+    else:
+        image_processor = None
+
     full_train_dataset = DeadTreeDataset(
         root_dir,
         split="Train",
         crop_size=conf.train_crop_size,
         transform=train_transform,
         binarize=conf.binarize,
+        image_processor=image_processor,
     )
     test_dataset = DeadTreeDataset(
         root_dir,
@@ -104,6 +148,7 @@ def prepare_datasets(root_dir, conf):
         crop_size=conf.test_crop_size,
         transform=test_transform,
         binarize=conf.binarize,
+        image_processor=image_processor,
     )
 
     val_size = int(conf.val_size * len(full_train_dataset))

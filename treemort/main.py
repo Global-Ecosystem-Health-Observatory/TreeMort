@@ -11,6 +11,8 @@ from treemort.modeling.builder import resume_or_load
 from treemort.modeling.trainer import trainer
 from treemort.evaluation.evaluator import evaluator
 
+from transformers import MaskFormerImageProcessor, AutoImageProcessor
+
 
 def run(conf, eval_only):
     assert os.path.exists(
@@ -22,9 +24,9 @@ def run(conf, eval_only):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    train_dataset, val_dataset, test_dataset = prepare_datasets(conf.data_folder, conf)
+    train_dataset, val_dataset, test_dataset = prepare_datasets(root_dir=conf.data_folder, conf=conf)
 
-    model, optimizer, criterion, metrics = resume_or_load(conf, device=device)
+    model, optimizer, criterion, metrics = resume_or_load(conf=conf, device=device)
 
     n_batches = len(train_dataset)
 
@@ -55,6 +57,7 @@ def run(conf, eval_only):
             conf=conf,
             callbacks=callbacks,
             device=device,
+            image_processor=image_processor,
         )
 
 
