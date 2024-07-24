@@ -115,7 +115,7 @@ def trainer(
 
                 val_loss += loss.item()
 
-                batch_metrics = metrics(outputs, labels)
+                batch_metrics = metrics(predictions, labels)
                 for key, value in batch_metrics.items():
                     if key not in val_metrics:
                         val_metrics[key] = 0.0
