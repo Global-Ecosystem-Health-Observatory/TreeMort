@@ -6,7 +6,7 @@ model = beit
 
 output-dir = output/beit
 
-train-crop-size = 640
+train-crop-size = 224
 test-crop-size = 640
 
 input-channels = 4
