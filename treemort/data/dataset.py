@@ -55,10 +55,9 @@ class DeadTreeDataset(Dataset):
             image = image / 255.0
             label = (label > 0).float()
 
-        image, label = self.center_crop_or_pad(image, label, self.crop_size)
-
         image = image.permute(2, 0, 1)  # Convert to (C, H, W) format
-        label = label.unsqueeze(0)  # Convert to (1, H, W) format
+
+        image, label = self.center_crop_or_pad(image, label, self.crop_size)
 
         if self.image_processor:
             image = F.resize(
@@ -75,41 +74,40 @@ class DeadTreeDataset(Dataset):
         if self.transform:
             image, label = self.transform(image, label)
 
-        return image, label
-
-    def center_crop_or_pad(self, image, label, size=256):
-        h, w = image.shape[:2]
-        ch, cw = (size, size)
-
-        # Padding if image dimensions are smaller than crop size
-        if h < ch or w < cw:
-            pad_h = max(ch - h, 0)
-            pad_w = max(cw - w, 0)
-            image = np.pad(
-                image,
-                (
-                    (pad_h // 2, pad_h - pad_h // 2),
-                    (pad_w // 2, pad_w - pad_w // 2),
-                    (0, 0),
-                ),
-                mode="constant",
-                constant_values=0,
-            )
-            label = np.pad(
-                label,
-                ((pad_h // 2, pad_h - pad_h // 2), (pad_w // 2, pad_w - pad_w // 2)),
-                mode="constant",
-                constant_values=0,
-            )
-            h, w = image.shape[:2]
-
-        # Cropping
-        x = (w - cw) // 2
-        y = (h - ch) // 2
-        image = image[y : y + ch, x : x + cw]
-        label = label[y : y + ch, x : x + cw]
+        label = label.unsqueeze(0)  # Convert to (1, H, W) format
 
         return image, label
+
+
+def center_crop_or_pad(self, image, label, size=256):
+    h, w = image.shape[1:]  # image is in (C, H, W) format
+    ch, cw = (size, size)
+
+    # Padding if image dimensions are smaller than crop size
+    if h < ch or w < cw:
+        pad_h = max(ch - h, 0)
+        pad_w = max(cw - w, 0)
+        image = torch.nn.functional.pad(
+            image,
+            (pad_w // 2, pad_w - pad_w // 2, pad_h // 2, pad_h - pad_h // 2),
+            mode="constant",
+            value=0,
+        )
+        label = torch.nn.functional.pad(
+            label,
+            (pad_w // 2, pad_w - pad_w // 2, pad_h // 2, pad_h - pad_h // 2),
+            mode="constant",
+            value=0,
+        )
+        h, w = image.shape[1:]
+
+    # Cropping
+    x = (w - cw) // 2
+    y = (h - ch) // 2
+    image = image[:, y : y + ch, x : x + cw]
+    label = label[y : y + ch, x : x + cw]
+
+    return image, label
 
 
 def prepare_datasets(root_dir, conf):
