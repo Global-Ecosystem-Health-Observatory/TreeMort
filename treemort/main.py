@@ -24,7 +24,7 @@ def run(conf, eval_only):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    train_dataset, val_dataset, test_dataset = prepare_datasets(root_dir=conf.data_folder, conf=conf)
+    train_dataset, val_dataset, test_dataset, image_processor = prepare_datasets(root_dir=conf.data_folder, conf=conf)
 
     model, optimizer, criterion, metrics = resume_or_load(conf=conf, device=device)
 
@@ -42,6 +42,7 @@ def run(conf, eval_only):
             batch_size=conf.test_batch_size,
             threshold=conf.threshold,
             model_name=conf.model,
+            image_processor=image_processor,
         )
 
     else:

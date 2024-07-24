@@ -175,10 +175,8 @@ def build_model(
         config = BeitConfig.from_pretrained(pretrained_model, id2label = {0: 'alive', 1: 'dead'}, ignore_mismatched_sizes=True)
         print("[INFO] displaying the BEiT configuration...")
 
-        print('A')
         model = CustomBeit(config)
 
-        print('B')
         base_model = BeitModel.from_pretrained(pretrained_model)
         model.model = base_model
         model.model.load_state_dict(model.model.state_dict(), strict=False)

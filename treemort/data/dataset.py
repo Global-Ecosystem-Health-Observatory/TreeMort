@@ -169,4 +169,4 @@ def prepare_datasets(root_dir, conf):
         test_dataset, batch_size=conf.test_batch_size, shuffle=False, drop_last=True
     )
 
-    return train_loader, val_loader, test_loader
+    return train_loader, val_loader, test_loader, image_processor
