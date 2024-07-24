@@ -128,6 +128,7 @@ def prepare_datasets(root_dir, conf):
         image_processor = AutoImageProcessor.from_pretrained(
             "microsoft/beit-base-finetuned-ade-640-640", do_rescale=False
         )
+        image_processor.size = (384,384) # default (640,640) exceeds GPU memory
 
     else:
         image_processor = None
