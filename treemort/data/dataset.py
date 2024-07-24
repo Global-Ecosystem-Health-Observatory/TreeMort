@@ -79,35 +79,35 @@ class DeadTreeDataset(Dataset):
         return image, label
 
 
-def center_crop_or_pad(self, image, label, size=256):
-    h, w = image.shape[1:]  # image is in (C, H, W) format
-    ch, cw = (size, size)
+    def center_crop_or_pad(self, image, label, size=256):
+        h, w = image.shape[1:]  # image is in (C, H, W) format
+        ch, cw = (size, size)
 
-    # Padding if image dimensions are smaller than crop size
-    if h < ch or w < cw:
-        pad_h = max(ch - h, 0)
-        pad_w = max(cw - w, 0)
-        image = torch.nn.functional.pad(
-            image,
-            (pad_w // 2, pad_w - pad_w // 2, pad_h // 2, pad_h - pad_h // 2),
-            mode="constant",
-            value=0,
-        )
-        label = torch.nn.functional.pad(
-            label,
-            (pad_w // 2, pad_w - pad_w // 2, pad_h // 2, pad_h - pad_h // 2),
-            mode="constant",
-            value=0,
-        )
-        h, w = image.shape[1:]
+        # Padding if image dimensions are smaller than crop size
+        if h < ch or w < cw:
+            pad_h = max(ch - h, 0)
+            pad_w = max(cw - w, 0)
+            image = torch.nn.functional.pad(
+                image,
+                (pad_w // 2, pad_w - pad_w // 2, pad_h // 2, pad_h - pad_h // 2),
+                mode="constant",
+                value=0,
+            )
+            label = torch.nn.functional.pad(
+                label,
+                (pad_w // 2, pad_w - pad_w // 2, pad_h // 2, pad_h - pad_h // 2),
+                mode="constant",
+                value=0,
+            )
+            h, w = image.shape[1:]
 
-    # Cropping
-    x = (w - cw) // 2
-    y = (h - ch) // 2
-    image = image[:, y : y + ch, x : x + cw]
-    label = label[y : y + ch, x : x + cw]
+        # Cropping
+        x = (w - cw) // 2
+        y = (h - ch) // 2
+        image = image[:, y : y + ch, x : x + cw]
+        label = label[y : y + ch, x : x + cw]
 
-    return image, label
+        return image, label
 
 
 def prepare_datasets(root_dir, conf):
