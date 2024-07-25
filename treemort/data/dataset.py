@@ -124,11 +124,17 @@ def prepare_datasets(root_dir, conf):
         image_processor = AutoImageProcessor.from_pretrained(
             "facebook/detr-resnet-50-panoptic"
         )
+
+        image_processor.size["height"] = image_processor.size["shortest_edge"]
+        image_processor.size["width"] = image_processor.size["shortest_edge"]
+
     elif conf.model == "beit":
         image_processor = AutoImageProcessor.from_pretrained(
             "microsoft/beit-base-finetuned-ade-640-640", do_rescale=False
         )
-        image_processor.size = (384,384) # default (640,640) exceeds GPU memory
+        
+        image_processor.size["height"] = 384  # default (640,640) exceeds GPU memory
+        image_processor.size["width"] = 384
 
     else:
         image_processor = None
