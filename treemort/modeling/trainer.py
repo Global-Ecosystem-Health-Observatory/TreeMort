@@ -35,24 +35,23 @@ def trainer(
 
             optimizer.zero_grad()
 
+            target_sizes = [(label.shape[1], label.shape[2]) for label in labels]
+
             if conf.model == "maskformer":
                 outputs = model(images)
         
-                target_sizes = [(label.shape[1], label.shape[2]) for label in labels]
                 predictions = image_processor.post_process_semantic_segmentation(outputs, target_sizes=target_sizes)
                 predictions = torch.stack([prediction.unsqueeze(0) for prediction in predictions], dim=0).float().to(device)
             
             elif conf.model == "detr":
                 outputs = model(images)
 
-                target_sizes = [(label.shape[1], label.shape[2]) for label in labels]
                 predictions = image_processor.post_process_panoptic_segmentation(outputs, target_sizes=target_sizes)
                 predictions = torch.stack([prediction['segmentation'].unsqueeze(0).to(device) for prediction in predictions], dim=0).float()
 
             elif conf.model == "beit":
                 outputs = model(images)
 
-                target_sizes = [(label.shape[1], label.shape[2]) for label in labels]
                 predictions = image_processor.post_process_semantic_segmentation(outputs, target_sizes=target_sizes)
                 predictions = torch.stack([prediction.unsqueeze(0).to(device) for prediction in predictions], dim=0).float()
 
@@ -93,24 +92,23 @@ def trainer(
             for batch_idx, (images, labels) in enumerate(val_progress_bar):
                 images, labels = images.to(device), labels.to(device)
 
+                target_sizes = [(label.shape[1], label.shape[2]) for label in labels]
+
                 if conf.model == "maskformer":
                     outputs = model(images)
 
-                    target_sizes = [(image.shape[1], image.shape[2]) for image in images]
                     predictions = image_processor.post_process_semantic_segmentation(outputs, target_sizes=target_sizes)
                     predictions = torch.stack([prediction.unsqueeze(0) for prediction in predictions], dim=0).float().to(device)
     
                 elif conf.model == "detr":
                     outputs = model(images)
 
-                    target_sizes = [(image.shape[1], image.shape[2]) for image in images]
                     predictions = image_processor.post_process_panoptic_segmentation(outputs, target_sizes=target_sizes)
                     predictions = torch.stack([prediction['segmentation'].unsqueeze(0).to(device) for prediction in predictions], dim=0).float()
 
                 elif  conf.model == "beit":
                     outputs = model(images)
 
-                    target_sizes = [(image.shape[1], image.shape[2]) for image in images]
                     predictions = image_processor.post_process_semantic_segmentation(outputs, target_sizes=target_sizes)
                     predictions = torch.stack([prediction.unsqueeze(0).to(device) for prediction in predictions], dim=0).float()
 

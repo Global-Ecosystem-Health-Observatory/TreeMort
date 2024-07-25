@@ -12,7 +12,7 @@ test-crop-size = 512
 input-channels = 4
 output-channels = 1
 
-train-batch-size = 8
+train-batch-size = 4
 test-batch-size = 8
 
 epochs = 100
