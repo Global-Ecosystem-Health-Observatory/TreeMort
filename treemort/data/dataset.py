@@ -3,8 +3,9 @@ import torch
 
 import numpy as np
 
+import torch.nn.functional as F
 import torchvision.transforms as T
-import torchvision.transforms.functional as F
+import torchvision.transforms.functional as TF
 
 from torch.utils.data import Dataset, DataLoader, random_split
 from transformers import AutoImageProcessor, MaskFormerImageProcessor
@@ -34,12 +35,12 @@ class DeadTreeDataset(Dataset):
         ]
         self.image_processor = image_processor
 
-        # Ensure image_mean and image_std have four values
+        # Ensure image_mean and image_std have four values; add value for NIR (the 1st input channel)
         if image_processor:
             if len(self.image_processor.image_mean) == 3:
-                self.image_processor.image_mean.append(0.5)
+                self.image_processor.image_mean.insert(0, 0.5)
             if len(self.image_processor.image_std) == 3:
-                self.image_processor.image_std.append(0.5)
+                self.image_processor.image_std.insert(0, 0.5)
 
     def __len__(self):
         return len(self.image_files)
@@ -52,7 +53,7 @@ class DeadTreeDataset(Dataset):
         label = torch.from_numpy(np.load(label_path).astype(np.float32))
 
         if self.binarize:
-            image = image / 255.0
+            # image = image / 255.0  # TODO. dataset creation with labels as binary masks
             label = (label > 0).float()
 
         image = image.permute(2, 0, 1)  # Convert to (C, H, W) format
@@ -60,16 +61,46 @@ class DeadTreeDataset(Dataset):
         image, label = self.center_crop_or_pad(image, label, self.crop_size)
 
         if self.image_processor:
-            image = F.resize(
-                image,
-                [
-                    self.image_processor.size["height"],
-                    self.image_processor.size["width"],
-                ],
-            )
-            image = (
-                image - torch.tensor(self.image_processor.image_mean).view(-1, 1, 1)
-            ) / torch.tensor(self.image_processor.image_std).view(-1, 1, 1)
+            if self.image_processor.do_rescale:
+                image = image * self.image_processor.rescale_factor
+
+            if self.image_processor.do_resize:
+                image = F.interpolate(
+                    image.unsqueeze(0),
+                    size=(
+                        self.image_processor.size["shortest_edge"],
+                        self.image_processor.size["longest_edge"],
+                    ),
+                    mode="bilinear",
+                    align_corners=False,
+                ).squeeze(0)
+
+                label = (
+                    F.interpolate(
+                        label.unsqueeze(0).unsqueeze(0),
+                        size=(
+                            self.image_processor.size["shortest_edge"],
+                            self.image_processor.size["longest_edge"],
+                        ),
+                        mode="nearest",
+                    )
+                    .squeeze(0)
+                    .squeeze(0)
+                )
+
+            if self.image_processor.do_normalize:
+                image_mean = torch.tensor(self.image_processor.image_mean)
+                image_std = torch.tensor(self.image_processor.image_std)
+                image = (image - image_mean.view(-1, 1, 1)) / image_std.view(-1, 1, 1)
+
+            if self.image_processor.do_pad:
+                pad_size = self.image_processor.pad_size
+                if pad_size:
+                    pad_h = pad_size[0] - image.shape[1]
+                    pad_w = pad_size[1] - image.shape[2]
+                    if pad_h > 0 or pad_w > 0:
+                        image = F.pad(image, (0, pad_w, 0, pad_h), value=0)
+                        label = F.pad(label, (0, pad_w, 0, pad_h), value=0)
 
         if self.transform:
             image, label = self.transform(image, label)
@@ -77,7 +108,6 @@ class DeadTreeDataset(Dataset):
         label = label.unsqueeze(0)  # Convert to (1, H, W) format
 
         return image, label
-
 
     def center_crop_or_pad(self, image, label, size=256):
         h, w = image.shape[1:]  # image is in (C, H, W) format
@@ -125,16 +155,10 @@ def prepare_datasets(root_dir, conf):
             "facebook/detr-resnet-50-panoptic"
         )
 
-        image_processor.size["height"] = image_processor.size["shortest_edge"]
-        image_processor.size["width"] = image_processor.size["shortest_edge"]
-
     elif conf.model == "beit":
         image_processor = AutoImageProcessor.from_pretrained(
             "microsoft/beit-base-finetuned-ade-640-640", do_rescale=False
         )
-        
-        image_processor.size["height"] = 384  # default (640,640) exceeds GPU memory
-        image_processor.size["width"] = 384
 
     else:
         image_processor = None

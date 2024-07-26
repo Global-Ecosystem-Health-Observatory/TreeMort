@@ -44,7 +44,7 @@ def plot_samples(image_paths, label_paths, num_samples=5):
     plt.show()
 
 
-def plot_augmented_samples(dataset, num_samples=3):
+def plot_dataset_samples(dataset, num_samples=3):
     iterator = iter(dataset)
 
     sample_count = 0
@@ -62,6 +62,10 @@ def plot_augmented_samples(dataset, num_samples=3):
 
             image = batch_images[i].numpy()
             label = batch_labels[i].numpy()
+
+            print(image.shape, label.shape)
+            image = image.transpose(1, 2, 0)  # Convert from (C, H, W) to (H, W, C)
+            print(image.shape, label.shape)
 
             # de-normalize image if necessary
             image = ((image + 1.0) * 127.5).astype("uint8")
