@@ -30,24 +30,23 @@ class IOUCallback:
                     images = images.to(self.device)
                     labels = labels.to(self.device)
 
+                    target_sizes = [(label.shape[1], label.shape[2]) for label in labels]
+
                     if self.model_name == "maskformer":
                         outputs = self.model(images)
 
-                        target_sizes = [(image.shape[1], image.shape[2]) for image in images]
                         predictions = self.image_processor.post_process_semantic_segmentation(outputs, target_sizes=target_sizes)
                         predictions = torch.stack([prediction.unsqueeze(0) for prediction in predictions] , dim=0)
 
                     elif self.model_name == "detr":
                         outputs = self.model(images)
 
-                        target_sizes = [(image.shape[1], image.shape[2]) for image in images]
                         predictions = self.image_processor.post_process_panoptic_segmentation(outputs, target_sizes=target_sizes)
                         predictions = torch.stack([prediction['segmentation'].unsqueeze(0) for prediction in predictions], dim=0)
 
                     elif self.model_name == "beit":
                         outputs = self.model(images)
 
-                        target_sizes = [(image.shape[1], image.shape[2]) for image in images]
                         predictions = self.image_processor.post_process_semantic_segmentation(outputs, target_sizes=target_sizes)
                         predictions = torch.stack([prediction.unsqueeze(0) for prediction in predictions], dim=0).float()
 
