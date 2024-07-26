@@ -69,7 +69,7 @@ class DeadTreeDataset(Dataset):
                     image.unsqueeze(0),
                     size=(
                         self.image_processor.size["shortest_edge"],
-                        self.image_processor.size["longest_edge"],
+                        self.image_processor.size["shortest_edge"],
                     ),
                     mode="bilinear",
                     align_corners=False,
@@ -80,7 +80,7 @@ class DeadTreeDataset(Dataset):
                         label.unsqueeze(0).unsqueeze(0),
                         size=(
                             self.image_processor.size["shortest_edge"],
-                            self.image_processor.size["longest_edge"],
+                            self.image_processor.size["shortest_edge"],
                         ),
                         mode="nearest",
                     )
