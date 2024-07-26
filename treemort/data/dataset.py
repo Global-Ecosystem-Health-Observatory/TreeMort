@@ -94,7 +94,9 @@ class DeadTreeDataset(Dataset):
                 image = (image - image_mean.view(-1, 1, 1)) / image_std.view(-1, 1, 1)
 
             if self.image_processor.do_pad:
-                pad_size = self.image_processor.pad_size
+                pad_size = getattr(self.image_processor, 'pad_sized', None)
+                # pad_size = self.image_processor.pad_size # statement fails on Puhti
+
                 if pad_size:
                     pad_h = pad_size[0] - image.shape[1]
                     pad_w = pad_size[1] - image.shape[2]
