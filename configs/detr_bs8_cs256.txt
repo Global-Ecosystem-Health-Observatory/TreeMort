@@ -7,7 +7,7 @@ model = detr
 output-dir = output/detr
 
 train-crop-size = 256
-test-crop-size = 512
+test-crop-size = 800
 
 input-channels = 4
 output-channels = 1
