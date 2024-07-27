@@ -4,6 +4,8 @@ data-folder = /scratch/project_2008436/rahmanan/AerialImageModel_ITD
 
 model = deeplabv3+
 
+backbone = resnet50
+
 output-dir = output/deeplabv3plus
 
 train-crop-size = 256

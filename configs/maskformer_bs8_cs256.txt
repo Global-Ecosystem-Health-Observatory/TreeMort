@@ -4,6 +4,8 @@ data-folder = /scratch/project_2008436/rahmanan/AerialImageModel_ITD
 
 model = maskformer
 
+backbone = facebook/maskformer-swin-base-ade
+
 output-dir = output/maskformer
 
 train-crop-size = 256

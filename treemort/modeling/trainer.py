@@ -55,6 +55,12 @@ def trainer(
                 predictions = image_processor.post_process_semantic_segmentation(outputs, target_sizes=target_sizes)
                 predictions = torch.stack([prediction.unsqueeze(0).to(device) for prediction in predictions], dim=0).float()
 
+            elif conf.model == "dinov2":
+                outputs = model(images)
+
+                probabilities = torch.nn.functional.softmax(outputs.logits, dim=1)
+                predictions = torch.argmax(probabilities, dim=1).unsqueeze(1).to(device).float()
+
             else:
                 predictions = model(images)
             
@@ -112,6 +118,11 @@ def trainer(
                     predictions = image_processor.post_process_semantic_segmentation(outputs, target_sizes=target_sizes)
                     predictions = torch.stack([prediction.unsqueeze(0).to(device) for prediction in predictions], dim=0).float()
 
+                elif conf.model == "dinov2":
+                    outputs = model(images)
+
+                    probabilities = torch.nn.functional.softmax(outputs.logits, dim=1)
+                    predictions = torch.argmax(probabilities, dim=1).unsqueeze(1)
                 else:
                     predictions = model(images)
 

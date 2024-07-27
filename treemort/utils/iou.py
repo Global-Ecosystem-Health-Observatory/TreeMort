@@ -3,24 +3,32 @@ import numpy as np
 from tqdm import tqdm
 from scipy import ndimage
 
-from transformers import MaskFormerImageProcessor, AutoImageProcessor
 
 class IOUCallback:
-    def __init__(self, model, dataset, num_samples, batch_size, threshold, model_name, image_processor=None):
+    def __init__(
+        self,
+        model,
+        dataset,
+        num_samples,
+        batch_size,
+        threshold,
+        model_name,
+        image_processor=None,
+    ):
         self.model = model
         self.dataset = dataset
         self.num_samples = num_samples
         self.batch_size = batch_size
         self.threshold = threshold
         self.model_name = model_name
-        self.device = next(model.parameters()).device  # Get the device of the model
+        self.device = next(model.parameters()).device
         self.image_processor = image_processor
 
     def evaluate(self):
         self.model.eval()  # Set the model to evaluation mode
         pixel_ious = []
         tree_ious = []
-            
+
         total_batches = self.num_samples // self.batch_size
 
         with tqdm(total=total_batches, desc="Evaluating") as pbar:
@@ -30,25 +38,61 @@ class IOUCallback:
                     images = images.to(self.device)
                     labels = labels.to(self.device)
 
-                    target_sizes = [(label.shape[1], label.shape[2]) for label in labels]
+                    target_sizes = [
+                        (label.shape[1], label.shape[2]) for label in labels
+                    ]
 
                     if self.model_name == "maskformer":
                         outputs = self.model(images)
 
-                        predictions = self.image_processor.post_process_semantic_segmentation(outputs, target_sizes=target_sizes)
-                        predictions = torch.stack([prediction.unsqueeze(0) for prediction in predictions] , dim=0)
+                        predictions = (
+                            self.image_processor.post_process_semantic_segmentation(
+                                outputs, target_sizes=target_sizes
+                            )
+                        )
+                        predictions = torch.stack(
+                            [prediction.unsqueeze(0) for prediction in predictions],
+                            dim=0,
+                        )
 
                     elif self.model_name == "detr":
                         outputs = self.model(images)
 
-                        predictions = self.image_processor.post_process_panoptic_segmentation(outputs, target_sizes=target_sizes)
-                        predictions = torch.stack([prediction['segmentation'].unsqueeze(0) for prediction in predictions], dim=0)
+                        predictions = (
+                            self.image_processor.post_process_panoptic_segmentation(
+                                outputs, target_sizes=target_sizes
+                            )
+                        )
+                        predictions = torch.stack(
+                            [
+                                prediction["segmentation"].unsqueeze(0)
+                                for prediction in predictions
+                            ],
+                            dim=0,
+                        )
 
                     elif self.model_name == "beit":
                         outputs = self.model(images)
 
-                        predictions = self.image_processor.post_process_semantic_segmentation(outputs, target_sizes=target_sizes)
-                        predictions = torch.stack([prediction.unsqueeze(0) for prediction in predictions], dim=0).float()
+                        predictions = (
+                            self.image_processor.post_process_semantic_segmentation(
+                                outputs, target_sizes=target_sizes
+                            )
+                        )
+                        predictions = torch.stack(
+                            [prediction.unsqueeze(0) for prediction in predictions],
+                            dim=0,
+                        ).float()
+
+                    elif self.model_name == "dinov2":
+                        outputs = self.model(images)
+
+                        probabilities = torch.nn.functional.softmax(
+                            outputs.logits, dim=1
+                        )
+                        predictions = (
+                            torch.argmax(probabilities, dim=1).unsqueeze(1).float()
+                        )
 
                     else:
                         predictions = self.model(images)

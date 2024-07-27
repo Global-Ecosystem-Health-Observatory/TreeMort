@@ -1,12 +1,12 @@
-# settings for BEiT: BERT Pre-Training of Image Transformers
+# settings for dinov2
 
 data-folder = /scratch/project_2008436/rahmanan/AerialImageModel_ITD
 
-model = beit
+model = dinov2
 
-backbone = microsoft/beit-base-finetuned-ade-640-640
+backbone = facebook/dinov2-base
 
-output-dir = output/beit
+output-dir = output/dinov2
 
 train-crop-size = 256
 test-crop-size = 256
@@ -14,7 +14,7 @@ test-crop-size = 256
 input-channels = 4
 output-channels = 1
 
-train-batch-size = 4
+train-batch-size = 8
 test-batch-size = 8
 
 epochs = 100
@@ -25,7 +25,7 @@ learning-rate = 1e-4
 
 threshold = 0.5
 
-activation = sigmoid # available options [tanh, sigmoid]
+# activation = sigmoid # available options [tanh, sigmoid]
 
 loss = hybrid # available options [mse, hybrid]
 

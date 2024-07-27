@@ -22,11 +22,13 @@ def run(conf, eval_only):
     if not os.path.exists(conf.output_dir):
         os.makedirs(conf.output_dir)
 
+    id2label = {0: "alive", 1: "dead"}
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    train_dataset, val_dataset, test_dataset, image_processor = prepare_datasets(root_dir=conf.data_folder, conf=conf)
+    train_dataset, val_dataset, test_dataset, image_processor = prepare_datasets(conf.data_folder, conf=conf)
 
-    model, optimizer, criterion, metrics = resume_or_load(conf=conf, device=device)
+    model, optimizer, criterion, metrics = resume_or_load(conf, id2label, device)
 
     n_batches = len(train_dataset)
 

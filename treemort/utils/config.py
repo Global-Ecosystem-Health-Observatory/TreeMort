@@ -7,6 +7,7 @@ def setup(config_file_path):
 
     parser.add("-d",    "--data-folder",        type=str,   required=True,      help="directory of input samples for training and testing")
     parser.add("-m",    "--model",              type=str,   required=True,      help="neural network model name for training")
+    parser.add("-b",    "--backbone",           type=str,   required=True,      help="neural network model for feature extraction and/or backbone")
     parser.add("-e",    "--epochs",             type=int,   required=True,      help="number of epochs for training")
     parser.add("-ib",   "--train-batch-size",   type=int,   required=True,      help="batch size for training")
     parser.add("-ob",   "--test-batch-size",    type=int,   required=True,      help="batch size for testing")

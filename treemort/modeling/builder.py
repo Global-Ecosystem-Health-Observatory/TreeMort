@@ -1,4 +1,3 @@
-import os
 import torch
 
 import torch.nn as nn
@@ -6,197 +5,81 @@ import torch.optim as optim
 import segmentation_models_pytorch as smp
 
 from transformers import (
-            MaskFormerConfig,
-            MaskFormerModel,
-            MaskFormerForInstanceSegmentation,
-            DetrModel,
-            DetrConfig,
-            DetrForSegmentation,
-            BeitModel,
-            BeitConfig,
-            BeitForSemanticSegmentation,
-        )
+    MaskFormerForInstanceSegmentation,
+    DetrForSegmentation,
+    BeitForSemanticSegmentation,
+)
 
 from treemort.utils.checkpoints import get_checkpoint
-from treemort.modeling.network.self_attention_unet import SelfAttentionUNet
 from treemort.utils.loss import hybrid_loss, mse_loss, iou_score, f_score
 
+from treemort.modeling.network.dinov2 import Dinov2ForSemanticSegmentation
+from treemort.modeling.network.self_attention_unet import SelfAttentionUNet
+from treemort.modeling.network.custom_models import (
+    CustomMaskFormer,
+    CustomDetr,
+    CustomBeit,
+)
+from treemort.modeling.config import validate_configuration, get_model_config
 
-def resume_or_load(conf, device):
-    model, optimizer, criterion, metrics = build_model(
-        model_name=conf.model,
-        input_channels=conf.input_channels,
-        output_channels=conf.output_channels,
-        activation=conf.activation,
-        loss=conf.loss,
-        learning_rate=conf.learning_rate,
-        threshold=conf.threshold,
-        device=device
-    )
+
+def resume_or_load(conf, id2label, device):
+    print("[INFO] Starting model building process.")
+    model, optimizer, criterion, metrics = build_model(conf, id2label, device)
 
     if conf.resume:
+        print("[INFO] Resuming from checkpoint.")
         checkpoint = get_checkpoint(conf.model_weights, conf.output_dir)
 
         if checkpoint:
             model.load_state_dict(torch.load(checkpoint))
-            print(f"Loaded weights from {checkpoint}")
+            print(f"[INFO] Loaded weights from {checkpoint}")
 
         else:
-            print("No checkpoint found. Proceeding without loading weights.")
+            print("[INFO] No checkpoint found. Proceeding without loading weights.")
 
     else:
-        print("Model training from scratch.")
+        print("[INFO] Training model from scratch.")
 
     return model, optimizer, criterion, metrics
 
 
-def build_model(
-    model_name,
-    input_channels,
-    output_channels,
-    activation,
-    loss,
-    learning_rate,
-    threshold,
-    device,
-    backbone="resnet50",
-):
-    assert model_name in [
-        "unet",
-        "sa_unet",
-        "deeplabv3+",
-        "maskformer",
-        "detr",
-        "beit",
-    ], f"Model {model_name} unavailable."
-    assert activation in [
-        "tanh",
-        "sigmoid",
-    ], f"Model activation {activation} unavailable."
-    assert loss in ["mse", "hybrid"], f"Model loss {loss} unavailable."
+def build_model(conf, id2label, device):
+    print("[INFO] Validating configuration.")
+    validate_configuration(conf)
 
-    if model_name == "unet":
-        model = smp.Unet(
-            encoder_name="resnet34",
-            in_channels=input_channels,
-            classes=output_channels,
-            activation=None,
-        )
+    print(f"[INFO] Loading configuration for model {conf.model}.")
+    config = get_model_config(conf.model, conf.backbone, len(id2label), id2label)
 
-    elif model_name == "sa_unet":
-        model = SelfAttentionUNet(
-            in_channels=input_channels,
-            n_classes=output_channels,
-            depth=4,
-            wf=6,
-            batch_norm=True,
-        )
+    print(f"[INFO] Creating model {conf.model}.")
+    model = {
+            "unet": create_unet_model,
+            "sa_unet": create_sa_unet_model,
+            "deeplabv3+": create_deeplabv3plus_model,
+            "dinov2": create_dinov2_model,
+            "maskformer": create_maskformer_model,
+            "detr": create_detr_model,
+            "beit": create_beit_model,
+        }[conf.model](config=config, conf=conf, id2label=id2label, backbone=conf.backbone)
 
-    elif model_name == "deeplabv3+":
-        model = smp.DeepLabV3Plus(backbone, in_channels=input_channels, encoder_weights='imagenet')
-
-    elif model_name == "maskformer":     
-        
-        model_name = "facebook/maskformer-swin-base-ade"
-
-        config = MaskFormerConfig.from_pretrained(model_name, id2label = {0: 'alive', 1: 'dead'}, ignore_mismatched_sizes=True)
-        print("[INFO] displaying the MaskFormer configuration...")
-
-        model = MaskFormerForInstanceSegmentation(config)
-
-        base_model = MaskFormerModel.from_pretrained(model_name)
-        model.model = base_model
-
-        class CustomMaskFormer(MaskFormerForInstanceSegmentation):
-            def __init__(self, config):
-                super().__init__(config)
-                self.model = MaskFormerModel(config)
-                self.conv1 = nn.Conv2d(4, 3, kernel_size=1)
-
-            def forward(self, pixel_values, pixel_mask=None):
-                # Map the 4-channel input to 3 channels
-                pixel_values = self.conv1(pixel_values)
-                return super().forward(pixel_values, pixel_mask)
-
-        model = CustomMaskFormer(config)
-
-        # Copy the weights from the pretrained model
-        model.model.load_state_dict(model.model.state_dict(), strict=False)
-
-        # Now custom_model can be used with 4-channel inputs
-        print("[INFO] Custom model created and weights loaded successfully.")
-        
-    elif model_name == "detr":
-
-        model_name = "facebook/detr-resnet-50-panoptic"
-
-        config = DetrConfig.from_pretrained(model_name, id2label = {0: 'alive', 1: 'dead'}, ignore_mismatched_sizes=True)
-        print("[INFO] displaying the DETR configuration...")
-
-        model = DetrForSegmentation(config)
-
-        base_model = DetrModel.from_pretrained(model_name)
-        model.model = base_model
-
-        class CustomDetr(DetrForSegmentation):
-            def __init__(self, config):
-                super().__init__(config)
-                self.model = DetrModel(config)
-                self.conv1 = nn.Conv2d(4, 3, kernel_size=1)
-
-            def forward(self, pixel_values, pixel_mask=None):
-                # Map the 4-channel input to 3 channels
-                pixel_values = self.conv1(pixel_values)
-                return super().forward(pixel_values, pixel_mask)
-
-        model = CustomDetr(config)
-
-        # Copy the weights from the pretrained model
-        model.model.load_state_dict(model.model.state_dict(), strict=False)
-
-        # Now custom_model can be used with 4-channel inputs
-        print("[INFO] Custom model created and weights loaded successfully.")
-
-    elif model_name == "beit":
-
-        class CustomBeit(BeitForSemanticSegmentation):
-            def __init__(self, config):
-                super().__init__(config)
-                self.model = BeitModel(config)
-                self.conv1 = nn.Conv2d(4, 3, kernel_size=1)
-
-            def forward(self, pixel_values, pixel_mask=None):
-                # Map the 4-channel input to 3 channels
-                pixel_values = self.conv1(pixel_values)
-                return super().forward(pixel_values, pixel_mask)
-
-        pretrained_model = "microsoft/beit-base-finetuned-ade-640-640"
-
-        config = BeitConfig.from_pretrained(pretrained_model, id2label = {0: 'alive', 1: 'dead'}, ignore_mismatched_sizes=True)
-        print("[INFO] displaying the BEiT configuration...")
-
-        model = CustomBeit(config)
-
-        base_model = BeitModel.from_pretrained(pretrained_model)
-        model.model = base_model
-        model.model.load_state_dict(model.model.state_dict(), strict=False)
-    
-        print("[INFO] Custom BEiT model created and weights loaded successfully.")
-
+    print("[INFO] Moving model to device.")
     model.to(device)
 
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    print("[INFO] Initializing optimizer.")
+    optimizer = optim.Adam(model.parameters(), lr=conf.learning_rate)
 
-    if loss == "hybrid":
+    if conf.loss == "hybrid":
+        print("[INFO] Using hybrid loss function.")
         criterion = hybrid_loss
 
         def metrics(pred, target):
             return {
-                "iou_score": iou_score(pred, target, threshold),
-                "f_score": f_score(pred, target, threshold),
+                "iou_score": iou_score(pred, target, conf.threshold),
+                "f_score": f_score(pred, target, conf.threshold),
             }
 
-    elif loss == "mse":
+    elif conf.loss == "mse":
+        print("[INFO] Using MSE loss function.")
         criterion = mse_loss
 
         def metrics(pred, target):
@@ -205,4 +88,53 @@ def build_model(
             rmse = torch.sqrt(mse)
             return {"mse": mse, "mae": mae, "rmse": rmse}
 
+    print("[INFO] Model building completed.")
     return model, optimizer, criterion, metrics
+
+
+def create_unet_model(conf, **kwargs):
+    print("[INFO] Creating U-Net model.")
+    return smp.Unet(
+        encoder_name="resnet34", in_channels=conf.input_channels, classes=conf.output_channels, activation=None
+    )
+
+def create_sa_unet_model(conf, **kwargs):
+    print("[INFO] Creating Self-Attention U-Net model.")
+    return SelfAttentionUNet(in_channels=conf.input_channels, n_classes=conf.output_channels, depth=4, wf=6, batch_norm=True)
+
+def create_deeplabv3plus_model(conf, **kwargs):
+    print("[INFO] Creating DeepLabV3+ model.")
+    return smp.DeepLabV3Plus(conf.backbone, in_channels=conf.input_channels, encoder_weights="imagenet")
+
+def create_dinov2_model(conf, id2label, **kwargs):
+    print("[INFO] Creating DINOv2 model.")
+    return Dinov2ForSemanticSegmentation.from_pretrained(conf.backbone, id2label=id2label, num_labels=len(id2label))
+
+def create_maskformer_model(config, backbone, **kwargs):
+    print("[INFO] Creating MaskFormer model.")
+    model = CustomMaskFormer(config)
+    pretrained_model = MaskFormerForInstanceSegmentation.from_pretrained(backbone)
+    model.model.load_state_dict(pretrained_model.model.state_dict(), strict=False)
+    print("[INFO] MaskFormer model created and weights loaded.")
+    return model
+
+def create_detr_model(config, backbone, id2label, **kwargs):
+    print("[INFO] Creating DETR model.")
+    model = CustomDetr(config)
+    pretrained_model = DetrForSegmentation.from_pretrained(
+        backbone, num_labels=len(id2label), id2label=id2label, ignore_mismatched_sizes=True
+    )
+    state_dict = pretrained_model.detr.state_dict()
+    del state_dict["class_labels_classifier.weight"]
+    del state_dict["class_labels_classifier.bias"]
+    model.detr.load_state_dict(state_dict, strict=False)
+    print("[INFO] DETR model created and weights loaded.")
+    return model
+
+def create_beit_model(config, backbone, **kwargs):
+    print("[INFO] Creating BEiT model.")
+    model = CustomBeit(config)
+    pretrained_model = BeitForSemanticSegmentation.from_pretrained(backbone)
+    model.beit.load_state_dict(pretrained_model.beit.state_dict(), strict=False)
+    print("[INFO] BEiT model created and weights loaded.")
+    return model

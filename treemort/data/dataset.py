@@ -1,14 +1,13 @@
+# Code borrowed from https://github.com/NielsRogge/Transformers-Tutorials/blob/master/DINOv2/Train_a_linear_classifier_on_top_of_DINOv2_for_semantic_segmentation.ipynb
+
 import os
 import torch
 
 import numpy as np
-
 import torch.nn.functional as F
-import torchvision.transforms as T
-import torchvision.transforms.functional as TF
 
+from transformers import AutoImageProcessor
 from torch.utils.data import Dataset, DataLoader, random_split
-from transformers import AutoImageProcessor, MaskFormerImageProcessor
 
 from treemort.utils.augment import Augmentations
 
@@ -61,48 +60,7 @@ class DeadTreeDataset(Dataset):
         image, label = self.center_crop_or_pad(image, label, self.crop_size)
 
         if self.image_processor:
-            if self.image_processor.do_rescale:
-                image = image * self.image_processor.rescale_factor
-
-            if self.image_processor.do_resize:
-                image = F.interpolate(
-                    image.unsqueeze(0),
-                    size=(
-                        self.image_processor.size["shortest_edge"],
-                        self.image_processor.size["shortest_edge"],
-                    ),
-                    mode="bilinear",
-                    align_corners=False,
-                ).squeeze(0)
-
-                label = (
-                    F.interpolate(
-                        label.unsqueeze(0).unsqueeze(0),
-                        size=(
-                            self.image_processor.size["shortest_edge"],
-                            self.image_processor.size["shortest_edge"],
-                        ),
-                        mode="nearest",
-                    )
-                    .squeeze(0)
-                    .squeeze(0)
-                )
-
-            if self.image_processor.do_normalize:
-                image_mean = torch.tensor(self.image_processor.image_mean)
-                image_std = torch.tensor(self.image_processor.image_std)
-                image = (image - image_mean.view(-1, 1, 1)) / image_std.view(-1, 1, 1)
-
-            if self.image_processor.do_pad:
-                pad_size = getattr(self.image_processor, 'pad_sized', None)
-                # pad_size = self.image_processor.pad_size # statement fails on Puhti
-
-                if pad_size:
-                    pad_h = pad_size[0] - image.shape[1]
-                    pad_w = pad_size[1] - image.shape[2]
-                    if pad_h > 0 or pad_w > 0:
-                        image = F.pad(image, (0, pad_w, 0, pad_h), value=0)
-                        label = F.pad(label, (0, pad_w, 0, pad_h), value=0)
+            image, label = self.apply_image_processor(image, label)
 
         if self.transform:
             image, label = self.transform(image, label)
@@ -141,6 +99,52 @@ class DeadTreeDataset(Dataset):
 
         return image, label
 
+    def apply_image_processor(self, image, label):
+        if self.image_processor.do_rescale:
+            image = image * self.image_processor.rescale_factor
+
+        if self.image_processor.do_resize:
+            image = F.interpolate(
+                image.unsqueeze(0),
+                size=(
+                    self.image_processor.size["shortest_edge"],
+                    self.image_processor.size["shortest_edge"],
+                ),
+                mode="bilinear",
+                align_corners=False,
+            ).squeeze(0)
+
+            label = (
+                F.interpolate(
+                    label.unsqueeze(0).unsqueeze(0),
+                    size=(
+                        self.image_processor.size["shortest_edge"],
+                        self.image_processor.size["shortest_edge"],
+                    ),
+                    mode="nearest",
+                )
+                .squeeze(0)
+                .squeeze(0)
+            )
+
+        if self.image_processor.do_normalize:
+            image_mean = torch.tensor(self.image_processor.image_mean)
+            image_std = torch.tensor(self.image_processor.image_std)
+            image = (image - image_mean.view(-1, 1, 1)) / image_std.view(-1, 1, 1)
+
+        if self.image_processor.do_pad:
+            pad_size = getattr(self.image_processor, "pad_sized", None)
+            # pad_size = self.image_processor.pad_size # statement fails on Puhti
+
+            if pad_size:
+                pad_h = pad_size[0] - image.shape[1]
+                pad_w = pad_size[1] - image.shape[2]
+                if pad_h > 0 or pad_w > 0:
+                    image = F.pad(image, (0, pad_w, 0, pad_h), value=0)
+                    label = F.pad(label, (0, pad_w, 0, pad_h), value=0)
+
+        return image, label
+
 
 def prepare_datasets(root_dir, conf):
 
@@ -148,20 +152,16 @@ def prepare_datasets(root_dir, conf):
     val_transform = None
     test_transform = None
 
-    if conf.model == "maskformer":
-        image_processor = MaskFormerImageProcessor(
-            ignore_index=0, do_resize=True, do_rescale=False, do_normalize=False
-        )
-    elif conf.model == "detr":
-        image_processor = AutoImageProcessor.from_pretrained(
-            "facebook/detr-resnet-50-panoptic"
-        )
+    if conf.model in ["maskformer", "detr", "beit", "dinov2"]:
+        image_processor = AutoImageProcessor.from_pretrained(conf.backbone)
 
-    elif conf.model == "beit":
-        image_processor = AutoImageProcessor.from_pretrained(
-            "microsoft/beit-base-finetuned-ade-640-640", do_rescale=False
-        )
-
+        if conf.model == "beit":
+            image_processor.size["shortest_edge"] = min(
+                image_processor.size["height"], image_processor.size["width"]
+            )
+            image_processor.do_pad = False
+        elif conf.model in ["maskformer", "dinov2"]:
+            image_processor.do_pad = False
     else:
         image_processor = None
 

@@ -4,6 +4,8 @@ data-folder = /scratch/project_2008436/rahmanan/AerialImageModel_ITD
 
 model = detr
 
+backbone = facebook/detr-resnet-50-panoptic
+
 output-dir = output/detr
 
 train-crop-size = 256
