@@ -1,6 +1,6 @@
 # configurations for dataset creation
 
-data-folder = /project_2008436/rahmanan/AerialImageModel_ITD
+data-folder = /scratch/project_2008436/rahmanan/AerialImageModel_ITD
 image-folder = 4band_25cm
 label-folder = Geojsons
 hdf5-file = AerialImageModel_ITD.h5

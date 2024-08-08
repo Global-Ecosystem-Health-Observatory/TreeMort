@@ -7,10 +7,9 @@
 #SBATCH --mem-per-cpu=4000
 
 module load python-data
-pip install --user --upgrade hdf5 configargparse
 
 srun python3 ./dataset/creator.py ./configs/AerialImageModel_ITD.txt
 
-# module load python-data
-# pip install --user --upgrade hdf5 configargparse
-
+# Note: Only first time to install packages
+#
+# pip install --user --upgrade opencv-python h5py configargparse rasterio
