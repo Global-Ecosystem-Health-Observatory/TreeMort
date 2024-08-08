@@ -6,7 +6,7 @@
 #SBATCH --time=02:00:00 --partition=small
 #SBATCH --mem-per-cpu=4000
 
-module load python-data
+module load tensorflow
 source venv/bin/activate
 
 srun python3 ./dataset/creator.py ./configs/AerialImageModel_ITD.txt
