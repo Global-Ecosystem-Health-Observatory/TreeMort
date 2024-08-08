@@ -1,8 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-from treemort.data.dataset import prepare_dataset
-
 
 def plot_examples(dataset, num_examples=5):
     for image_batch, label_batch in dataset.take(1):  # Take one batch
