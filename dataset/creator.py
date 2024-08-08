@@ -180,8 +180,6 @@ if __name__ == "__main__":
     # Load configuration
     conf = parse_config(args.config)
     
-    conf.data_folder = "/Users/anisr/Documents/AerialImages"
-    
     convert_to_hdf5(
         conf,
         no_of_samples=args.no_of_samples,
