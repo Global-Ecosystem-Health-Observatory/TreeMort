@@ -2,17 +2,21 @@
 
 data-folder = /scratch/project_2008436/rahmanan/AerialImageModel_ITD
 
+hdf5-file = AerialImageModel_ITD.h5
+
 model = unet
 
-output-dir = output/unet_bin
+output-dir = output/unet
 
 train-crop-size = 256
-test-crop-size = 512
+val-crop-size = 256
+test-crop-size = 256
 
 input-channels = 4
 output-channels = 1
 
 train-batch-size = 8
+val-batch-size = 8
 test-batch-size = 8
 
 epochs = 100
@@ -28,7 +32,6 @@ activation = sigmoid # available options [tanh, sigmoid]
 loss = hybrid # available options [mse, hybrid]
 
 val-size = 0.2
+test-size = 0.1
 
 resume
-
-binarize

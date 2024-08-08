@@ -27,7 +27,7 @@ def run(conf, eval_only):
     print(f"[INFO] Using device: {device}")
 
     print("[INFO] Preparing datasets...")
-    train_dataset, val_dataset, test_dataset = prepare_datasets(conf.data_folder, conf)
+    train_dataset, val_dataset, test_dataset = prepare_datasets(conf)
     print(f"[INFO] Datasets prepared: Train({len(train_dataset)}), Val({len(val_dataset)}), Test({len(test_dataset)})")
 
     print("[INFO] Loading or resuming model...")

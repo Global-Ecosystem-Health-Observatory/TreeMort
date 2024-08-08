@@ -1,43 +1,39 @@
 import os
-import numpy as np
+import h5py
 import torch
-from torch.utils.data import Dataset, DataLoader, random_split
+
+import numpy as np
 import torchvision.transforms as T
 
+from torch.utils.data import Dataset, DataLoader, random_split
+
 from treemort.utils.augment import Augmentations
+from treemort.utils.datautils import stratified_split
 
 
 class DeadTreeDataset(Dataset):
     def __init__(
-        self, root_dir, split="train", crop_size=256, transform=None, binarize=False
+        self, hdf5_file, keys, crop_size=256, transform=None
     ):
-        self.root_dir = root_dir
-        self.split = split
+        self.hdf5_file = hdf5_file
+        self.keys = keys
         self.crop_size = crop_size
         self.transform = transform
-        self.binarize = binarize
-        self.images_dir = os.path.join(root_dir, split, "Images")
-        self.labels_dir = os.path.join(root_dir, split, "Labels")
-        self.image_files = [
-            f for f in os.listdir(self.images_dir) if f.endswith(".npy")
-        ]
 
     def __len__(self):
-        return len(self.image_files)
+        return len(self.keys)
 
     def __getitem__(self, idx):
-        image_path = os.path.join(self.images_dir, self.image_files[idx])
-        label_path = os.path.join(self.labels_dir, self.image_files[idx])
+        with h5py.File(self.hdf5_file, "r") as hf:
+            key = self.keys[idx]
+            image = hf[key]['image'][()]
+            label = hf[key]['label'][()]
 
-        image = np.load(image_path).astype(np.float32)
-        label = np.load(label_path).astype(np.float32)
+        image = image.astype(np.float32)
+        label = label.astype(np.float32)
 
-        if self.binarize:
-            image = image / 255.0
-            label = (label > 0).astype(np.float32)
-
-        else:
-            pass
+        image = image / 255.0
+        # label = (label > 0).astype(np.float32) # binarized within hdf5 dataset
 
         image, label = self.center_crop_or_pad(image, label, self.crop_size)
 
@@ -46,7 +42,7 @@ class DeadTreeDataset(Dataset):
 
         # Convert to torch tensors
         image = torch.tensor(image).permute(2, 0, 1)  # Convert to (C, H, W) format
-        label = torch.tensor(label).unsqueeze(0)
+        label = torch.tensor(label).unsqueeze(0)  # Add channel dimension for label
 
         return image, label
 
@@ -85,40 +81,41 @@ class DeadTreeDataset(Dataset):
         return image, label
 
 
-def prepare_datasets(root_dir, conf):
+
+def prepare_datasets(conf):
+
+    hdf5_file_path = os.path.join(conf.data_folder, conf.hdf5_file)
+
+    train_keys, val_keys, test_keys = stratified_split(hdf5_file_path, conf.val_size, conf.test_size)
 
     train_transform = Augmentations()
     val_transform = None
     test_transform = None
 
-    full_train_dataset = DeadTreeDataset(
-        root_dir,
-        split="Train",
+    train_dataset = DeadTreeDataset(
+        hdf5_file=hdf5_file_path,
+        keys=train_keys,
         crop_size=conf.train_crop_size,
         transform=train_transform,
-        binarize=conf.binarize,
+    )
+    val_dataset = DeadTreeDataset(
+        hdf5_file=hdf5_file_path,
+        keys=val_keys,
+        crop_size=conf.val_crop_size,
+        transform=val_transform,
     )
     test_dataset = DeadTreeDataset(
-        root_dir,
-        split="Test",
+        hdf5_file=hdf5_file_path,
+        keys=test_keys,
         crop_size=conf.test_crop_size,
         transform=test_transform,
-        binarize=conf.binarize,
     )
-
-    val_size = int(conf.val_size * len(full_train_dataset))
-    train_size = len(full_train_dataset) - val_size
-    train_dataset, val_dataset = random_split(
-        full_train_dataset, [train_size, val_size]
-    )
-
-    val_dataset.dataset.transform = val_transform
 
     train_loader = DataLoader(
         train_dataset, batch_size=conf.train_batch_size, shuffle=True, drop_last=True
     )
     val_loader = DataLoader(
-        val_dataset, batch_size=conf.train_batch_size, shuffle=False, drop_last=True
+        val_dataset, batch_size=conf.val_batch_size, shuffle=False, drop_last=True
     )
     test_loader = DataLoader(
         test_dataset, batch_size=conf.test_batch_size, shuffle=False, drop_last=True
