@@ -1,8 +1,8 @@
 import os
-import shutil
-import random
-import logging
+import h5py
 import argparse
+import configargparse
+import concurrent.futures
 
 import numpy as np
 
@@ -12,160 +12,179 @@ from preprocessutils import (
     segmap_to_topo,
 )
 
-# Configuration
-square_save_size = 320
 
-# nir_r_g_b_order only for highres sat images (otherwise set to None)
-# SET UP NIR-R-G-B order for example: PHR [3,0,1,2] -- alueX SS_PS [3,2,1,0]
-nir_r_g_b_order = [3,2,1,0]
-
-normalize_imagewise = False  # each image_crop normalized separately to 0...255
-normalize_channelwise = True  # each channel normalized separately to 0...255
+def pad_image(image, window_size):
+    h, w = image.shape[:2]
+    pad_h = max(0, window_size - h)
+    pad_w = max(0, window_size - w)
+    return np.pad(image, ((0, pad_h), (0, pad_w), (0, 0)), mode="constant")
 
 
-# Set up logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+def pad_label(label, window_size):
+    h, w = label.shape[:2]
+    pad_h = max(0, window_size - h)
+    pad_w = max(0, window_size - w)
+    return np.pad(label, ((0, pad_h), (0, pad_w)), mode="constant")
 
 
-def create_directory(directory_path):
-    os.makedirs(directory_path, exist_ok=True)
+def extract_patches(image, label, window_size, stride):
+    image = pad_image(image, window_size)
+    label = pad_label(label, window_size)
+
+    patches = []
+    h, w = image.shape[:2]
+    for y in range(0, h - window_size + 1, stride):
+        for x in range(0, w - window_size + 1, stride):
+            image_patch = image[y : y + window_size, x : x + window_size]
+            label_patch = label[y : y + window_size, x : x + window_size]
+
+            # Convert label_patch to binary mask
+            label_patch = (label_patch > 0).astype(np.float32)
+
+            patches.append((image_patch, label_patch))
+
+    return patches
 
 
-def create_dataset(project_folder, no_of_samples=None):
-    output_images_folder = os.path.join(project_folder, "Temp", "Images")
-    output_labels_folder = os.path.join(project_folder, "Temp", "Labels")
-
-    for folder_path in [output_images_folder, output_labels_folder]:
-        create_directory(folder_path)
-
-    image_folder = os.path.join(project_folder, "4band_25cm")
-    label_folder = os.path.join(project_folder, "Geojsons")
-
-    file_list = os.listdir(image_folder)[:no_of_samples] if no_of_samples else os.listdir(image_folder)
-
-    total_files_in_area, total_annotations_in_area, no_of_samples = 0, 0, 0
-
-    for file in file_list:
-        try:
-            if file.endswith(("jp2", "tif", "tiff")):
-                total_files_in_area += 1
-
-                image_filepath = os.path.join(image_folder, file)
-                geojson_filepath = os.path.join(label_folder, file.rsplit('.', 1)[0] + ".geojson")
-
-                if nir_r_g_b_order is not None:
-                    exim_np, adjusted_polygons = get_image_and_polygons_reorder(
-                        image_filepath,
-                        geojson_filepath,
-                        nir_r_g_b_order,
-                        normalize_channelwise,
-                        normalize_imagewise,
-                    )
-                else:
-                    exim_np, adjusted_polygons = get_image_and_polygons_normalize(
-                        image_filepath,
-                        geojson_filepath,
-                        normalize_channelwise,
-                        normalize_imagewise,
-                    )
-
-                total_annotations_in_area += len(adjusted_polygons)
-                topolabel = segmap_to_topo(exim_np, adjusted_polygons)
-
-                # save images as close to 400 px images as evenly possible
-                orig_h, orig_w = exim_np.shape[:2]
-
-                divider_h = np.ceil(orig_h / square_save_size)
-                divider_w = np.ceil(orig_w / square_save_size)
-
-                sample_h = int(np.floor(orig_h / divider_h))
-                sample_w = int(np.floor(orig_w / divider_w))
-
-                file_stub = os.path.split(image_filepath)[1].split(".")[0]
-
-                # split the image to smaller samples
-                for x_tile in range(int(divider_w)):
-                    for y_tile in range(int(divider_h)):
-                        start_x, end_x = x_tile * sample_w, (x_tile + 1) * sample_w
-                        start_y, end_y = y_tile * sample_h, (y_tile + 1) * sample_h
-
-                        image_clip = exim_np[start_y:end_y, start_x:end_x, :]
-                        topo_clip = topolabel[start_y:end_y, start_x:end_x]
-
-                        res_image_path = os.path.join(output_images_folder, f"{file_stub}_{x_tile}_{y_tile}.npy")
-                        res_label_path = os.path.join(output_labels_folder, f"{file_stub}_{x_tile}_{y_tile}.npy")
-
-                        np.save(res_image_path, image_clip)
-                        np.save(res_label_path, topo_clip)
-                        no_of_samples += 1
-
-        except Exception as e:
-            logging.error(f"Failed to process {file}: {e}")
-
-    logging.info(f"{total_files_in_area} files processed")
-    logging.info(f"{total_annotations_in_area} polygons found")
-    logging.info(f"{no_of_samples} sample-squares created")
-
-    return output_images_folder, output_labels_folder
-
-
-def split_dataset(
-    project_folder, output_images_folder, output_labels_folder, split_ratio=1
+def process_image(
+    file,
+    image_folder,
+    label_folder,
+    nir_r_g_b_order,
+    normalize_channelwise,
+    normalize_imagewise,
+    window_size,
+    stride,
 ):
-    train_images_folder = os.path.join(project_folder, "Train", "Images")
-    train_labels_folder = os.path.join(project_folder, "Train", "Labels")
-    test_images_folder  = os.path.join(project_folder, "Test", "Images")
-    test_labels_folder  = os.path.join(project_folder, "Test", "Labels")
+    try:
+        if file.endswith(("jp2", "tif", "tiff")):
+            image_filepath = os.path.join(image_folder, file)
+            geojson_filepath = os.path.join(label_folder, file.rsplit(".", 1)[0] + ".geojson")
 
-    for folder_path in [
-        train_images_folder,
-        train_labels_folder,
-        test_images_folder,
-        test_labels_folder,
-    ]:
-        create_directory(folder_path)
+            if nir_r_g_b_order is not None:
+                exim_np, adjusted_polygons = get_image_and_polygons_reorder(
+                    image_filepath,
+                    geojson_filepath,
+                    nir_r_g_b_order,
+                    normalize_channelwise,
+                    normalize_imagewise,
+                )
+            else:
+                exim_np, adjusted_polygons = get_image_and_polygons_normalize(
+                    image_filepath,
+                    geojson_filepath,
+                    normalize_channelwise,
+                    normalize_imagewise,
+                )
 
-    all_files = os.listdir(output_images_folder)
+            topolabel = segmap_to_topo(exim_np, adjusted_polygons)
 
-    for file in all_files:
-        src_image_path = os.path.join(output_images_folder, file)
-        src_label_path = os.path.join(output_labels_folder, file)
+            patches = extract_patches(exim_np, topolabel, window_size, stride)
 
-        if random.randint(1, 10) == split_ratio:  # 10% test set
-            dest_image_path = os.path.join(test_images_folder, file)
-            dest_label_path = os.path.join(test_labels_folder, file)
+            # Create labeled patches with binary classification (1 if contains dead trees, else 0)
+            labeled_patches = [(patch[0], patch[1], int(np.any(patch[1]))) for patch in patches]
 
-        else:
-            dest_image_path = os.path.join(train_images_folder, file)
-            dest_label_path = os.path.join(train_labels_folder, file)
+            return file, labeled_patches
+    except Exception as e:
+        print(f"[ERROR] Failed to process {file}: {e}")
+        return file, []
 
-        shutil.move(src_image_path, dest_image_path)
-        shutil.move(src_label_path, dest_label_path)
 
-    logging.info("Created Train and Test folders")
-    logging.info(f"Train Images: {train_images_folder}")
-    logging.info(f"Train Labels: {train_labels_folder}")
-    logging.info(f"Test Images: {test_images_folder}")
-    logging.info(f"Test Labels: {test_labels_folder}")
+def write_to_hdf5(hdf5_file, data):
+    with h5py.File(hdf5_file, "a") as hf:  # Open in append mode
+        for file_stub, labeled_patches in data:
+            for idx, (image_patch, label_patch, contains_dead_tree) in enumerate(labeled_patches):
+                key = f"{file_stub}_{idx}"
+                hf.create_group(key)
+                hf[key].create_dataset("image", data=image_patch, compression="gzip")
+                hf[key].create_dataset("label", data=label_patch, compression="gzip")
+                hf[key].attrs["contains_dead_tree"] = contains_dead_tree
 
+
+def convert_to_hdf5(
+    conf,
+    no_of_samples=None,
+    num_workers=4,
+    chunk_size=10,
+):
+    image_folder = os.path.join(conf.data_folder, conf.image_folder)
+    label_folder = os.path.join(conf.data_folder, conf.label_folder)
+    hdf5_file = os.path.join(conf.data_folder, conf.hdf5_file)
+    
+    assert not os.path.exists(hdf5_file), f"[ERROR] The HDF5 file '{hdf5_file}' already exists. Please provide a different file name or delete the existing file."
+
+    file_list = (
+        os.listdir(image_folder)[:no_of_samples]
+        if no_of_samples
+        else os.listdir(image_folder)
+    )
+    chunk_count = len(file_list) // chunk_size + int(len(file_list) % chunk_size != 0)
+
+    for chunk_idx in range(chunk_count):
+        chunk_files = file_list[chunk_idx * chunk_size : (chunk_idx + 1) * chunk_size]
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
+            future_to_file = {
+                executor.submit(
+                    process_image,
+                    file,
+                    image_folder,
+                    label_folder,
+                    conf.nir_rgb_order,
+                    conf.normalize_channelwise,
+                    conf.normalize_imagewise,
+                    conf.window_size,
+                    conf.stride,
+                ): file
+                for file in chunk_files
+            }
+            results = []
+            for future in concurrent.futures.as_completed(future_to_file):
+                file = future_to_file[future]
+                try:
+                    results.append(future.result())
+                except Exception as e:
+                    print(f"[ERROR] File {file} generated an exception: {e}")
+
+            write_to_hdf5(hdf5_file, results)
+
+        files_left = max(0, len(file_list) - (chunk_idx + 1) * chunk_size)
+        print(f"[INFO] Completed chunk {chunk_idx + 1}/{chunk_count}. {files_left} files left to process.")
+
+def parse_config(config_file_path):
+    parser = configargparse.ArgParser(default_config_files=[config_file_path])
+
+    parser.add("--data-folder",             type=str, required=True,    help="directory with aerial image and label data")
+    parser.add("--image-folder",            type=str, required=True,    help="name of image directory")
+    parser.add("--label-folder",            type=str, required=True,    help="name of label directory")
+    parser.add("--hdf5-file",               type=str, required=True,    help="name of output hdf5 file")
+    parser.add("--num-workers",             type=int, default=4,        help="number of workers for parallel processing")
+    parser.add("--window-size",             type=int, default=256,      help="size of the window")
+    parser.add("--stride",                  type=int, default=128,      help="stride for the window")
+    parser.add("--nir-rgb-order",           type=int, nargs='+', default=[3, 2, 1, 0],   help="NIR, R, G, B order")
+    parser.add("--normalize-imagewise",     action="store_true",        help="normalize imagewise")
+    parser.add("--normalize-channelwise",   action="store_true",        help="normalize channelwise")
+
+    conf, _ = parser.parse_known_args()
+
+    return conf
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Aerial images dataset creation.")
-    parser.add_argument("data_folder",     type=str,               help="Path to the raw Aerial Image data")
-    parser.add_argument("--no-of-samples", type=int, default=None, help="If set N>1, creates samples from N Aerial Images, for testing purposes only")
-
+    parser.add_argument("config",           type=str,               help="Path to the configuration file",)
+    parser.add_argument("--no-of-samples",  type=int, default=None, help="If set N>1, creates samples from N Aerial Images, for testing purposes only",)
+    parser.add_argument("--num-workers",    type=int, default=4,    help="Number of workers for parallel processing",)
+    parser.add_argument("--chunk-size",     type=int, default=10,   help="Number of images to process in a single chunk",)
     args = parser.parse_args()
 
-    print(args)
-
-    data_folder = args.data_folder
-
-    image_folder = os.path.join(data_folder, "4band_25cm")
-    label_folder = os.path.join(data_folder, "Geojsons")
-
-    output_images_folder, output_labels_folder = create_dataset(data_folder, args.no_of_samples)
-    split_dataset(data_folder, output_images_folder, output_labels_folder)
-
-    logging.info("Removing Temp folder")
-    shutil.rmtree(os.path.join(data_folder, "Temp"))
-
+    # Load configuration
+    conf = parse_config(args.config)
+    
+    conf.data_folder = "/Users/anisr/Documents/AerialImages"
+    
+    convert_to_hdf5(
+        conf,
+        no_of_samples=args.no_of_samples,
+        num_workers=args.num_workers,
+        chunk_size=args.chunk_size,
+    )

@@ -30,18 +30,9 @@ def load_numpy(image_path, label_path, crop_size):
 
 
 def normalize_inputs(image_tf, label_tf):
-    image_tf = (image_tf / 127.5) - 1.0  # rescale to range [-1, +1]
-
-    label_tf = label_tf / 255.0  # rescale to range [0, +1]
-    label_tf = label_tf - tf.cast(label_tf == 0, tf.float32)  # set 0 (background) to -1
-
-    return image_tf, label_tf
-
-
-def normalize_inputs_bin(image_tf, label_tf):
     image_tf = image_tf / 255.0
 
-    label_tf = tf.cast(label_tf > 0, tf.float32)
+    label_tf = tf.cast(label_tf > 0, tf.float32) # redundant normalization; already done in dataset
 
     return image_tf, label_tf
 
@@ -74,10 +65,7 @@ def load_and_crop_image(image_path, label_path, crop_size, input_channels):
     return image, label
 
 
-def preprocess_image(image, label, binarize=False):
-    if binarize:
-        image, label = normalize_inputs_bin(image, label)
-    else:
-        image, label = normalize_inputs(image, label)
-
+def preprocess_image(image, label):
+    image, label = normalize_inputs(image, label)
+    
     return image, label

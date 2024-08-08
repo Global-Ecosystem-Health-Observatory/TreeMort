@@ -54,13 +54,12 @@ def build_model(model_name, input_channels, output_channels, activation, loss, l
     if loss == "hybrid":
         iou_score = sm.metrics.IOUScore(threshold=threshold)
         f_score = sm.metrics.FScore(threshold=threshold)
-        hybrid_metrics = [iou_score, f_score]
 
         dice_loss = sm.losses.DiceLoss()
         focal_loss = sm.losses.BinaryFocalLoss()
         hybrid_loss = dice_loss + (1 * focal_loss)
 
-        model.compile(optimizer=optimizer, loss=hybrid_loss, metrics=[hybrid_metrics])
+        model.compile(optimizer=optimizer, loss=hybrid_loss, metrics=[iou_score, f_score])
 
     elif loss == "mse":
         mse_metric = tf.keras.metrics.MeanSquaredError(name='mse')

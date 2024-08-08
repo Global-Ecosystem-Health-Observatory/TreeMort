@@ -6,12 +6,12 @@ class CustomAugmentation(tf.keras.layers.Layer):
         super(CustomAugmentation, self).__init__()
 
     def call(self, image, label):
-        combined = tf.concat([image, tf.expand_dims(label, axis=-1)], axis=-1)
+        combined = tf.concat([image, label], axis=-1)
         combined = self.random_flip(combined)
         combined = self.random_rotation(combined)
 
         image = combined[:, :, : image.shape[-1]]
-        label = tf.squeeze(combined[:, :, image.shape[-1] :], axis=-1)
+        label = combined[:, :, image.shape[-1] :]
 
         image = self.random_brightness_contrast(image)
         image = self.random_multiplicative_noise(image)

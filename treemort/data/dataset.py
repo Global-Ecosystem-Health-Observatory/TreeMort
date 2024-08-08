@@ -1,92 +1,127 @@
+import os
+import h5py
+
 import tensorflow as tf
 
-from treemort.utils.preprocess import load_and_crop_image, preprocess_image
+from treemort.utils.preprocess import preprocess_image
+from treemort.utils.datautils import stratified_split
 from treemort.utils.augment import CustomAugmentation
 
 
+def load_from_hdf5(hdf5_file_path, key):
+    with h5py.File(hdf5_file_path, "r") as hf:
+        image = hf[key]["image"][()]
+        label = hf[key]["label"][()]
+    return image, label
+
+
+def decode_and_reshape(image, label, crop_size, input_channels, output_channels):
+    image = tf.convert_to_tensor(image, dtype=tf.float32)
+    label = tf.convert_to_tensor(label, dtype=tf.float32)
+
+    image = tf.reshape(image, [crop_size, crop_size, input_channels])
+    label = tf.reshape(label, [crop_size, crop_size, output_channels])
+
+    return image, label
+
+
+def load_and_decode(hdf5_file_path, key):
+    key = key.numpy().decode("utf-8")  # Convert bytes to string
+    image, label = load_from_hdf5(hdf5_file_path, key)
+    return image, label
+
+
 def prepare_dataset(
-    image_paths,
-    label_paths,
+    hdf5_file_path,
+    keys,
     crop_size,
     batch_size,
     input_channels,
+    output_channels,
     augment=False,
-    binarize=False,
-    val_split_ratio=0.2,
 ):
-    no_of_files = len(image_paths)
-    dataset_paths = tf.data.Dataset.from_tensor_slices((image_paths, label_paths))
+    def load_and_decode_fn(key):
+        key = tf.convert_to_tensor(key, dtype=tf.string)
+        image, label = tf.py_function(
+            func=lambda k: load_and_decode(hdf5_file_path, k),
+            inp=[key],
+            Tout=[tf.float32, tf.float32],
+        )
 
-    dataset_paths = dataset_paths.shuffle(
-        buffer_size=no_of_files, reshuffle_each_iteration=True
-    )
+        label = tf.expand_dims(label, axis=-1)
 
-    if val_split_ratio > 0:
-        val_size = int(val_split_ratio * no_of_files)
-        val_dataset_paths = dataset_paths.take(val_size)
-        train_dataset_paths = dataset_paths.skip(val_size)
-    else:
-        train_dataset_paths = dataset_paths
-        val_dataset_paths = None
+        image.set_shape([crop_size, crop_size, input_channels])
+        label.set_shape([crop_size, crop_size, output_channels])
+        return image, label
 
-    def load_and_crop(image_path, label_path):
-        return load_and_crop_image(image_path, label_path, crop_size, input_channels)
-
-    def preprocess(image_path, label_path):
-        return preprocess_image(image_path, label_path, binarize)
-
-    augmentation_layer = CustomAugmentation() if augment else None
+    def decode_and_reshape_fn(image, label):
+        return decode_and_reshape(image, label, crop_size, input_channels, output_channels)
 
     def apply_augmentation(image, label):
         if augment:
+            augmentation_layer = CustomAugmentation()
             image, label = augmentation_layer(image, label)
         return image, label
 
-    train_dataset = (
-        train_dataset_paths.map(load_and_crop, num_parallel_calls=tf.data.AUTOTUNE)
-        .map(apply_augmentation, num_parallel_calls=tf.data.AUTOTUNE)
-        .map(preprocess, num_parallel_calls=tf.data.AUTOTUNE)
-        .repeat()
-        .batch(batch_size)
-        .prefetch(tf.data.AUTOTUNE)
-    )
+    def preprocess_fn(image, label):
+        image, label = preprocess_image(image, label)
+        return image, label
 
-    if val_dataset_paths:
-        val_dataset = (
-            val_dataset_paths.map(load_and_crop, num_parallel_calls=tf.data.AUTOTUNE)
-            .map(preprocess, num_parallel_calls=tf.data.AUTOTUNE)
-            .repeat()
-            .batch(batch_size)
-            .prefetch(tf.data.AUTOTUNE)
-        )
-    else:
-        val_dataset = None
+    dataset = tf.data.Dataset.from_tensor_slices(keys)
+    dataset = dataset.map(lambda key: load_and_decode_fn(key), num_parallel_calls=tf.data.AUTOTUNE)
+    dataset = dataset.map(decode_and_reshape_fn, num_parallel_calls=tf.data.AUTOTUNE)
 
-    return train_dataset, val_dataset
+    if augment:
+        dataset = dataset.map(apply_augmentation, num_parallel_calls=tf.data.AUTOTUNE)
+
+    dataset = dataset.map(preprocess_fn, num_parallel_calls=tf.data.AUTOTUNE)
+
+    dataset = dataset.shuffle(buffer_size=1000)  # Shuffle dataset
+    dataset = dataset.batch(batch_size).prefetch(tf.data.AUTOTUNE)
+
+    return dataset
 
 
-def prepare_datasets(train_images, train_labels, test_images, test_labels, conf):
+def prepare_datasets(conf):
+    hdf5_file_path = os.path.join(conf.data_folder, conf.hdf5_file)
 
-    train_dataset, val_dataset = prepare_dataset(
-        train_images,
-        train_labels,
+    train_keys, val_keys, test_keys = stratified_split(hdf5_file_path, conf.val_size, conf.test_size)
+
+    train_dataset = prepare_dataset(
+        hdf5_file_path,
+        train_keys,
         conf.train_crop_size,
         conf.train_batch_size,
         conf.input_channels,
+        conf.output_channels,
         augment=True,
-        binarize=conf.binarize,
-        val_split_ratio=conf.val_size,
+    )
+
+    val_dataset = prepare_dataset(
+        hdf5_file_path,
+        val_keys,
+        conf.val_crop_size,
+        conf.val_batch_size,
+        conf.input_channels,
+        conf.output_channels,
+        augment=False,
     )
 
     test_dataset = prepare_dataset(
-        test_images,
-        test_labels,
+        hdf5_file_path,
+        test_keys,
         conf.test_crop_size,
         conf.test_batch_size,
         conf.input_channels,
+        conf.output_channels,
         augment=False,
-        binarize=conf.binarize,
-        val_split_ratio=0,
-    )[0]
+    )
 
-    return train_dataset, val_dataset, test_dataset
+    return (
+        train_dataset,
+        val_dataset,
+        test_dataset,
+        len(train_keys),
+        len(val_keys),
+        len(test_keys),
+    )
