@@ -2,61 +2,100 @@
 
 ## Getting Started (Puhti)
 
-- Clone repository
+**Step A.** Clone TreeMort repository and install it.
 
 ```bash
 git clone https://github.com/Global-Ecosystem-Health-Observatory/TreeMort.git
 cd TreeMort
+
+sh ./scripts/install_treemort.sh
 ```
 
-- Install TreeMort and its dependencies
+**Step B.** Upload aerial image and label data from local machine to Allas cloud storage. Move to Step D, if the dataset in HDF5 is already created and available on scratch.
+
+1. Clone allas utils and change shell to bash, as zsh is not supported.
 
 ```bash
-sh scripts/install_treemort.sh
+git clone https://github.com/CSCfi/allas-cli-utils.git
+
+chsh -s /bin/bash
+exit
 ```
 
-- Train a model
+2. Restart terminal in bash. Create a new virtual environment.
 
 ```bash
-sh ./scripts/run_treemort.sh ./configs/unet_self_attention_bs8_cs256.txt --eval-only false
+echo $SHELL
+
+cd allas-cli-utils
+
+python3 -m venv atools-venv
+source atools-venv/bin/activate
+
+pip3 install --upgrade pip
+pip3 install openstackclient python-swiftclient
+
+source allas_conf -u rahmanan
 ```
 
-- Evaluate the model
+3. Upload aerial image and label data to Allas.
+
 ```bash
-sh ./scripts/run_treemort.sh ./configs/unet_self_attention_bs8_cs256.txt --eval-only true
+cd ~/Documents/AerialImages
+
+swift upload DRYTREE-project-AerialImageModel_ITD --skip-identical ./4band_25cm/*.*
+swift upload DRYTREE-project-AerialImageModel_ITD --skip-identical ./Geojsons/*.*
+```
+
+4. Restore zsh
+
+```bash
+chsh -s /bin/zsh
+echo $SHELL
+```
+
+**Step C.** Create dataset in HDF5 format. 
+
+1. Download aerial image and label data to scratch.
+
+```bash
+module load allas
+allas-conf
+
+cd /scratch/project_2008436/rahmanan/AerialImageModel_ITD
+
+swift download DRYTREE-project-AerialImageModel_ITD
+```
+
+2. Run script to create the HDF5 dataset.
+
+```bash
+cd ~/TreeMort
+
+sh ./scripts/run_creator.sh
+```
+
+**Step D.** Demo TreeMort
+
+1. Train a model.
+
+```bash
+sh ./scripts/run_treemort.sh ./configs/unet_bs8_cs256.txt --eval-only false
+```
+
+2.  Evaluate the model.
+
+```bash
+sh ./scripts/run_treemort.sh ./configs/unet_bs8_cs256.txt --eval-only true
 ```
 
 ## Results
 
-| Model                             | Mean IOU Pixels   | Mean IOU Trees    |
-| :-------------------------------: | :---------------: | :---------------: |
-| Kokonet                           | 0.791             | 0.810             |
-| Kokonet Binarized                 | 0.796             | 0.818             |
-| Kokonet Binarized with Backbone   | 0.759             | 0.781             |
-| Unet with Self Attention          | 0.844             | 0.862             |
+|          Model           |  Mean IOU Pixels  |  Mean IOU Trees  |
+| :----------------------: | :---------------: | :--------------: |
+| Unet                     |                   |                  |
+| Unet with Self Attention |                   |                  |
 
-
-## (Optional) Dataset Creation
-
-- Create the Train and Test datsets
-
-```bash
-python dataset/creator.py /Users/anisr/Documents/AerialImages_ITD
-```
-
-- Create Train and Test dataset with a few samples, for testing purposes only
-
-```bash
-python dataset/creator.py /Users/anisr/Documents/AerialImages_ITD --no-of-samples 2 
-```
-
-- Copy Train and Test folders to Puhti scratch folder
-
-```bash
-scp -O -r ~/Documents/AerialImageModel_ITD/Train rahmanan@puhti.csc.fi:/scratch/project_2008436/rahmanan/AerialImageModel_ITD/Train
-
-scp -O -r ~/Documents/AerialImageModel_ITD/Test rahmanan@puhti.csc.fi:/scratch/project_2008436/rahmanan/AerialImageModel_ITD/Test
-```
 
 ## Getting Started (Mac OS, for development)
 
@@ -75,8 +114,6 @@ source venv/bin/activate
 
 pip install --upgrade pip
 pip install --upgrade --no-deps --force-reinstall .
-
-export SM_FRAMEWORK="tf.keras"
 ```
 
 - Train a model
