@@ -1,41 +1,75 @@
 import h5py
 
+from collections import defaultdict
 from sklearn.model_selection import train_test_split
 
 
-def load_patch_keys(hdf5_file_path):
+def load_and_organize_data(hdf5_file_path):
+    image_patch_map = defaultdict(list)
+
     with h5py.File(hdf5_file_path, "r") as hf:
-        keys_with_dead_tree = []
-        keys_without_dead_tree = []
         for key in hf.keys():
-            if "contains_dead_tree" in hf[key].attrs:
-                if hf[key].attrs["contains_dead_tree"] == 1:
-                    keys_with_dead_tree.append(key)
-                else:
-                    keys_without_dead_tree.append(key)
-    return keys_with_dead_tree, keys_without_dead_tree
+            contains_dead_tree = hf[key].attrs.get("contains_dead_tree", 0)
+            filename = hf[key].attrs.get("source_image", "")
+            image_patch_map[filename].append((key, contains_dead_tree))
+
+    return image_patch_map
 
 
-def stratified_split(hdf5_file_path, val_ratio, test_ratio):
-    keys_with_dead_tree, keys_without_dead_tree = load_patch_keys(hdf5_file_path)
+def stratified_split(image_patch_map, val_ratio, test_ratio):
+    patches_with_dead_tree = []
+    patches_without_dead_tree = []
 
-    total_with = len(keys_with_dead_tree)
-    total_without = len(keys_without_dead_tree)
+    for img, patches in image_patch_map.items():
+        for patch in patches:
+            if patch[1] == 1:
+                patches_with_dead_tree.append((img, patch))
+            else:
+                patches_without_dead_tree.append((img, patch))
 
-    val_size_with = int(val_ratio * total_with)
-    test_size_with = int(test_ratio * total_with)
+    train_patches_with_dead_tree, val_test_patches_with_dead_tree = train_test_split(
+        patches_with_dead_tree,
+        test_size=(val_ratio + test_ratio),
+        random_state=42,
+        stratify=[img for img, patch in patches_with_dead_tree],  # stratify by image
+    )
+    val_patches_with_dead_tree, test_patches_with_dead_tree = train_test_split(
+        val_test_patches_with_dead_tree,
+        test_size=(test_ratio / (val_ratio + test_ratio)),
+        random_state=42,
+        stratify=[
+            img for img, patch in val_test_patches_with_dead_tree
+        ],  # stratify by image
+    )
 
-    val_size_without = int(val_ratio * total_without)
-    test_size_without = int(test_ratio * total_without)
+    if patches_without_dead_tree:
+        train_patches_without_dead_tree, val_test_patches_without_dead_tree = (
+            train_test_split(
+                patches_without_dead_tree,
+                test_size=(val_ratio + test_ratio),
+                random_state=42,
+                stratify=[
+                    img for img, patch in patches_without_dead_tree
+                ],  # stratify by image
+            )
+        )
+        val_patches_without_dead_tree, test_patches_without_dead_tree = (
+            train_test_split(
+                val_test_patches_without_dead_tree,
+                test_size=(test_ratio / (val_ratio + test_ratio)),
+                random_state=42,
+                stratify=[
+                    img for img, patch in val_test_patches_without_dead_tree
+                ],  # stratify by image
+            )
+        )
+    else:
+        train_patches_without_dead_tree = []
+        val_patches_without_dead_tree = []
+        test_patches_without_dead_tree = []
 
-    train_keys_with, val_test_keys_with = train_test_split(keys_with_dead_tree, test_size=(val_size_with + test_size_with), random_state=42)
-    val_keys_with, test_keys_with = train_test_split(val_test_keys_with, test_size=test_size_with, random_state=42)
+    train_patches = train_patches_with_dead_tree + train_patches_without_dead_tree
+    val_patches = val_patches_with_dead_tree + val_patches_without_dead_tree
+    test_patches = test_patches_with_dead_tree + test_patches_without_dead_tree
 
-    train_keys_without, val_test_keys_without = train_test_split(keys_without_dead_tree, test_size=(val_size_without + test_size_without), random_state=42,)
-    val_keys_without, test_keys_without = train_test_split(val_test_keys_without, test_size=test_size_without, random_state=42)
-
-    train_keys = train_keys_with + train_keys_without
-    val_keys = val_keys_with + val_keys_without
-    test_keys = test_keys_with + test_keys_without
-
-    return train_keys, val_keys, test_keys
+    return train_patches, val_patches, test_patches

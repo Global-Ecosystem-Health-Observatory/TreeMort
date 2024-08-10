@@ -82,7 +82,7 @@ def process_image(
             patches = extract_patches(exim_np, topolabel, window_size, stride)
 
             # Create labeled patches with binary classification (1 if contains dead trees, else 0)
-            labeled_patches = [(patch[0], patch[1], int(np.any(patch[1]))) for patch in patches]
+            labeled_patches = [(patch[0], patch[1], int(np.any(patch[1])), file) for patch in patches]
 
             return file, labeled_patches
     except Exception as e:
@@ -93,13 +93,13 @@ def process_image(
 def write_to_hdf5(hdf5_file, data):
     with h5py.File(hdf5_file, "a") as hf:  # Open in append mode
         for file_stub, labeled_patches in data:
-            for idx, (image_patch, label_patch, contains_dead_tree) in enumerate(labeled_patches):
+            for idx, (image_patch, label_patch, contains_dead_tree, filename) in enumerate(labeled_patches):
                 key = f"{file_stub}_{idx}"
                 hf.create_group(key)
                 hf[key].create_dataset("image", data=image_patch, compression="gzip")
                 hf[key].create_dataset("label", data=label_patch, compression="gzip")
                 hf[key].attrs["contains_dead_tree"] = contains_dead_tree
-
+                hf[key].attrs["source_image"] = filename
 
 def convert_to_hdf5(
     conf,
@@ -179,7 +179,7 @@ if __name__ == "__main__":
 
     # Load configuration
     conf = parse_config(args.config)
-    
+
     convert_to_hdf5(
         conf,
         no_of_samples=args.no_of_samples,

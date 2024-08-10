@@ -29,15 +29,14 @@ cat <<EOT > $SBATCH_SCRIPT
 #SBATCH --ntasks=1 --cpus-per-task=4
 #SBATCH --mem-per-cpu=32G
 #SBATCH --gres=gpu:v100:1
+#SBATCH --partition=gpu
 EOT
 
 # Conditional SBATCH settings
 if [ "$EVAL_ONLY" = true ]; then
-    echo "#SBATCH --time=00:14:59" >> $SBATCH_SCRIPT
-    echo "#SBATCH --partition=gputest" >> $SBATCH_SCRIPT
+    echo "#SBATCH --time=01:00:00" >> $SBATCH_SCRIPT
 else
     echo "#SBATCH --time=36:00:00" >> $SBATCH_SCRIPT
-    echo "#SBATCH --partition=gpu" >> $SBATCH_SCRIPT
 fi
 
 # Add the rest of the script

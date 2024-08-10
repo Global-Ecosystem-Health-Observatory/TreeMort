@@ -3,12 +3,11 @@ import h5py
 import torch
 
 import numpy as np
-import torchvision.transforms as T
 
-from torch.utils.data import Dataset, DataLoader, random_split
+from torch.utils.data import Dataset, DataLoader
 
 from treemort.utils.augment import Augmentations
-from treemort.utils.datautils import stratified_split
+from treemort.utils.datautils import load_and_organize_data, stratified_split
 
 
 class DeadTreeDataset(Dataset):
@@ -25,7 +24,11 @@ class DeadTreeDataset(Dataset):
 
     def __getitem__(self, idx):
         with h5py.File(self.hdf5_file, "r") as hf:
-            key = self.keys[idx]
+            _, (key, contains_dead_tree) = self.keys[idx]
+            
+            if key not in hf:
+                raise KeyError(f"Key {key} does not exist in the HDF5 file")
+            
             image = hf[key]['image'][()]
             label = hf[key]['label'][()]
 
@@ -81,12 +84,12 @@ class DeadTreeDataset(Dataset):
         return image, label
 
 
-
 def prepare_datasets(conf):
-
     hdf5_file_path = os.path.join(conf.data_folder, conf.hdf5_file)
 
-    train_keys, val_keys, test_keys = stratified_split(hdf5_file_path, conf.val_size, conf.test_size)
+    image_patch_map = load_and_organize_data(hdf5_file_path)
+
+    train_keys, val_keys, test_keys = stratified_split(image_patch_map, conf.val_size, conf.test_size)
 
     train_transform = Augmentations()
     val_transform = None
