@@ -7,7 +7,7 @@ import numpy as np
 from torch.utils.data import Dataset, DataLoader
 
 from treemort.utils.augment import Augmentations
-from treemort.utils.datautils import load_and_organize_data, stratified_split
+from treemort.utils.datautils import load_and_organize_data, stratify_images_by_patch_count
 
 
 class DeadTreeDataset(Dataset):
@@ -22,13 +22,10 @@ class DeadTreeDataset(Dataset):
     def __len__(self):
         return len(self.keys)
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx):            
+        key = self.keys[idx]
+
         with h5py.File(self.hdf5_file, "r") as hf:
-            _, (key, contains_dead_tree) = self.keys[idx]
-            
-            if key not in hf:
-                raise KeyError(f"Key {key} does not exist in the HDF5 file")
-            
             image = hf[key]['image'][()]
             label = hf[key]['label'][()]
 
@@ -89,7 +86,7 @@ def prepare_datasets(conf):
 
     image_patch_map = load_and_organize_data(hdf5_file_path)
 
-    train_keys, val_keys, test_keys = stratified_split(image_patch_map, conf.val_size, conf.test_size)
+    train_keys, val_keys, test_keys = stratify_images_by_patch_count(image_patch_map, conf.val_size, conf.test_size)
 
     train_transform = Augmentations()
     val_transform = None
