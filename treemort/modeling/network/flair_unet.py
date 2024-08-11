@@ -1,6 +1,56 @@
 import torch
-from torch import nn
+
+import torch.nn as nn
 import torch.nn.functional as F
+
+from torch import nn
+from huggingface_hub import hf_hub_download
+
+from treemort.modeling.network.unet_mtd import smp_unet_mtd
+
+
+class PretrainedUNetModel:
+    def __init__(
+        self,
+        repo_id,
+        filename,
+        architecture="unet",
+        encoder="resnet34",
+        n_channels=4,
+        n_classes=15,
+        use_metadata=False,
+    ):
+        self.repo_id = repo_id
+        self.filename = filename
+        self.architecture = architecture
+        self.encoder = encoder
+        self.n_channels = n_channels
+        self.n_classes = n_classes
+        self.use_metadata = use_metadata
+
+        self.checkpoint_path = hf_hub_download(
+            repo_id=self.repo_id, filename=self.filename
+        )
+
+        self.model = self._initialize_model()
+
+        self._load_pretrained_weights()
+
+    def _initialize_model(self):
+        model = smp_unet_mtd(
+            architecture=self.architecture,
+            encoder=self.encoder,
+            n_channels=self.n_channels,
+            n_classes=self.n_classes,
+            use_metadata=self.use_metadata,
+        )
+        return model
+
+    def _load_pretrained_weights(self):
+        self.model.load_state_dict(torch.load(self.checkpoint_path), strict=False)
+
+    def get_model(self):
+        return self.model
 
 
 class SelfAttentionUNetDecoder(nn.Module):
@@ -116,55 +166,6 @@ class UNetUpBlock(nn.Module):
         return out
 
 
-import torch
-from huggingface_hub import hf_hub_download
-from treemort.modeling.network.unet_mtd import smp_unet_mtd
-
-
-class PretrainedUNetModel:
-    def __init__(
-        self,
-        repo_id,
-        filename,
-        architecture="unet",
-        encoder="resnet34",
-        n_channels=4,
-        n_classes=15,
-        use_metadata=False,
-    ):
-        self.repo_id = repo_id
-        self.filename = filename
-        self.architecture = architecture
-        self.encoder = encoder
-        self.n_channels = n_channels
-        self.n_classes = n_classes
-        self.use_metadata = use_metadata
-
-        self.checkpoint_path = hf_hub_download(
-            repo_id=self.repo_id, filename=self.filename
-        )
-
-        self.model = self._initialize_model()
-
-        self._load_pretrained_weights()
-
-    def _initialize_model(self):
-        model = smp_unet_mtd(
-            architecture=self.architecture,
-            encoder=self.encoder,
-            n_channels=self.n_channels,
-            n_classes=self.n_classes,
-            use_metadata=self.use_metadata,
-        )
-        return model
-
-    def _load_pretrained_weights(self):
-        self.model.load_state_dict(torch.load(self.checkpoint_path), strict=False)
-
-    def get_model(self):
-        return self.model
-
-
 class FeatureExtractor(nn.Module):
     def __init__(self, model, use_metadata=False):
         super(FeatureExtractor, self).__init__()
@@ -194,10 +195,6 @@ class FeatureExtractor(nn.Module):
         return self.features
 
 
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-
 class CombinedModel(nn.Module):
     def __init__(self, pretrained_model, n_classes=3, output_size=256):
         super(CombinedModel, self).__init__()
@@ -212,11 +209,12 @@ class CombinedModel(nn.Module):
             kernel_size=3,
         )
         # Additional upsampling layer
-        self.upsample = nn.Upsample(size=(output_size, output_size), mode='bilinear', align_corners=False)
+        self.upsample = nn.Upsample(
+            size=(output_size, output_size), mode="bilinear", align_corners=False
+        )
 
     def forward(self, x):
         encoder_features = self.feature_extractor(x)
         decoder_output = self.decoder(encoder_features[-1], encoder_features)
         upsampled_output = self.upsample(decoder_output)
         return upsampled_output
-
