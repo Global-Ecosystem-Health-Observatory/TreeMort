@@ -93,9 +93,8 @@ sh ./scripts/run_treemort.sh ./configs/unet_bs8_cs256.txt --eval-only true
 
 |          Model           |  Mean IOU Pixels  |  Mean IOU Trees  |
 | :----------------------: | :---------------: | :--------------: |
-| Unet                     |                   |                  |
-| Unet with Self Attention |                   |                  |
-
+| Unet with Self Attention | 0.753             | 0.774            |
+| FLAIR SA-Unet            | 0.814             | 0.814            |
 
 ## Getting Started (Mac OS, for development)
 
