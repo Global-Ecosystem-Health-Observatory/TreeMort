@@ -1,0 +1,39 @@
+# settings for DETR (DEtection TRansformer)
+
+data-folder = /scratch/project_2008436/rahmanan/AerialImageModel_ITD
+
+hdf5-file = AerialImageModel_ITD.h5
+
+model = detr
+
+backbone = facebook/detr-resnet-50-panoptic
+
+output-dir = output/detr
+
+train-crop-size = 256
+val-crop-size = 256
+test-crop-size = 256
+
+input-channels = 4
+output-channels = 1
+
+train-batch-size = 4
+val-batch-size = 4
+test-batch-size = 4
+
+epochs = 100
+
+model-weights = best # available options [best, latest]
+
+learning-rate = 1e-4
+
+threshold = 0.5
+
+activation = sigmoid # available options [tanh, sigmoid]
+
+loss = hybrid # available options [mse, hybrid]
+
+val-size = 0.2
+test-size = 0.1
+
+resume

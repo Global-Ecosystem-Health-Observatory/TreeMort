@@ -65,8 +65,6 @@ def stratify_images_by_patch_count(image_patch_map, val_ratio, test_ratio):
     """
     train_images, val_images, test_images = bin_images_by_patch_count(image_patch_map, val_ratio, test_ratio)
 
-    print(len(train_images) + len(val_images) + len(test_images))
-
     train_keys = extract_keys_from_images(image_patch_map, train_images)
     val_keys = extract_keys_from_images(image_patch_map, val_images)
     test_keys = extract_keys_from_images(image_patch_map, test_images)

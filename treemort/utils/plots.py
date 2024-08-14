@@ -38,8 +38,8 @@ def plot_examples(data_loader, num_examples=5):
 
 import h5py
 
+from treemort.data.loader import prepare_datasets
 from treemort.utils.config import setup
-from treemort.data.dataset import prepare_datasets
 from treemort.utils.plots import plot_examples
 
 config_file_path = "../configs/unet_bs8_cs256.txt"

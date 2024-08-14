@@ -1,12 +1,16 @@
+import os
 import configargparse
 
 
 def setup(config_file_path):
+    assert os.path.exists(config_file_path), f"Config file not found at: {config_file_path}"
+
     parser = configargparse.ArgParser(default_config_files=[config_file_path])
 
     parser.add("-d",    "--data-folder",        type=str,   required=True,      help="directory with aerial image and label data")
     parser.add("-hf",   "--hdf5-file",          type=str,   required=True,      help="hdf5 file of aerial image and label data")
     parser.add("-m",    "--model",              type=str,   required=True,      help="neural network model name for training")
+    parser.add("-b",    "--backbone",           type=str,   default=None,       help="neural network model for feature extraction and/or backbone")
     parser.add("-e",    "--epochs",             type=int,   required=True,      help="number of epochs for training")
     parser.add("-ib",   "--train-batch-size",   type=int,   required=True,      help="batch size for training")
     parser.add("-vb",   "--val-batch-size",     type=int,   required=True,      help="batch size for validation")
