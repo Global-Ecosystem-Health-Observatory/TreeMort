@@ -7,9 +7,7 @@
 #SBATCH --mem-per-cpu=6000
 
 module load python-data
+source venv/bin/activate
 
 srun python3 ./dataset/creator.py ./configs/AerialImageModel_ITD.txt
 
-# Note: Only first time to install packages
-#
-# pip install --user --upgrade opencv-python h5py configargparse rasterio
