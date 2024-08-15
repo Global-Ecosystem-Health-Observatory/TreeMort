@@ -2,7 +2,7 @@
 
 # Check if at least the config file is provided
 if [ "$#" -lt 1 ]; then
-    echo "Usage: ./run_treemort.sh <config file> [--eval-only true|false]"
+    echo "Usage: ./run_treemort.sh <config file> [--eval-only true|false] [--test-run true|false]"
     exit 1
 fi
 
@@ -13,6 +13,7 @@ EVAL_ONLY=false
 while [[ "$#" -gt 1 ]]; do
     case $2 in
         --eval-only) EVAL_ONLY="$3"; shift ;;
+	--test-run) TEST_RUN="$3"; shift ;;
     esac
     shift
 done
@@ -29,14 +30,18 @@ cat <<EOT > $SBATCH_SCRIPT
 #SBATCH --ntasks=1 --cpus-per-task=4
 #SBATCH --mem-per-cpu=32G
 #SBATCH --gres=gpu:v100:1
-#SBATCH --partition=gpu
 EOT
 
 # Conditional SBATCH settings
-if [ "$EVAL_ONLY" = true ]; then
+if [ "$TEST_RUN" = true ]; then
+    echo "#SBATCH --time=00:15:00" >> $SBATCH_SCRIPT
+    echo "#SBATCH --partition=gputest" >> $SBATCH_SCRIPT
+elif [ "$EVAL_ONLY" = true ]; then
     echo "#SBATCH --time=01:00:00" >> $SBATCH_SCRIPT
+    echo "#SBATCH --partition=gpu" >> $SBATCH_SCRIPT
 else
     echo "#SBATCH --time=36:00:00" >> $SBATCH_SCRIPT
+    echo "#SBATCH --partition=gpu" >> $SBATCH_SCRIPT
 fi
 
 # Add the rest of the script
