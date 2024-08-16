@@ -25,7 +25,7 @@ SBATCH_SCRIPT=$(mktemp)
 cat <<EOT > $SBATCH_SCRIPT
 #!/bin/bash
 #SBATCH --job-name=tree-mort
-#SBATCH --account=project_2008436
+#SBATCH --account=project_2004205
 #SBATCH --output=output/stdout/%A_%a
 #SBATCH --ntasks=1 --cpus-per-task=4
 #SBATCH --mem-per-cpu=32G
