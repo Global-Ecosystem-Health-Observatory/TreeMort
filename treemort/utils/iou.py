@@ -63,6 +63,21 @@ class IOUCallback:
 
         return torch.stack([prediction.unsqueeze(0) for prediction in predictions], dim=0).float()
 
+    def _calculate_pixel_iou(self, y_pred, y_true):
+        y_pred_binary = np.squeeze(y_pred > self.threshold)
+        y_true_binary = np.squeeze(y_true > self.threshold)
+        
+        # Check if both prediction and ground truth are entirely background
+        if np.sum(y_pred_binary) == 0 and np.sum(y_true_binary) == 0:
+            return 0.0  # or np.nan, depending on how you want to handle this case
+
+        intersection = (y_pred_binary * y_true_binary).sum()
+        union = y_pred_binary.sum() + y_true_binary.sum() - intersection
+        
+        return (intersection + 1e-6) / (union + 1e-6)
+
+
+
     '''
     def _calculate_pixel_iou(self, y_pred, y_true):
         y_pred_binary = np.squeeze(y_pred > self.threshold)
@@ -76,6 +91,7 @@ class IOUCallback:
             return 1.0  # Consider the IoU as 1.0 when both are entirely background
 
         return tp_pixels / (tp_pixels + fp_pixels + fn_pixels)
+    '''
     '''
     def _calculate_pixel_iou(self, y_pred, y_true):
         y_pred_binary = np.squeeze(y_pred > self.threshold)
@@ -93,6 +109,7 @@ class IOUCallback:
 
         iou = (tp_pixels + tn_pixels) / total_pixels
         return iou
+    '''
 
     def _calculate_dice_coefficient(self, y_pred, y_true):
         y_pred_binary = np.squeeze(y_pred > self.threshold)
@@ -264,6 +281,8 @@ class IOUCallback:
         mean_adjusted_dice_score = np.mean(adjusted_dice_scores)
         mean_mcc = np.mean(mcc_scores)
         
+        print(pixel_ious)
+
         return {
             "mean_iou_pixels": mean_iou_pixels,
             "mean_iou_trees": mean_iou_trees,
