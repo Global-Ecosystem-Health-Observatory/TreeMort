@@ -16,3 +16,8 @@ def evaluator(model, dataset, num_samples, batch_size, threshold, model_name, im
 
     print(f" Mean IOU Pixels: {iou_results['mean_iou_pixels']:.3f}")
     print(f" Mean IOU Trees: {iou_results['mean_iou_trees']:.3f}")
+    print(f" Mean IOU: {iou_results['mean_iou']:.3f}")
+    print(f" Mean Balanced IOU: {iou_results['mean_balanced_iou']:.3f}")
+    print(f" Mean Dice Score: {iou_results['mean_dice_score']:.3f}")
+    print(f" Mean Adjusted Dice Score: {iou_results['mean_adjusted_dice_score']:.3f}")
+    print(f" Mean MCC: {iou_results['mean_mcc']:.3f}")

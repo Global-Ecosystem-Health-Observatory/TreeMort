@@ -18,7 +18,8 @@ class IOUCallback:
 
     def evaluate(self):
         self.model.eval()
-        pixel_ious, tree_ious = [], []
+
+        pixel_ious, tree_ious, mean_ious, balanced_ious, dice_scores, adjusted_dice_scores, mcc_scores = [], [], [], [], [], [], []
 
         with tqdm(total=self.num_samples, desc="Evaluating") as pbar:
             with torch.no_grad():
@@ -29,15 +30,19 @@ class IOUCallback:
 
                     for i in range(len(predictions)):
                         y_pred, y_true = predictions[i], labels[i]
-                        iou_pixels = self._calculate_pixel_iou(y_pred, y_true)
-                        pixel_ious.append(iou_pixels)
-                        iou_trees = self._calculate_tree_iou(y_pred, y_true)
-                        tree_ious.append(iou_trees)
+
+                        pixel_ious.append(self._calculate_pixel_iou(y_pred, y_true))
+                        tree_ious.append(self._calculate_tree_iou(y_pred, y_true))
+                        mean_ious.append(self._calculate_mean_iou(y_pred, y_true))
+                        balanced_ious.append(self._calculate_balanced_iou(y_pred, y_true))
+                        dice_scores.append(self._calculate_dice_coefficient(y_pred, y_true))
+                        adjusted_dice_scores.append(self._calculate_adjusted_dice_coefficient(y_pred, y_true))
+                        mcc_scores.append(self._calculate_mcc(y_pred, y_true))
 
                     pbar.update(1)
                     pbar.set_postfix(iterations_left=self.num_samples - pbar.n)
 
-        return self._compute_mean_ious(pixel_ious, tree_ious)
+        return self._compute_mean_ious(pixel_ious, tree_ious, mean_ious, balanced_ious, dice_scores, adjusted_dice_scores, mcc_scores)
 
     def _get_predictions(self, images, labels):
         outputs = self.model(images)
@@ -58,6 +63,7 @@ class IOUCallback:
 
         return torch.stack([prediction.unsqueeze(0) for prediction in predictions], dim=0).float()
 
+    '''
     def _calculate_pixel_iou(self, y_pred, y_true):
         y_pred_binary = np.squeeze(y_pred > self.threshold)
         y_true_binary = np.squeeze(y_true > self.threshold)
@@ -67,10 +73,148 @@ class IOUCallback:
         fn_pixels = np.sum(np.logical_and(np.logical_not(y_pred_binary), y_true_binary))
 
         if (tp_pixels + fp_pixels + fn_pixels) == 0:
-            return 1.0 if np.sum(y_true_binary) == 0 else 0.0
+            return 1.0  # Consider the IoU as 1.0 when both are entirely background
 
         return tp_pixels / (tp_pixels + fp_pixels + fn_pixels)
+    '''
+    def _calculate_pixel_iou(self, y_pred, y_true):
+        y_pred_binary = np.squeeze(y_pred > self.threshold)
+        y_true_binary = np.squeeze(y_true > self.threshold)
 
+        tp_pixels = np.sum(np.logical_and(y_pred_binary, y_true_binary))
+        fp_pixels = np.sum(np.logical_and(y_pred_binary, np.logical_not(y_true_binary)))
+        fn_pixels = np.sum(np.logical_and(np.logical_not(y_pred_binary), y_true_binary))
+        tn_pixels = np.sum(np.logical_and(np.logical_not(y_pred_binary), np.logical_not(y_true_binary)))
+
+        # Calculate IoU considering both TP and TN
+        total_pixels = tp_pixels + fp_pixels + fn_pixels + tn_pixels
+        if total_pixels == 0:
+            return 1.0  # Consider the IoU as 1.0 when both are entirely background
+
+        iou = (tp_pixels + tn_pixels) / total_pixels
+        return iou
+
+    def _calculate_dice_coefficient(self, y_pred, y_true):
+        y_pred_binary = np.squeeze(y_pred > self.threshold)
+        y_true_binary = np.squeeze(y_true > self.threshold)
+
+        tp_pixels = np.sum(np.logical_and(y_pred_binary, y_true_binary))
+        fp_pixels = np.sum(np.logical_and(y_pred_binary, np.logical_not(y_true_binary)))
+        fn_pixels = np.sum(np.logical_and(np.logical_not(y_pred_binary), y_true_binary))
+
+        denominator = 2 * tp_pixels + fp_pixels + fn_pixels
+
+        # No special handling, may cause a RuntimeWarning if denominator is zero
+        dice = (2 * tp_pixels) / denominator if denominator != 0 else 0.0
+
+        return dice
+    
+    def _calculate_adjusted_dice_coefficient(self, y_pred, y_true):
+        y_pred_binary = np.squeeze(y_pred > self.threshold)
+        y_true_binary = np.squeeze(y_true > self.threshold)
+
+        tp_pixels = np.sum(np.logical_and(y_pred_binary, y_true_binary))
+        fp_pixels = np.sum(np.logical_and(y_pred_binary, np.logical_not(y_true_binary)))
+        fn_pixels = np.sum(np.logical_and(np.logical_not(y_pred_binary), y_true_binary))
+
+        denominator = 2 * tp_pixels + fp_pixels + fn_pixels
+
+        if denominator == 0:
+            # Handle special cases explicitly
+            return 1.0 if np.array_equal(y_pred_binary, y_true_binary) else 0.0
+        else:
+            dice = (2 * tp_pixels) / denominator
+
+        return dice
+    
+    def _calculate_mean_iou(self, y_pred, y_true):
+        y_pred_binary = np.squeeze(y_pred > self.threshold)
+        y_true_binary = np.squeeze(y_true > self.threshold)
+
+        # Foreground IoU
+        tp_fg = np.sum(np.logical_and(y_pred_binary, y_true_binary))
+        fp_fg = np.sum(np.logical_and(y_pred_binary, np.logical_not(y_true_binary)))
+        fn_fg = np.sum(np.logical_and(np.logical_not(y_pred_binary), y_true_binary))
+        denominator_fg = tp_fg + fp_fg + fn_fg
+
+        if denominator_fg == 0:
+            # Handle cases where the denominator is zero
+            iou_fg = 1.0 if tp_fg == 0 and (fp_fg == 0 and fn_fg == 0) else 0.0
+        else:
+            iou_fg = tp_fg / denominator_fg
+
+        # Background IoU
+        tp_bg = np.sum(np.logical_and(np.logical_not(y_pred_binary), np.logical_not(y_true_binary)))
+        fp_bg = np.sum(np.logical_and(np.logical_not(y_pred_binary), y_true_binary))
+        fn_bg = np.sum(np.logical_and(y_pred_binary, np.logical_not(y_true_binary)))
+        denominator_bg = tp_bg + fp_bg + fn_bg
+
+        if denominator_bg == 0:
+            # Handle cases where the denominator is zero
+            iou_bg = 1.0 if tp_bg == 0 and (fp_bg == 0 and fn_bg == 0) else 0.0
+        else:
+            iou_bg = tp_bg / denominator_bg
+
+        # Calculate mean IoU
+        mean_iou = (iou_fg + iou_bg) / 2
+        return mean_iou
+
+
+    def _calculate_balanced_iou(self, y_pred, y_true):
+        y_pred_binary = np.squeeze(y_pred > self.threshold)
+        y_true_binary = np.squeeze(y_true > self.threshold)
+
+        # Foreground IoU
+        tp_fg = np.sum(np.logical_and(y_pred_binary, y_true_binary))
+        fp_fg = np.sum(np.logical_and(y_pred_binary, np.logical_not(y_true_binary)))
+        fn_fg = np.sum(np.logical_and(np.logical_not(y_pred_binary), y_true_binary))
+        iou_fg = tp_fg / (tp_fg + fp_fg + fn_fg + 1e-10)  # Adding a small constant to avoid division by zero
+
+        # Background IoU
+        tp_bg = np.sum(np.logical_and(np.logical_not(y_pred_binary), np.logical_not(y_true_binary)))
+        fp_bg = np.sum(np.logical_and(np.logical_not(y_pred_binary), y_true_binary))
+        fn_bg = np.sum(np.logical_and(y_pred_binary, np.logical_not(y_true_binary)))
+        iou_bg = tp_bg / (tp_bg + fp_bg + fn_bg + 1e-10)
+
+        # Balanced IoU: Weighted average of foreground and background IoU
+        fg_weight = np.sum(y_true_binary) / y_true_binary.size  # Proportion of foreground pixels
+        bg_weight = 1.0 - fg_weight  # Proportion of background pixels
+
+        balanced_iou = fg_weight * iou_fg + bg_weight * iou_bg
+        return balanced_iou
+
+    def _calculate_mcc(self, y_pred, y_true):
+        y_pred_binary = np.squeeze(y_pred > self.threshold)
+        y_true_binary = np.squeeze(y_true > self.threshold)
+
+        tp_pixels = np.sum(np.logical_and(y_pred_binary, y_true_binary))
+        fp_pixels = np.sum(np.logical_and(y_pred_binary, np.logical_not(y_true_binary)))
+        fn_pixels = np.sum(np.logical_and(np.logical_not(y_pred_binary), y_true_binary))
+        tn_pixels = np.sum(np.logical_and(np.logical_not(y_pred_binary), np.logical_not(y_true_binary)))
+
+        numerator = (tp_pixels * tn_pixels) - (fp_pixels * fn_pixels)
+        denominator = np.sqrt((tp_pixels + fp_pixels) * (tp_pixels + fn_pixels) * (tn_pixels + fp_pixels) * (tn_pixels + fn_pixels) + 1e-10)
+
+        mcc = numerator / denominator
+        return mcc
+
+
+
+    '''
+    def _calculate_pixel_iou(self, y_pred, y_true):
+        y_pred_binary = np.squeeze(y_pred > self.threshold)
+        y_true_binary = np.squeeze(y_true > self.threshold)
+
+        tp_pixels = np.sum(np.logical_and(y_pred_binary, y_true_binary))
+        fp_pixels = np.sum(np.logical_and(y_pred_binary, np.logical_not(y_true_binary)))
+        fn_pixels = np.sum(np.logical_and(np.logical_not(y_pred_binary), y_true_binary))
+
+        if (tp_pixels + fp_pixels + fn_pixels) == 0:
+            return -1  # Indicate invalid IoU when both are empty or IoU is undefined
+
+        return tp_pixels / (tp_pixels + fp_pixels + fn_pixels)
+    '''
+    
     def _calculate_tree_iou(self, y_pred, y_true):
         y_pred_binary = np.squeeze(y_pred > self.threshold)
         y_true_binary = np.squeeze(y_true > self.threshold)
@@ -97,11 +241,48 @@ class IOUCallback:
                 fn_trees += 1
 
         if (tp_trees + fp_trees + fn_trees) == 0:
-            return 1.0 if num_features_true == 0 else 0.0
+            iou_trees = 1.0 if num_features_true == 0 else 0.0
+        else:
+            iou_trees = tp_trees / (tp_trees + fp_trees + fn_trees)
+        
+        return iou_trees
+
+        '''
+        if (tp_trees + fp_trees + fn_trees) == 0:
+            return -1  # Indicate invalid IoU
 
         return tp_trees / (tp_trees + fp_trees + fn_trees)
+        '''
+    
+    def _compute_mean_ious(self, pixel_ious, tree_ious, mean_ious, balanced_ious, dice_scores, adjusted_dice_scores, mcc_scores):
 
+        mean_iou_pixels = np.mean(pixel_ious)
+        mean_iou_trees = np.mean(tree_ious)
+        mean_iou = np.mean(mean_ious)
+        mean_balanced_iou = np.mean(balanced_ious)
+        mean_dice_score = np.mean(dice_scores)
+        mean_adjusted_dice_score = np.mean(adjusted_dice_scores)
+        mean_mcc = np.mean(mcc_scores)
+        
+        return {
+            "mean_iou_pixels": mean_iou_pixels,
+            "mean_iou_trees": mean_iou_trees,
+            "mean_iou": mean_iou,
+            "mean_balanced_iou": mean_balanced_iou,
+            "mean_dice_score": mean_dice_score,
+            "mean_adjusted_dice_score": mean_adjusted_dice_score,
+            "mean_mcc": mean_mcc
+        }
+
+    
+    '''
     def _compute_mean_ious(self, pixel_ious, tree_ious):
-        mean_iou_pixels = np.mean([iou for iou in pixel_ious if iou != -1])
-        mean_iou_trees = np.mean([iou for iou in tree_ious if iou != -1])
+        # Filter out invalid IoU values
+        valid_pixel_ious = [iou for iou in pixel_ious if iou != -1]
+        valid_tree_ious = [iou for iou in tree_ious if iou != -1]
+
+        mean_iou_pixels = np.mean(valid_pixel_ious) if valid_pixel_ious else 0.0
+        mean_iou_trees = np.mean(valid_tree_ious) if valid_tree_ious else 0.0
+        
         return {"mean_iou_pixels": mean_iou_pixels, "mean_iou_trees": mean_iou_trees}
+    '''

@@ -26,7 +26,8 @@ def load_checkpoint_if_available(model, conf):
     checkpoint_path = get_checkpoint(conf.model_weights, conf.output_dir)
 
     if checkpoint_path:
-        model.load_state_dict(torch.load(checkpoint_path))
+        device = next(model.parameters()).device  # Get the device of the model
+        model.load_state_dict(torch.load(checkpoint_path, map_location=device))
         print(f"[INFO] Loaded weights from {checkpoint_path}.")
     else:
         print("[INFO] No checkpoint found. Training from scratch.")
