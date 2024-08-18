@@ -22,7 +22,7 @@ def bin_images_by_patch_count(image_patch_map, val_ratio, test_ratio):
     Bin images such that validation and test bins fulfill the given ratios in terms of patch count.
     """
     keys = list(image_patch_map.keys())
-    random.seed(42)
+    random.seed(42) # for replication
     random.shuffle(keys)
     shuffled_images = [(key, image_patch_map[key]) for key in keys]
 

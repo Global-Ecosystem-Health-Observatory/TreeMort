@@ -93,8 +93,11 @@ sh ./scripts/run_treemort.sh ./configs/unet_bs8_cs256.txt --eval-only true
 
 |          Model                      |  Mean IOU Pixels  |  Mean IOU Trees  |
 | :---------------------------------: | :---------------: | :--------------: |
-| Unet with Self Attention            | 0.753             | 0.774            |
-| FLAIR (Encoder) + SA-Unet (Decoder) | 0.814             | 0.814            |
+| Unet with Self Attention            | 0.281             | 0.749            |
+| FLAIR (Encoder) + SA-Unet (Decoder) |                   |                  |
+
+| Model   | Mean IOU Pixels | Mean IOU Trees | Mean IOU | Mean Balanced IOU | Mean Dice Score | Mean Adjusted Dice Score | Mean MCC | 
+| SA-Unet | 0.281 | 0.749 | 0.840 | 0.997 | 0.334 | 0.736 | 0.342 |
 
 ## Getting Started (Mac OS, for development)
 
