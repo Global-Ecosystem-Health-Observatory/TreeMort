@@ -1,12 +1,12 @@
-# settings for self attention unet modified
+# settings for multiscale self attention unet
 
 data-folder = /scratch/project_2008436/rahmanan/AerialImageModel_ITD
 
 hdf5-file = AerialImageModel_ITD.h5
 
-model = sa_unet_multi
+model = sa_unet_multiscale
 
-output-dir = output/sa_unet_multi
+output-dir = output/sa_unet_multiscale
 
 train-crop-size = 256
 val-crop-size = 256

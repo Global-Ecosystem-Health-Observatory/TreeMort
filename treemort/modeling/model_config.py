@@ -10,6 +10,7 @@ from transformers import (
 )
 
 from treemort.modeling.network.sa_unet import SelfAttentionUNet
+from treemort.modeling.network.sa_unet_multiscale import MultiScaleAttentionUNet
 from treemort.modeling.network.dinov2 import Dinov2ForSemanticSegmentation
 from treemort.modeling.network.flair_unet import CombinedModel, PretrainedUNetModel
 from treemort.modeling.network.custom_models import (
@@ -23,6 +24,7 @@ def configure_model(conf, id2label):
     model_choices = {
         "unet": lambda: configure_unet(conf),
         "sa_unet": lambda: configure_sa_unet(conf),
+        "sa_unet_multiscale": lambda: configure_sa_unet_multiscale(conf),
         "deeplabv3+": lambda: configure_deeplabv3_plus(conf),
         "dinov2": lambda: configure_dinov2(conf, id2label),
         "maskformer": lambda: configure_maskformer(conf, id2label),
@@ -47,6 +49,12 @@ def configure_unet(conf):
 def configure_sa_unet(conf):
     model = SelfAttentionUNet(in_channels=conf.input_channels, n_classes=conf.output_channels, depth=4, wf=6, batch_norm=True,)
     print("[INFO] SA-Unet model configured with pre-trained weights.")
+    return model
+
+
+def configure_sa_unet_multiscale(conf):
+    model = MultiScaleAttentionUNet(in_channels=conf.input_channels, n_classes=conf.output_channels, depth=4, wf=6, batch_norm=True,)
+    print("[INFO] Multiscale SA-Unet multi model configured with pre-trained weights.")
     return model
 
 

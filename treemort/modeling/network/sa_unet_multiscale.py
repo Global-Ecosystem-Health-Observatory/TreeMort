@@ -2,7 +2,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-class SelfAttentionUNet(nn.Module):
+class MultiScaleAttentionUNet(nn.Module):
     def __init__(
         self,
         in_channels=9,
@@ -14,7 +14,7 @@ class SelfAttentionUNet(nn.Module):
         up_mode="upconv",
         kernel_size=3,
     ):
-        super(SelfAttentionUNet, self).__init__()
+        super(MultiScaleAttentionUNet, self).__init__()
         assert up_mode in ("upconv", "upsample")
         self.padding = padding
         self.depth = depth
@@ -99,6 +99,9 @@ class UNetConvBlock(nn.Module):
         self.conv1x1 = nn.Conv2d(out_size, out_size, kernel_size=1, padding=0)
         self.conv3x3 = nn.Conv2d(out_size, out_size, kernel_size=3, padding=1)
         self.conv5x5 = nn.Conv2d(out_size, out_size, kernel_size=5, padding=2)
+        
+        # Final convolution to reduce channels
+        self.final_conv = nn.Conv2d(3 * out_size, out_size, kernel_size=1, padding=0)
 
         if batch_norm:
             self.batch_norm1 = nn.BatchNorm2d(out_size)
@@ -126,8 +129,9 @@ class UNetConvBlock(nn.Module):
             x3x3 = self.batch_norm_conv3x3(x3x3)
             x5x5 = self.batch_norm_conv5x5(x5x5)
 
-        # Concatenate multi-scale features
+        # Concatenate multi-scale features and reduce channels
         x_out = torch.cat([x1x1, x3x3, x5x5], dim=1)
+        x_out = self.final_conv(x_out)
         return x_out
 
 
