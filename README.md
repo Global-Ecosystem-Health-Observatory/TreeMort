@@ -72,7 +72,7 @@ swift download DRYTREE-project-AerialImageModel_ITD
 ```bash
 cd ~/TreeMort
 
-sh ./scripts/run_creator.sh
+sbatch ./scripts/run_creator.sh
 ```
 
 **Step D.** Demo TreeMort
