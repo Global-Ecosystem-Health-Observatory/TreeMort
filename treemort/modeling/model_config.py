@@ -9,9 +9,10 @@ from transformers import (
     BeitForSemanticSegmentation,
 )
 
+from treemort.modeling.network.fast_segnet import Fast_SegNet
 from treemort.modeling.network.sa_unet import SelfAttentionUNet
-from treemort.modeling.network.sa_unet_multiscale import MultiScaleAttentionUNet
 from treemort.modeling.network.dinov2 import Dinov2ForSemanticSegmentation
+from treemort.modeling.network.sa_unet_multiscale import MultiScaleAttentionUNet
 from treemort.modeling.network.flair_unet import CombinedModel, PretrainedUNetModel
 from treemort.modeling.network.custom_models import (
     CustomMaskFormer,
@@ -31,6 +32,7 @@ def configure_model(conf, id2label):
         "detr": lambda: configure_detr(conf, id2label),
         "beit": lambda: configure_beit(conf, id2label),
         "flair_unet": lambda: configure_flair_unet(conf),
+        "fast_segnet": lambda: configure_fast_segnet(),
     }
 
     assert conf.model in model_choices, f"[ERROR] Invalid model: {conf.model}."
@@ -123,4 +125,10 @@ def configure_flair_unet(conf):
         output_size=conf.test_crop_size,
     )
     print("[INFO] FLAIR-UNet model configured with pre-trained weights.")
+    return model
+
+
+def configure_fast_segnet():
+    model = Fast_SegNet()
+    print("[INFO] Fast-SegNet model configured.")
     return model
