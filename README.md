@@ -35,7 +35,7 @@ source atools-venv/bin/activate
 pip3 install --upgrade pip
 pip3 install openstackclient python-swiftclient
 
-source allas_conf -u rahmanan
+source allas_conf -u <your CSC username>
 ```
 
 3. Upload aerial image and label data to Allas.
@@ -91,15 +91,16 @@ sh ./scripts/run_treemort.sh ./configs/unet_bs8_cs256.txt --eval-only true
 
 ## Results
 
-|          Model                      |  Mean IOU Pixels  |  Mean IOU Trees  |
-| :---------------------------------: | :---------------: | :--------------: |
-| Unet with Self Attention            | 0.281             | 0.749            |
-| FLAIR (Encoder) + SA-Unet (Decoder) | 0.291             | 0.785            |
+|                Model                | Mean IOU Pixels | Mean IOU Trees |
+| :---------------------------------: | :-------------: | :------------: |
+|      Unet with Self Attention       |      0.281      |     0.749      |
+| FLAIR (Encoder) + SA-Unet (Decoder) |      0.291      |     0.785      |
 
-| Model      | Mean IOU Pixels | Mean IOU Trees | Mean IOU | Mean Balanced IOU | Mean Dice Score | Mean Adjusted Dice Score | Mean MCC | 
-| :--------: | :-------------: | :------------: ---------: | :---------------: | :-------------: | :----------------------: | :------: |
-| SA-Unet    | 0.281 | 0.749 | 0.840 | 0.997 | 0.334 | 0.736 | 0.342 |
-| FLAIR-Unet | 0.291 | 0.785 | 0.856 | 0.997 | 0.343 | 0.766 | 0.351 |
+|   Model    | Mean IOU Pixels | Mean IOU Trees | Mean IOU | Mean Balanced IOU | Mean Dice Score | Mean Adjusted Dice Score | Mean MCC |
+| :--------: | :-------------: | :------------: | :------: | :---------------: | :-------------: | :----------------------: | :------: |
+|  SA-Unet   |      0.281      |     0.749      |  0.840   |       0.997       |      0.334      |          0.736           |  0.342   |
+| FLAIR-Unet |      0.291      |     0.785      |  0.856   |       0.997       |      0.343      |          0.766           |  0.351   |
+
 
 ## Getting Started (Mac OS, for development)
 
