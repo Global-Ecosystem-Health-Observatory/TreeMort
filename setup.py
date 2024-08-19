@@ -14,5 +14,8 @@ setup(
         'torchvision',
         'configargparse',
         'segmentation-models-pytorch',
+        'opencv-python',
+        'h5py',
+        'rasterio'
     ],
 )
