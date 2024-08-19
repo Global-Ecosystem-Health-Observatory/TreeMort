@@ -10,11 +10,10 @@ from treemort.utils.callbacks import (
     ModelCheckpoint,
     ReduceLROnPlateau,
     EarlyStopping,
-    build_callbacks,
 )
+from treemort.modeling.callback_builder import build_callbacks
 
 
-# Dummy model class
 class DummyModel(nn.Module):
     def __init__(self):
         super(DummyModel, self).__init__()
@@ -48,17 +47,13 @@ def test_model_checkpoint(mock_torch_save, dummy_model, dummy_optimizer):
 
         model_checkpoint = ModelCheckpoint(filepath=checkpoint_path, save_freq=1)
 
-        # Call the checkpoint callback
         model_checkpoint(epoch=1, model=dummy_model, optimizer=dummy_optimizer)
 
-        # Ensure torch.save was called
         assert mock_torch_save.called
 
-        # Get the call arguments
         saved_model_state = mock_torch_save.call_args[0][0]
         expected_model_state = dummy_model.state_dict()
 
-        # Compare state_dicts
         for key in expected_model_state:
             assert torch.equal(expected_model_state[key], saved_model_state[key])
 
@@ -80,9 +75,7 @@ def test_model_checkpoint_best(mock_torch_save, dummy_model, dummy_optimizer):
 
         # Simulate first call with a validation loss
         val_loss = 0.5
-        model_checkpoint(
-            epoch=1, model=dummy_model, optimizer=dummy_optimizer, val_loss=val_loss
-        )
+        model_checkpoint(epoch=1, model=dummy_model, optimizer=dummy_optimizer, val_loss=val_loss)
 
         assert mock_torch_save.called
 

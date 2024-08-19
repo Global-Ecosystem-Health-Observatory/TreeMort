@@ -6,7 +6,7 @@ import concurrent.futures
 
 import numpy as np
 
-from preprocessutils import (
+from dataset.preprocessutils import (
     get_image_and_polygons_reorder,
     get_image_and_polygons_normalize,
     segmap_to_topo,
@@ -78,10 +78,8 @@ def process_image(
                 )
 
             topolabel = segmap_to_topo(exim_np, adjusted_polygons)
-
             patches = extract_patches(exim_np, topolabel, window_size, stride)
 
-            # Create labeled patches with binary classification (1 if contains dead trees, else 0)
             labeled_patches = [(patch[0], patch[1], int(np.any(patch[1])), file) for patch in patches]
 
             return file, labeled_patches
@@ -92,14 +90,21 @@ def process_image(
 
 def write_to_hdf5(hdf5_file, data):
     with h5py.File(hdf5_file, "a") as hf:  # Open in append mode
-        for file_stub, labeled_patches in data:
-            for idx, (image_patch, label_patch, contains_dead_tree, filename) in enumerate(labeled_patches):
-                key = f"{file_stub}_{idx}"
-                hf.create_group(key)
-                hf[key].create_dataset("image", data=image_patch, compression="gzip")
-                hf[key].create_dataset("label", data=label_patch, compression="gzip")
-                hf[key].attrs["contains_dead_tree"] = contains_dead_tree
-                hf[key].attrs["source_image"] = filename
+        if data:  # Ensure data is not empty
+            for file_stub, labeled_patches in data:
+                if labeled_patches:  # Only process if labeled_patches is not empty
+                    for idx, (image_patch, label_patch, contains_dead_tree, filename) in enumerate(labeled_patches):
+                        key = f"{file_stub}_{idx}"
+                        hf.create_group(key)
+                        hf[key].create_dataset("image", data=image_patch, compression="gzip")
+                        hf[key].create_dataset("label", data=label_patch, compression="gzip")
+                        hf[key].attrs["contains_dead_tree"] = contains_dead_tree
+                        hf[key].attrs["source_image"] = filename
+                else:
+                    print(f"[WARNING] No labeled patches for file: {file_stub}")
+        else:
+            print("[WARNING] No data provided to write.")
+
 
 def convert_to_hdf5(
     conf,
@@ -142,7 +147,9 @@ def convert_to_hdf5(
             for future in concurrent.futures.as_completed(future_to_file):
                 file = future_to_file[future]
                 try:
-                    results.append(future.result())
+                    result = future.result()
+                    if result:  # Ensure result is not None
+                        results.append(result)
                 except Exception as e:
                     print(f"[ERROR] File {file} generated an exception: {e}")
 
@@ -150,6 +157,7 @@ def convert_to_hdf5(
 
         files_left = max(0, len(file_list) - (chunk_idx + 1) * chunk_size)
         print(f"[INFO] Completed chunk {chunk_idx + 1}/{chunk_count}. {files_left} files left to process.")
+
 
 def parse_config(config_file_path):
     parser = configargparse.ArgParser(default_config_files=[config_file_path])

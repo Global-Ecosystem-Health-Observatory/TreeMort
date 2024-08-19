@@ -1,4 +1,3 @@
-import os
 import pytest
 
 from pyfakefs.fake_filesystem_unittest import Patcher
@@ -60,6 +59,5 @@ def test_get_checkpoint_latest_empty_directory():
         assert checkpoint is None
 
 
-# Add this if you want to run the tests without pytest command
 if __name__ == "__main__":
     pytest.main([__file__])
