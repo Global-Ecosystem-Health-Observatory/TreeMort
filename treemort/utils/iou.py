@@ -75,6 +75,8 @@ class IOUCallback:
         elif self.model_name == "dinov2":
             probabilities = torch.nn.functional.softmax(outputs.logits, dim=1)
             predictions = torch.argmax(probabilities, dim=1).unsqueeze(1).float()
+        elif self.model_name == "uiunet":
+            predictions = outputs[0]
         else:
             predictions = outputs
 

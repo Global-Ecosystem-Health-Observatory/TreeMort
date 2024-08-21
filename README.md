@@ -95,11 +95,14 @@ sh ./scripts/run_treemort.sh ./configs/unet_bs8_cs256.txt --eval-only true
 | :---------------------------------: | :---------------: | :--------------: |
 | Unet with Self Attention            | 0.281             | 0.749            |
 | FLAIR (Encoder) + SA-Unet (Decoder) | 0.291             | 0.785            |
+| Fast-SegNet                         | 0.248             | 0.754            |
 
-| Model      | Mean IOU Pixels | Mean IOU Trees | Mean IOU | Mean Balanced IOU | Mean Dice Score | Mean Adjusted Dice Score | Mean MCC | 
-| :--------: | :-------------: | :------------: ---------: | :---------------: | :-------------: | :----------------------: | :------: |
-| SA-Unet    | 0.281 | 0.749 | 0.840 | 0.997 | 0.334 | 0.736 | 0.342 |
-| FLAIR-Unet | 0.291 | 0.785 | 0.856 | 0.997 | 0.343 | 0.766 | 0.351 |
+| Model       | Mean IOU Pixels | Mean IOU Trees | Mean IOU | Mean Balanced IOU | Mean Dice Score | Mean Adjusted Dice Score | Mean MCC | 
+| :---------: | :-------------: | :------------: ---------: | :---------------: | :-------------: | :----------------------: | :------: |
+| SA-Unet     | 0.281 | 0.749 | 0.840 | 0.997 | 0.334 | 0.736 | 0.342 |
+| FLAIR-Unet  | 0.291 | 0.785 | 0.856 | 0.997 | 0.343 | 0.766 | 0.351 |
+| Fast-SegNet | 0.248 | 0.754 | 0.829 | 0.996 | 0.306 | 0.719 | 0.316 |
+
 
 ## Getting Started (Mac OS, for development)
 

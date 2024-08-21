@@ -16,12 +16,24 @@ def validate_one_epoch(model, criterion, metrics, val_loader, conf, device, imag
         for batch_idx, (images, labels) in enumerate(val_progress_bar):
             images, labels = images.to(device), labels.to(device)
 
-            outputs = process_model_output(model, images, conf, image_processor, labels, device)
-            loss = criterion(outputs, labels)
+            predictions = process_model_output(model, images, conf, image_processor, labels, device)
+
+            if conf.model in ["uiunet"]:
+                loss = 0.0
+                for prediction in predictions:
+                    partial_loss = criterion(prediction, labels)
+                    loss += partial_loss
+                predictions = predictions[0] # use the 
+            else:
+                loss = criterion(predictions, labels)
 
             val_loss += loss.item()
 
-            batch_metrics = metrics(outputs, labels)
+            if conf.model in ["uiunet"]:
+                batch_metrics = metrics(predictions[0], labels)
+            else:
+                batch_metrics = metrics(predictions, labels)
+            
             for key, value in batch_metrics.items():
                 if key not in val_metrics:
                     val_metrics[key] = 0.0

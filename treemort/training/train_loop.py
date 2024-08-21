@@ -19,7 +19,13 @@ def train_one_epoch(model, optimizer, criterion, metrics, train_loader, conf, de
 
         predictions = process_model_output(model, images, conf, image_processor, labels, device)
 
-        loss = criterion(predictions, labels)
+        if conf.model in ["uiunet"]:
+            loss = 0.0
+            for prediction in predictions:
+                partial_loss = criterion(prediction, labels)
+                loss += partial_loss
+        else:
+            loss = criterion(predictions, labels)
 
         if conf.model in ["maskformer", "detr"]:
             loss.requires_grad = True
@@ -29,7 +35,11 @@ def train_one_epoch(model, optimizer, criterion, metrics, train_loader, conf, de
 
         train_loss += loss.item()
 
-        batch_metrics = metrics(predictions, labels)
+        if conf.model in ["uiunet"]:
+            batch_metrics = metrics(predictions[0], labels)
+        else:
+            batch_metrics = metrics(predictions, labels)
+
         for key, value in batch_metrics.items():
             if key not in train_metrics:
                 train_metrics[key] = 0.0
