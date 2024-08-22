@@ -80,7 +80,25 @@ def normalize_image(image):
     return image
 
 
-def overlay_image_on_folium_map(image, bounds, geojson):
+def style_function_blue(feature):
+    return {
+        'fillColor': 'blue',
+        'color': 'blue',
+        'weight': 2,
+        'fillOpacity': 0.5
+    }
+
+
+def style_function_red(feature):
+    return {
+        'fillColor': 'red',
+        'color': 'red',
+        'weight': 2,
+        'fillOpacity': 0.5
+    }
+
+
+def overlay_image_on_folium_map(image, bounds, geojson, geojson_pred):
     map_center = [(bounds.top + bounds.bottom) / 2, (bounds.left + bounds.right) / 2]
     m = folium.Map(location=map_center, zoom_start=15)
  
@@ -95,7 +113,9 @@ def overlay_image_on_folium_map(image, bounds, geojson):
         cross_origin=False,
     ).add_to(m)
 
-    folium.GeoJson(geojson, name="GeoJSON Overlay").add_to(m)
+    folium.GeoJson(geojson, name="GeoJSON Overlay", style_function=style_function_blue).add_to(m)
+    folium.GeoJson(geojson_pred, name="GeoJSON Predictions Overlay", style_function=style_function_red).add_to(m)
+
     folium.LayerControl().add_to(m)
 
     return m
@@ -112,15 +132,15 @@ def main():
         if response.status_code == 200:
             data = response.json()
             tiff_url = f"http://127.0.0.1:8000{data.get('tiff_url')}"
-            geojson_url = f"http://127.0.0.1:8000{data.get('geojson_url')}"
 
             image, bounds = fetch_and_verify_tiff(tiff_url)
             if image is not None:
                 normalized_image = normalize_image(image)
 
                 geojson = data.get("geojson")
+                geojson_pred = data.get("geojson_pred")
 
-                map_overlay = overlay_image_on_folium_map(normalized_image, bounds, geojson)
+                map_overlay = overlay_image_on_folium_map(normalized_image, bounds, geojson, geojson_pred)
 
                 # Render the map in the Streamlit app
                 st.components.v1.html(map_overlay._repr_html_(), height=600)
