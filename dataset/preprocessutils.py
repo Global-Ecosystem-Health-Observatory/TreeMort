@@ -1,86 +1,59 @@
-import cv2
 import json
-import rasterio
 
+import cv2
 import numpy as np
-
+import rasterio
 from tqdm import tqdm
 
 
-def get_image_and_polygons_reorder(
-    image_filepath,
-    geojson_filepath,
-    nir_r_g_b_order,
-    normalize_channelwise,
-    normalize_imagewise,
-):
-    exim_np, x_min, y_min, x_max, y_max, pixel_step_meters = load_geotiff_reorder(image_filepath, nir_r_g_b_order, normalize_channelwise, normalize_imagewise)
-    label_polygons = load_geojson_labels(geojson_filepath)
-    
-    k_y = (y_max - y_min) / exim_np.shape[0]
-    k_x = (x_max - x_min) / exim_np.shape[1]
+def create_label_mask(img_arr: np.ndarray, polys: list[np.ndarray]):
+    """Creates a binary label mask from annotated polygons
 
-    adjusted_polygons = []
-    for polygon in label_polygons:
-        adjusted_polygon = []
-        for coordinate in polygon:
-            newx = np.int32((coordinate[0] - (x_min)) / k_x)
-            newy = np.int32(exim_np.shape[0] + ((y_min) - coordinate[1]) / k_y)  # y-coord grow up -- cv2 grows down
-            adjusted_polygon.append(np.array([newx, newy]))
+    Parameters
+    ----------
+    img_arr : np.ndarray
+        image for which the annotations have been extracted
+    polys : list[np.ndarray]
+        annotated polygons
 
-        adjusted_polygons.append(np.int32(np.array(adjusted_polygon).reshape((-1, 1, 2))))
+    Returns
+    -------
+    np.ndarray
+        binary label mask (1=foreground, 0=background)
+    """
 
-    return exim_np, adjusted_polygons
+    image_h, image_w = img_arr.shape[:2]
+    label_mask = np.zeros((image_h, image_w), dtype=np.float32)
 
+    for poly in tqdm(polys, desc="Creating label masks"):
+        cv2.fillPoly(label_mask, pts=[poly], color=1)
 
-def get_image_and_polygons_normalize(image_filepath, geojson_filepath, normalize_channelwise, normalize_imagewise):
-    exim_np, x_min, y_min, x_max, y_max, pixel_step_meters = load_tiff_normalize(image_filepath, None, normalize_channelwise, normalize_imagewise)
-    label_polygons = load_geojson_labels(geojson_filepath)
-    
-    k_y = (y_max - y_min) / exim_np.shape[0]
-    k_x = (x_max - x_min) / exim_np.shape[1]
-
-    adjusted_polygons = []
-    for polygon in label_polygons:
-        adjusted_polygon = []
-        for coordinate in polygon:
-            newx = np.int32((coordinate[0] - (x_min)) / k_x)
-            newy = np.int32(exim_np.shape[0] + ((y_min) - coordinate[1]) / k_y)  # y-coord grow up -- cv2 grows down
-            adjusted_polygon.append(np.array([newx, newy]))
-            
-        adjusted_polygons.append(np.int32(np.array(adjusted_polygon).reshape((-1, 1, 2))))
-
-    return exim_np, adjusted_polygons
+    return label_mask
 
 
-def load_tiff_normalize(
-    filename: str,
-    pixel_step_meters: float,
-    normalize_channelwise: bool,
-    normalize_imagewise: bool,
-) -> tuple:
-    with rasterio.open(filename) as img:
-        exim = img.read()
-        exim[exim < -3e38] = 0
-        exim_np = exim.astype(np.float32)
+def segmap_to_topo(img_arr: np.ndarray, contours: list) -> np.ndarray:
+    """Creates a topographic label mask
 
-        if exim.shape[0] < 30:
-            exim_np = np.moveaxis(exim_np, 0, -1)
+    Parameters
+    ----------
+    img_arr : np.ndarray
+        array of image values
+    contours : list[np.ndarray]
+        coordinates of vertices of polygons in image coordinates
 
-        if normalize_channelwise:
-            exim_np = normalize_channelwise_to_uint8(exim_np)
-        elif normalize_imagewise:
-            exim_np = normalize_imagewise_to_uint8(exim_np)
-        else:
-            exim_np = np.uint8(np.clip(exim_np, 0, 255))
+    Returns
+    -------
+    np.ndarray
+        topographic label mask
 
-        x_min, y_min, x_max, y_max = img.bounds
+    Notes
+    -----
+    A topographic label mask is a mask in which the center of each polygon gets
+    the maximum value (255) and the values decrease towards the polygon borders.
+    Zeros represent background pixels.
 
-    return exim_np, x_min, y_min, x_max, y_max, pixel_step_meters
-
-
-def segmap_to_topo(image_np: np.ndarray, contours: list) -> np.ndarray:
-    image_h, image_w = image_np.shape[:2]
+    """
+    image_h, image_w = img_arr.shape[:2]
     topolabel = np.zeros((image_h, image_w), dtype=np.float32)
 
     for tree in tqdm(contours, desc="Processing contours"):
@@ -98,85 +71,263 @@ def segmap_to_topo(image_np: np.ndarray, contours: list) -> np.ndarray:
     return topolabel
 
 
-def load_geotiff_reorder(
+def get_image_and_polygons(
+    image_filepath: str,
+    geojson_filepath: str,
+    nir_r_g_b_order: list[int],
+    normalize_channelwise: bool,
+    normalize_imagewise: bool,
+) -> tuple[np.ndarray, list[np.ndarray]]:
+    """Reads and preprocesses an image and corresponding annotations
+
+    Parameters
+    ----------
+    image_filepath : str
+        filepath to the image file
+    geojson_filepath : str
+        filepath to the annotation file
+    nir_r_g_b_order : list[int]
+        order of nir, r, g, and b channels in the image
+    normalize_channelwise : bool
+        whether to apply channelwise normalization
+    normalize_imagewise : bool
+        whether to apply imagewise normalization
+
+    Returns
+    -------
+    img_arr : np.ndarray
+        array of image values. Dimensions are (rows, cols, channels)
+    adjusted_polygons : list[np.ndarray]
+        coordinates of vertices of annotated polygons in image coordinates
+    """
+
+    img_arr, bounds, resolution = load_geotiff(
+        image_filepath,
+        nir_r_g_b_order,
+        normalize_channelwise,
+        normalize_imagewise
+    )
+
+    min_xy = bounds[:2]
+    n_rows = img_arr.shape[0]
+    
+    # Polygons in georeferenced coordinates
+    label_polygons = load_geojson_labels(geojson_filepath)
+
+    # Transform polygons into image coordinates
+    adjusted_polygons = []
+    for polygon in label_polygons:
+        adjusted_polygon = []
+        for coordinate in polygon:
+            img_coords = geo_to_img_coords(coordinate, min_xy, resolution, n_rows)
+            adjusted_polygon.append(img_coords)
+
+        adjusted_polygons.append(np.int32(np.array(adjusted_polygon).reshape((-1, 1, 2))))
+
+    return img_arr, adjusted_polygons
+
+
+def geo_to_img_coords(
+    geocoord: list,
+    min_xy: tuple,
+    resolution: tuple,
+    n_rows: int) -> tuple[int]:
+    """Converts georeferenced coordinates into image coordinates
+
+    Parameters
+    ----------
+    geocoord : list
+        x and y geocoordinates
+    min_xy : tuple
+        left and bottom bounds of image in geocoordinates
+    resolution : tuple
+        pixel resolution in x and y directions
+    n_rows : int
+        number of rows in the image
+
+    Returns
+    -------
+    tuple[int]
+        col and row index of input geocoordinate
+    """
+
+    x,y = geocoord
+    min_x, min_y = min_xy
+    res_x, res_y = resolution
+
+    col = np.int32((x - min_x) / res_x) 
+    row = np.int32(n_rows + (min_y - y) / res_y)
+
+    return col, row
+
+
+def load_geotiff(
     filename: str,
-    nir_r_g_b_order: list,
+    nir_r_g_b_order: list = None,
     normalize_channelwise: bool = False,
     normalize_imagewise: bool = False,
-) -> tuple:
-    with rasterio.open(filename) as img:
-        exim = np.moveaxis(img.read(), 0, -1)
-        exim[exim < -3e38] = 0  # set missing values to zero
-        exim_np = np.float32(exim)
-        if exim.shape[0] < 30:  # if channels are first, move them last
-            exim_np = np.moveaxis(exim_np, 0, -1)
+) -> tuple[np.ndarray, tuple[float], tuple[float]]:
+    """Reads image, reorders channels, and optionally scales image
 
-        exim_np = exim_np[:, :, nir_r_g_b_order]
+    Parameters
+    ----------
+    filename : str
+        filepath to image file
+    nir_r_g_b_order : list
+        indices of nir, r, g, and b channels, respectively, by default [3,0,1,2]
+    normalize_channelwise : bool, optional
+        whether to perform channelwise normalization, by default False
+    normalize_imagewise : bool, optional
+        whether to perform imagewise normalization, by default False
+
+    Returns
+    -------
+    img_arr : np.ndarray
+        array of image values. Dimensions are (rows, cols, channels)
+    bounds : tuple
+        left, bottom, right, and top of image in georeferenced coordinates
+    res : tuple
+        x and y resolution of image in meters
+    """
+
+    if nir_r_g_b_order is None:
+        nir_r_g_b_order = [3,0,1,2]
+           
+    with rasterio.open(filename) as img:
+
+        # Read pixel values and move channels last
+        img_arr = np.moveaxis(img.read(), 0, -1).astype(np.float32)
+
+        # Reorder channels
+        img_arr = img_arr[:,:,nir_r_g_b_order]
+
+        # Set missing values to zero
+        if img.nodata is not None:
+            img_arr[img.nodata] = 0
+        else:
+            img_arr[img_arr < -3e38] = 0
 
         if normalize_channelwise:
-            exim_np = normalize_channelwise_to_uint8(exim_np)
+            img_arr = normalize_channelwise_to_uint8(img_arr)
         elif normalize_imagewise:
-            exim_np = normalize_imagewise_to_uint8(exim_np)
+            img_arr = normalize_imagewise_to_uint8(img_arr)
         else:
-            exim_np = np.uint8(np.clip(exim_np, 0, 255))
+            img_arr = np.uint8(np.clip(img_arr, 0, 255))
 
-        x_min, y_min, x_max, y_max = img.bounds
+        bounds = tuple(img.bounds)
+        resolution = img.res
 
-    pixel_step_meters = 0.5
-    return exim_np, x_min, y_min, x_max, y_max, pixel_step_meters
+    return img_arr, bounds, resolution
 
 
-def load_geojson_labels(geojson_path: str) -> list:
-    with open(geojson_path) as f:
+def load_geojson_labels(geojson_path: str) -> list[list[list[float]]]:
+    """Extracts coordinates of label polygon vertices
+
+    Parameters
+    ----------
+    geojson_path : str
+        filepath to label geojson file
+
+    Returns
+    -------
+    list[list[list[float]]]
+        coordinates of vertices of polygons in georeferenced coordinates
+
+    Notes
+    -----
+    Each polygon in a multipolygon is stored separately
+        
+    """
+    with open(geojson_path,"r") as f:
         samples_json = json.load(f)
 
     coord_list = []
-    for polygon in samples_json.get("features", []):
-        geometry = polygon.get("geometry")
+    for multipoly in samples_json.get("features", []):
+        geometry = multipoly.get("geometry")
         if geometry and geometry.get("coordinates"):
-            try:
-                coordinates = geometry["coordinates"][0][0]
-                if len(coordinates) > 2:
-                    coord_list.append(coordinates)
-            except (IndexError, TypeError) as e:
-                print(f"Error processing polygon coordinates: {e}")
+            # Inner loop ensures that all polygons in single multipolygon are
+            # stored separately
+            for poly in geometry["coordinates"]:
+                try:
+                    coordinates = poly[0]
+                    if len(coordinates) > 2:
+                        coord_list.append(coordinates)
+                except (IndexError, TypeError) as e:
+                    print(f"Error processing polygon coordinates: {e}")
 
     return coord_list
 
 
-def normalize_channelwise_to_uint8(exim_np: np.ndarray) -> np.ndarray:
+def normalize_channelwise_to_uint8(img_arr: np.ndarray) -> np.ndarray:
+    """Scales channels to range 0-255 and switches data type to uint8
 
-    def normalize_channel(channel: np.ndarray) -> np.ndarray:
-        min_val = getTopXValue(channel, 1)
-        max_val = getTopXValue(channel, 99)
-        if max_val != min_val:
-            channel_scaled = (channel - min_val) / (max_val - min_val) * 255
-            return np.clip(channel_scaled, 0, 255)
-        else:
-            return (np.zeros_like(channel) if min_val == 0 else np.ones_like(channel) * 255)
+    Parameters
+    ----------
+    img_arr : np.ndarray
+        multi-channel image
 
-    exim_np = np.stack([normalize_channel(exim_np[:, :, i]) for i in range(exim_np.shape[-1])], axis=-1)
-    return exim_np.astype(np.uint8)
+    Returns
+    -------
+    np.ndarray
+        input image scaled channelwise
+    """
+
+    scaled_channels = [
+        normalize_imagewise_to_uint8(img_arr[:,:,i]) 
+        for i 
+        in range(img_arr.shape[-1])
+    ]
+
+    return np.stack(scaled_channels, axis=-1)
 
 
-def normalize_imagewise_to_uint8(exim_np: np.ndarray) -> np.ndarray:
-    min_val = getTopXValue(exim_np, 1)
-    max_val = getTopXValue(exim_np, 99)
+def normalize_imagewise_to_uint8(img_arr: np.ndarray) -> np.ndarray:
+    """Scales image to range 0-255 and switches data type to uint8
+
+    Parameters
+    ----------
+    img_arr : np.ndarray
+        multi-channel image or single channel of image
+
+    Returns
+    -------
+    np.ndarray
+        scaled image
+    """
+
+    min_val, max_val = get_nonzero_percentiles(img_arr, [1,99])
 
     if max_val != min_val:
-        exim_np_scaled = (exim_np - min_val) / (max_val - min_val) * 255
-        exim_np_scaled = np.clip(exim_np_scaled, 0, 255)
+        img_arr_scaled = (img_arr - min_val) / (max_val - min_val) * 255
+        img_arr_scaled = np.clip(img_arr_scaled, 0, 255)
     else:
-        exim_np_scaled = np.zeros_like(exim_np)
+        img_arr_scaled = (
+            np.zeros_like(img_arr)
+            if min_val == 0
+            else np.ones_like(img_arr) * 255
+        )
 
-    return exim_np_scaled.astype(np.uint8)
+    return img_arr_scaled.astype(np.uint8)
 
 
-def getTopXValue(input_array: np.ndarray, percentage: float) -> float:
+def get_nonzero_percentiles(input_array: np.ndarray, percentages: float) -> float:
+    """Gets specified percentiles of values in input array excluding zeros
+
+    Parameters
+    ----------
+    input_array : np.ndarray
+        array from which the percentile is extracted
+    percentages : array_like of float
+        percentages to extract
+
+    Returns
+    -------
+    float
+        specified percentiles of array from which zeros have been excluded
+    """
+
     all_nonzero_values = input_array[input_array > 0]
     if len(all_nonzero_values) == 0:
         return 0
 
-    sorted_array = np.sort(all_nonzero_values)
-    index = int(len(sorted_array) * percentage / 100)
-    return sorted_array[index]
+    return np.percentile(all_nonzero_values, percentages)
