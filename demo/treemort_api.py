@@ -20,8 +20,9 @@ def get_bounds(tiff_file):
 async def map_data(filename: str):
     try:
         # Assume TIFF and GeoJSON files are in a specific directory
-        tiff_path = f"files/{filename}.tiff"
+        tiff_path = f"files/{filename}.tif"
         geojson_path = f"files/{filename}.geojson"
+        geojson_path_pred = f"files/{filename}_pred.geojson"
 
         if not os.path.exists(tiff_path):
             raise HTTPException(
@@ -32,12 +33,19 @@ async def map_data(filename: str):
             raise HTTPException(
                 status_code=404, detail=f"GeoJSON file not found: {geojson_path}"
             )
+        
+        if not os.path.exists(geojson_path_pred):
+            raise HTTPException(
+                status_code=404, detail=f"GeoJSON file with predictions not found: {geojson_path_pred}"
+            )
 
         bounds = get_bounds(tiff_path)
 
         gdf = gpd.read_file(geojson_path)
-
         gdf = gdf.to_crs(epsg=4326)
+
+        gdf_pred = gpd.read_file(geojson_path_pred)
+        gdf_pred = gdf_pred.to_crs(epsg=4326)
 
         centroid = gdf.geometry.centroid.iloc[0]
         latitude = centroid.y
@@ -50,7 +58,8 @@ async def map_data(filename: str):
             "latitude": latitude,
             "longitude": longitude,
             "geojson": gdf.to_json(),
-            "tiff_url": f"/tiff/{filename}.tiff",  # Serve TIFF file through a URL
+            "geojson_pred": gdf_pred.to_json(),
+            "tiff_url": f"/tiff/{filename}.tif",  # Serve TIFF file through a URL
         }
 
     except Exception as e:
