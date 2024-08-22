@@ -9,5 +9,5 @@
 module load python-data
 source venv/bin/activate
 
-srun python3 ./dataset/creator.py ./configs/AerialImageModel_ITD.txt
+srun python3 -m dataset.creator ./configs/AerialImageModel_ITD.txt
 
