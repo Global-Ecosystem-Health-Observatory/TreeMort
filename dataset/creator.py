@@ -7,9 +7,8 @@ import concurrent.futures
 import numpy as np
 
 from dataset.preprocessutils import (
-    get_image_and_polygons_reorder,
-    get_image_and_polygons_normalize,
-    segmap_to_topo,
+    get_image_and_polygons,
+    create_label_mask,
 )
 
 
@@ -38,9 +37,6 @@ def extract_patches(image, label, window_size, stride):
             image_patch = image[y : y + window_size, x : x + window_size]
             label_patch = label[y : y + window_size, x : x + window_size]
 
-            # Convert label_patch to binary mask
-            label_patch = (label_patch > 0).astype(np.float32)
-
             patches.append((image_patch, label_patch))
 
     return patches
@@ -61,24 +57,16 @@ def process_image(
             image_filepath = os.path.join(image_folder, file)
             geojson_filepath = os.path.join(label_folder, file.rsplit(".", 1)[0] + ".geojson")
 
-            if nir_r_g_b_order is not None:
-                exim_np, adjusted_polygons = get_image_and_polygons_reorder(
-                    image_filepath,
-                    geojson_filepath,
-                    nir_r_g_b_order,
-                    normalize_channelwise,
-                    normalize_imagewise,
-                )
-            else:
-                exim_np, adjusted_polygons = get_image_and_polygons_normalize(
-                    image_filepath,
-                    geojson_filepath,
-                    normalize_channelwise,
-                    normalize_imagewise,
-                )
+            img_arr, polygons = get_image_and_polygons(
+                image_filepath,
+                geojson_filepath,
+                nir_r_g_b_order,
+                normalize_channelwise,
+                normalize_imagewise
+            )
 
-            topolabel = segmap_to_topo(exim_np, adjusted_polygons)
-            patches = extract_patches(exim_np, topolabel, window_size, stride)
+            topolabel = create_label_mask(img_arr, polygons)
+            patches = extract_patches(img_arr, topolabel, window_size, stride)
 
             labeled_patches = [(patch[0], patch[1], int(np.any(patch[1])), file) for patch in patches]
 
