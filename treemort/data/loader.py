@@ -1,4 +1,5 @@
 import os
+import random
 
 from torch.utils.data import DataLoader
 from transformers import AutoImageProcessor
@@ -15,6 +16,8 @@ def prepare_datasets(conf):
     image_patch_map = load_and_organize_data(hdf5_file_path)
 
     train_keys, val_keys, test_keys = stratify_images_by_patch_count(image_patch_map, conf.val_size, conf.test_size)
+
+    random.seed(None) # for non-deterministic loader
 
     train_transform = Augmentations()
     val_transform = None

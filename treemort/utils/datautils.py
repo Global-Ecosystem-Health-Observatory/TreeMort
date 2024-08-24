@@ -17,13 +17,15 @@ def load_and_organize_data(hdf5_file_path):
     return image_patch_map
 
 
-def bin_images_by_patch_count(image_patch_map, val_ratio, test_ratio):
+def bin_images_by_patch_count(image_patch_map, val_ratio, test_ratio, seed=42):
     """
     Bin images such that validation and test bins fulfill the given ratios in terms of patch count.
     """
     keys = list(image_patch_map.keys())
-    random.seed(42) # for replication
+
+    random.seed(seed) # for replication
     random.shuffle(keys)
+    
     shuffled_images = [(key, image_patch_map[key]) for key in keys]
 
     total_patches = sum(len(patches) for patches in image_patch_map.values())

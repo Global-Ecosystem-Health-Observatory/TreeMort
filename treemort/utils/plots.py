@@ -1,14 +1,17 @@
+import random 
 import matplotlib.pyplot as plt
-import torch
 
-def plot_examples(data_loader, num_examples=5):
+
+def plot_examples(data_loader, num_examples=5, seed=None):
+    random.seed(seed)
+
     examples_shown = 0
     
     for images, labels in data_loader:
         for i in range(images.size(0)):
             if examples_shown >= num_examples:
                 return  # Stop once we've shown enough examples
-
+    
             rgb_image = images[i, 1:4].permute(1, 2, 0).cpu().numpy()
             nir_image = images[i, 0].cpu().numpy()
             label_np = labels[i].cpu().numpy().squeeze()
@@ -52,7 +55,7 @@ hdf5_file_path = os.path.join(conf.data_folder, conf.hdf5_file)
 with h5py.File(hdf5_file_path, 'r') as hf:
     keys = list(hf.keys())
 
-train_dataset, val_dataset, test_dataset = prepare_datasets(conf)
+train_dataset, _, _, _ = prepare_datasets(conf)
 
 plot_examples(train_dataset, num_examples=5)
 

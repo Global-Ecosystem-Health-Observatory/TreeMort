@@ -18,6 +18,7 @@ from treemort.modeling.network.custom_models import (
     CustomDetr,
     CustomBeit,
 )
+from treemort.modeling.network.hcfnet.HCFnet import HCFnet
 
 
 def configure_model(conf, id2label):
@@ -31,6 +32,7 @@ def configure_model(conf, id2label):
         "detr": lambda: configure_detr(conf, id2label),
         "beit": lambda: configure_beit(conf, id2label),
         "flair_unet": lambda: configure_flair_unet(conf),
+        "hcfnet": lambda: configure_hcfnet(conf),
     }
 
     assert conf.model in model_choices, f"[ERROR] Invalid model: {conf.model}."
@@ -123,4 +125,10 @@ def configure_flair_unet(conf):
         output_size=conf.test_crop_size,
     )
     print("[INFO] FLAIR-UNet model configured with pre-trained weights.")
+    return model
+
+
+def configure_hcfnet(conf):
+    model = HCFnet(conf.input_channels, conf.output_channels)
+    print("[INFO] HCFNet model configured.")
     return model

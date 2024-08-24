@@ -5,7 +5,7 @@ from tqdm import tqdm
 from treemort.training.output_processing import process_model_output
 
 
-def train_one_epoch(model, optimizer, criterion, metrics, train_loader, conf, device, image_processor):
+def train_one_epoch(model, optimizer, criterion, metrics, train_loader, conf, device, image_processor, class_weights):
     model.train()
     train_loss = 0.0
     train_metrics = {}
@@ -18,8 +18,8 @@ def train_one_epoch(model, optimizer, criterion, metrics, train_loader, conf, de
         optimizer.zero_grad()
 
         predictions = process_model_output(model, images, conf, image_processor, labels, device)
-
-        loss = criterion(predictions, labels)
+        
+        loss = criterion(predictions, labels, class_weights=class_weights)
 
         if conf.model in ["maskformer", "detr"]:
             loss.requires_grad = True
