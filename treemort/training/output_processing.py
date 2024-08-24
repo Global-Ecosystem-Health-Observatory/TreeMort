@@ -22,6 +22,10 @@ def process_model_output(model, images, conf, image_processor, labels, device):
         outputs = model(images)
         predictions = torch.sigmoid(outputs.logits[:, 1:2, :, :]) 
 
+    elif conf.model == "hcfnet":
+        outputs = model(images)
+        predictions = torch.sigmoid(outputs)
+        
     else:
         predictions = model(images)
     

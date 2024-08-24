@@ -20,6 +20,8 @@ def run(conf, eval_only):
 
     id2label = {0: "alive", 1: "dead"}
 
+    class_weights = torch.tensor([0.1, 0.9], dtype=torch.float32)
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"[INFO] Using device: {device}")
 
@@ -56,6 +58,7 @@ def run(conf, eval_only):
             conf=conf,
             callbacks=callbacks,
             image_processor=image_processor,
+            class_weights=class_weights,
         )
         print("[INFO] Training completed.")
 

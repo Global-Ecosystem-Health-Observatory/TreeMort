@@ -5,7 +5,7 @@ from tqdm import tqdm
 from treemort.training.output_processing import process_model_output
 
 
-def validate_one_epoch(model, criterion, metrics, val_loader, conf, device, image_processor):
+def validate_one_epoch(model, criterion, metrics, val_loader, conf, device, image_processor, class_weights):
     model.eval()
     val_loss = 0.0
     val_metrics = {}
@@ -17,7 +17,7 @@ def validate_one_epoch(model, criterion, metrics, val_loader, conf, device, imag
             images, labels = images.to(device), labels.to(device)
 
             outputs = process_model_output(model, images, conf, image_processor, labels, device)
-            loss = criterion(outputs, labels)
+            loss = criterion(outputs, labels, class_weights=class_weights)
 
             val_loss += loss.item()
 
