@@ -18,6 +18,8 @@ def trainer(
 ):
     device = next(model.parameters()).device  # Get the device of the model
 
+    class_weights = class_weights.to(device)
+
     for epoch in range(conf.epochs):
         print(f"[INFO] Epoch {epoch + 1}/{conf.epochs} - Training started.")
 
