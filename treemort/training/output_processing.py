@@ -23,7 +23,6 @@ def process_model_output(model, images, conf, image_processor, labels, device):
         predictions = torch.sigmoid(outputs.logits[:, 1:2, :, :]) 
 
     elif conf.model in ["sa_unet", "sa_unet_multiscale", "hcfnet"]:
-        print("DONE DONE")
         outputs = model(images)
         predictions = torch.sigmoid(outputs)
         
