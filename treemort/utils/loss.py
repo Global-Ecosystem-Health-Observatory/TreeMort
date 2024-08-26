@@ -39,7 +39,7 @@ def focal_loss(pred, target, alpha=0.25, gamma=2):
     return focal_loss.mean()
 
 
-def hybrid_loss(pred, target, dice_weight=0.5, alpha=0.9, gamma=2, class_weights=None):
+def hybrid_loss(pred, target, dice_weight=0.5, alpha=0.25, gamma=2, class_weights=None):
     if class_weights is not None:
         weight = torch.ones_like(target) * class_weights[1]
         weight[target == 0] = class_weights[0]
@@ -123,6 +123,7 @@ def iou_score(pred, target, threshold=0.5):
 
 def f_score(pred, target, threshold=0.5, beta=1):
     pred = (pred > threshold).float()
+    target = target.float()
 
     tp = (pred * target).sum()
     fp = ((1 - target) * pred).sum()
