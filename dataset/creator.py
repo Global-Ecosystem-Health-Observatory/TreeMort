@@ -65,8 +65,8 @@ def process_image(
                 normalize_imagewise
             )
 
-            topolabel = create_label_mask(img_arr, polygons)
-            patches = extract_patches(img_arr, topolabel, window_size, stride)
+            label_mask = create_label_mask(img_arr, polygons)
+            patches = extract_patches(img_arr, label_mask, window_size, stride)
 
             labeled_patches = [(patch[0], patch[1], int(np.any(patch[1])), file) for patch in patches]
 
