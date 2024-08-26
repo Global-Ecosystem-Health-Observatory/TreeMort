@@ -89,13 +89,10 @@ def geo_to_img_coords(
 
 def load_geotiff(
     filename: str,
-    nir_r_g_b_order: list = None,
+    nir_r_g_b_order: list[int],
     normalize_channelwise: bool = False,
     normalize_imagewise: bool = False,
 ) -> tuple[np.ndarray, tuple[float], tuple[float]]:
-
-    if nir_r_g_b_order is None:
-        nir_r_g_b_order = [3,0,1,2]
            
     with rasterio.open(filename) as img:
 
