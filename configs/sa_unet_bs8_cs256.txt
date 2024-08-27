@@ -29,7 +29,7 @@ threshold = 0.5
 
 # activation = sigmoid # available options [tanh, sigmoid]
 
-loss = hybrid # available options [mse, hybrid]
+loss = weighted_dice_loss # available options [mse, hybrid, weighted_dice_loss]
 
 val-size = 0.2
 test-size = 0.1

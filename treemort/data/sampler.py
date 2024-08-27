@@ -31,5 +31,4 @@ class BalancedSampler(Sampler):
         return iter(balanced_indices)
 
     def __len__(self):
-        # Length is twice the size of the smaller class
         return 2 * min(len(self.dead_tree_indices), len(self.no_dead_tree_indices))
