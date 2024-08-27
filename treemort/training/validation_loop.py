@@ -17,6 +17,7 @@ def validate_one_epoch(model, criterion, metrics, val_loader, conf, device, imag
             images, labels = images.to(device), labels.to(device)
 
             outputs = process_model_output(model, images, conf, image_processor, labels, device)
+            
             loss = criterion(outputs, labels, class_weights=class_weights)
 
             val_loss += loss.item()
