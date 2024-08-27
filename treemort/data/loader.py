@@ -17,7 +17,7 @@ def prepare_datasets(conf):
 
     train_keys, val_keys, test_keys = stratify_images_by_patch_count(image_patch_map, conf.val_size, conf.test_size)
 
-    random.seed(None) # for non-deterministic loader
+    random.seed(None) # makes loader non-deterministic
 
     train_transform = Augmentations()
     val_transform = None

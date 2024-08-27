@@ -1,5 +1,3 @@
-import torch
-
 from tqdm import tqdm
 
 from treemort.training.output_processing import process_model_output
@@ -37,7 +35,6 @@ def train_one_epoch(model, optimizer, criterion, metrics, train_loader, conf, de
 
         train_progress_bar.set_postfix({"Train Loss": train_loss / (batch_idx + 1)})
 
-    # Average train loss and metrics
     train_loss /= len(train_loader)
     for key in train_metrics:
         train_metrics[key] /= len(train_loader)

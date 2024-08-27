@@ -29,7 +29,6 @@ def validate_one_epoch(model, criterion, metrics, val_loader, conf, device, imag
 
             val_progress_bar.set_postfix({"Val Loss": val_loss / (batch_idx + 1)})
 
-    # Average validation loss and metrics
     val_loss /= len(val_loader)
     for key in val_metrics:
         val_metrics[key] /= len(val_loader)

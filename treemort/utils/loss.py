@@ -14,7 +14,7 @@ def dice_loss(pred, target, smooth=1.0):
     return 1 - ((2.0 * intersection + smooth) / (A_sum + B_sum + smooth))
 
 
-def weighted_dice_loss(pred, target, weights, smooth=1.0):
+def weighted_dice_loss(pred, target, class_weights, smooth=1.0):
     target = target.squeeze(1).long()
 
     if target.max() >= pred.shape[1]:
@@ -28,7 +28,7 @@ def weighted_dice_loss(pred, target, weights, smooth=1.0):
     dice_score = 2 * (intersection + smooth) / (union + smooth)
     dice_loss = 1 - dice_score
 
-    weighted_dice_loss = (dice_loss * weights).mean()
+    weighted_dice_loss = (dice_loss * class_weights).mean()
     return weighted_dice_loss
 
 
