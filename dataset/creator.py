@@ -50,7 +50,7 @@ def process_image(
     file,
     image_folder,
     label_folder,
-    nir_r_g_b_order,
+    nir_rgb_order,
     normalize_channelwise,
     normalize_imagewise,
     window_size,
@@ -61,11 +61,11 @@ def process_image(
             image_filepath = os.path.join(image_folder, file)
             geojson_filepath = os.path.join(label_folder, file.rsplit(".", 1)[0] + ".geojson")
 
-            if nir_r_g_b_order is not None:
+            if nir_rgb_order is not None:
                 exim_np, adjusted_polygons = get_image_and_polygons_reorder(
                     image_filepath,
                     geojson_filepath,
-                    nir_r_g_b_order,
+                    nir_rgb_order,
                     normalize_channelwise,
                     normalize_imagewise,
                 )
