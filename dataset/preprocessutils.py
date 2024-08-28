@@ -10,11 +10,11 @@ from tqdm import tqdm
 def get_image_and_polygons_reorder(
     image_filepath,
     geojson_filepath,
-    nir_r_g_b_order,
+    nir_rgb_order,
     normalize_channelwise,
     normalize_imagewise,
 ):
-    exim_np, x_min, y_min, x_max, y_max, pixel_step_meters = load_geotiff_reorder(image_filepath, nir_r_g_b_order, normalize_channelwise, normalize_imagewise)
+    exim_np, x_min, y_min, x_max, y_max, pixel_step_meters = load_geotiff_reorder(image_filepath, nir_rgb_order, normalize_channelwise, normalize_imagewise)
     label_polygons = load_geojson_labels(geojson_filepath)
     
     k_y = (y_max - y_min) / exim_np.shape[0]
@@ -100,7 +100,7 @@ def segmap_to_topo(image_np: np.ndarray, contours: list) -> np.ndarray:
 
 def load_geotiff_reorder(
     filename: str,
-    nir_r_g_b_order: list,
+    nir_rgb_order: list,
     normalize_channelwise: bool = False,
     normalize_imagewise: bool = False,
 ) -> tuple:
@@ -111,7 +111,7 @@ def load_geotiff_reorder(
         if exim.shape[0] < 30:  # if channels are first, move them last
             exim_np = np.moveaxis(exim_np, 0, -1)
 
-        exim_np = exim_np[:, :, nir_r_g_b_order]
+        exim_np = exim_np[:, :, nir_rgb_order]
 
         if normalize_channelwise:
             exim_np = normalize_channelwise_to_uint8(exim_np)
