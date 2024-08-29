@@ -1,9 +1,5 @@
 # configurations for inference creation
 
-data-folder = /scratch/project_2008436/rahmanan/AerialImageModel_ITD
-image-folder = 4band_25cm
-label-folder = Geojsons
-
 window-size = 256
 stride = 128
 nir-rgb-order = [3, 2, 1, 0]
