@@ -16,28 +16,25 @@ def trainer(
     image_processor=None,
     class_weights=None,
 ):
-    device = next(model.parameters()).device  # Get the device of the model
+    device = next(model.parameters()).device
 
     class_weights = class_weights.to(device)
 
     for epoch in range(conf.epochs):
         print(f"[INFO] Epoch {epoch + 1}/{conf.epochs} - Training started.")
 
-        # Training Phase
         train_loss, train_metrics = train_one_epoch(model, optimizer, criterion, metrics, train_loader, conf, device, image_processor, class_weights)
 
         print(f"[INFO] Epoch {epoch + 1} - Training completed.")
         print(f"[INFO] Training Loss: {train_loss:.4f}")
         print(f"[INFO] Training Metrics: {train_metrics}")
 
-        # Validation Phase
         val_loss, val_metrics = validate_one_epoch(model, criterion, metrics, val_loader, conf, device, image_processor, class_weights)
 
         print(f"[INFO] Epoch {epoch + 1} - Validation completed.")
         print(f"[INFO] Validation Loss: {val_loss:.4f}")
         print(f"[INFO] Validation Metrics: {val_metrics}")
 
-        # Callbacks
         handle_callbacks(callbacks, epoch, model, optimizer, val_loss)
 
         if any([isinstance(cb, EarlyStopping) and cb.stop_training for cb in callbacks]):

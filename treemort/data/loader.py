@@ -2,11 +2,11 @@ import os
 import random
 
 from torch.utils.data import DataLoader
-from transformers import AutoImageProcessor
 
 from treemort.data.dataset import DeadTreeDataset
 from treemort.data.sampler import BalancedSampler
 from treemort.utils.augment import Augmentations
+from treemort.data.image_processing import get_image_processor
 from treemort.utils.datautils import load_and_organize_data, stratify_images_by_patch_count
 
 
@@ -23,16 +23,7 @@ def prepare_datasets(conf):
     val_transform = None
     test_transform = None
 
-    if conf.model in ["maskformer", "detr", "beit", "dinov2"]:
-        image_processor = AutoImageProcessor.from_pretrained(conf.backbone)
-
-        if conf.model == "beit":
-            image_processor.size["shortest_edge"] = min(image_processor.size["height"], image_processor.size["width"])
-            image_processor.do_pad = False
-        elif conf.model in ["maskformer", "dinov2"]:
-            image_processor.do_pad = False
-    else:
-        image_processor = None
+    image_processor = get_image_processor(conf.model, conf.backbone)
 
     train_dataset = DeadTreeDataset(
         hdf5_file=hdf5_file_path,

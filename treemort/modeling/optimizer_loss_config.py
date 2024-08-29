@@ -2,7 +2,8 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from treemort.utils.loss import hybrid_loss, mse_loss, iou_score, f_score, weighted_dice_loss
+from treemort.utils.loss import hybrid_loss, mse_loss, weighted_dice_loss
+from treemort.utils.metrics import iou_score, f_score
 
 
 def configure_optimizer(model, learning_rate):
