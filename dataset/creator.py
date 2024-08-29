@@ -185,7 +185,6 @@ if __name__ == "__main__":
     parser.add_argument("--chunk-size",     type=int, default=10,   help="Number of images to process in a single chunk",)
     args = parser.parse_args()
 
-    # Load configuration
     conf = parse_config(args.config)
 
     convert_to_hdf5(
