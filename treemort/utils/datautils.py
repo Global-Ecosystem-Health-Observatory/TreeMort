@@ -18,9 +18,6 @@ def load_and_organize_data(hdf5_file_path):
 
 
 def bin_images_by_patch_count(image_patch_map, val_ratio, test_ratio, seed=42):
-    """
-    Bin images such that validation and test bins fulfill the given ratios in terms of patch count.
-    """
     keys = list(image_patch_map.keys())
 
     random.seed(seed) # for replication
@@ -52,19 +49,14 @@ def bin_images_by_patch_count(image_patch_map, val_ratio, test_ratio, seed=42):
 
     return train_images, val_images, test_images
 
+
 def extract_keys_from_images(image_patch_map, images):
-    """
-    Extract keys corresponding to images for a specific bin (train/val/test).
-    """
     keys = []
     for img in images:
         keys.extend([key for key, _ in image_patch_map[img]])
     return keys
 
 def stratify_images_by_patch_count(image_patch_map, val_ratio, test_ratio):
-    """
-    Stratify images into training, validation, and test bins based on patch count.
-    """
     train_images, val_images, test_images = bin_images_by_patch_count(image_patch_map, val_ratio, test_ratio)
 
     train_keys = extract_keys_from_images(image_patch_map, train_images)

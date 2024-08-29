@@ -1,4 +1,5 @@
 import torch
+import torch.nn.functional as F
 import numpy as np
 
 from tqdm import tqdm
@@ -63,22 +64,29 @@ class IOUCallback:
 
     def _get_predictions(self, images, labels):
         outputs = self.model(images)
-        target_sizes = [(label.shape[1], label.shape[2]) for label in labels]
+
+        _, _, h, w = images.shape
 
         if self.model_name == "maskformer":
-            predictions = self.image_processor.post_process_semantic_segmentation(outputs, target_sizes=target_sizes)
+            query_logits = outputs['masks_queries_logits']
+            combined_logits = torch.max(query_logits, dim=1).values
+            interpolated_logits = F.interpolate(combined_logits.unsqueeze(1), size=(h, w), mode='bilinear', align_corners=False)
+            predictions = torch.sigmoid(interpolated_logits)
+
         elif self.model_name == "detr":
-            predictions = self.image_processor.post_process_panoptic_segmentation(outputs, target_sizes=target_sizes)
-            predictions = torch.stack([prediction["segmentation"].unsqueeze(0) for prediction in predictions], dim=0,)
-        elif self.model_name == "beit":
-            predictions = self.image_processor.post_process_semantic_segmentation(outputs, target_sizes=target_sizes)
-        elif self.model_name == "dinov2":
-            probabilities = torch.nn.functional.softmax(outputs.logits, dim=1)
-            predictions = torch.argmax(probabilities, dim=1).unsqueeze(1).float()
+            query_logits = outputs['pred_masks']
+            combined_logits = torch.max(query_logits, dim=1).values
+            interpolated_logits = F.interpolate(combined_logits.unsqueeze(1), size=(h, w), mode='bilinear', align_corners=False)
+            predictions = torch.sigmoid(interpolated_logits)
+
+        elif self.model_name in ["dinov2", "beit"]:
+            logits = outputs.logits[:, 1:2, :, :]
+            predictions = torch.sigmoid(logits)
+
         else:
             predictions = outputs
 
-        return torch.stack([prediction.unsqueeze(0) for prediction in predictions], dim=0).float()
+        return predictions
 
     def _calculate_pixel_iou(self, y_pred, y_true):
         y_pred_binary = np.squeeze(y_pred > self.threshold)

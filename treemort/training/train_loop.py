@@ -1,3 +1,5 @@
+import torch
+
 from tqdm import tqdm
 
 from treemort.training.output_processing import process_model_output
@@ -15,19 +17,18 @@ def train_one_epoch(model, optimizer, criterion, metrics, train_loader, conf, de
 
         optimizer.zero_grad()
 
-        predictions = process_model_output(model, images, conf, image_processor, labels, device)
+        logits = process_model_output(model, images, conf)
         
-        loss = criterion(predictions, labels, class_weights=class_weights)
-
-        if conf.model in ["maskformer", "detr"]:
-            loss.requires_grad = True
+        loss = criterion(logits, labels, class_weights=class_weights)
 
         loss.backward()
         optimizer.step()
 
         train_loss += loss.item()
 
-        batch_metrics = metrics(predictions, labels)
+        pred_probs = torch.sigmoid(logits)
+
+        batch_metrics = metrics(pred_probs, labels)
         for key, value in batch_metrics.items():
             if key not in train_metrics:
                 train_metrics[key] = 0.0
