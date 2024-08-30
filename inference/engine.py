@@ -162,12 +162,6 @@ def run_inference(data_path, config_file_path, output_dir):
     else:
         print(f"[ERROR] Invalid input path: {data_path}")
         return
-    
-    if output_dir:
-        output_dir = Path(output_dir)
-        output_dir.mkdir(parents=True, exist_ok=True)
-    else:
-        output_dir = data_path.parent
 
     for image_path in image_paths:
         try:
