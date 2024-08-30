@@ -84,7 +84,7 @@ class IOUCallback:
             predictions = torch.sigmoid(logits)
 
         else:
-            predictions = outputs
+            predictions = torch.sigmoid(outputs)
 
         return predictions
 
