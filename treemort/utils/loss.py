@@ -17,28 +17,26 @@ def dice_loss(logits, target, smooth=1.0):
     return dice_loss
 
 
-def weighted_dice_loss(logits, target, class_weights, smooth=1.0):    
+def weighted_dice_loss(logits, target, class_weights, smooth=1.0):
     probs = torch.sigmoid(logits)
-    
-    target = target.squeeze(1).long()
-
-    if target.max() >= logits.shape[1]:
-        target = torch.clamp(target, max=logits.shape[1] - 1)
-
-    target = F.one_hot(target, num_classes=logits.shape[1]).permute(0, 3, 1, 2).float()
+    target = target.float()
 
     intersection = (probs * target).sum(dim=(2, 3))
     union = (probs + target).sum(dim=(2, 3))
 
-    dice_score = 2 * (intersection + smooth) / (union + smooth)
+    dice_score = (2 * intersection + smooth) / (union + smooth)
     dice_loss = 1 - dice_score
 
-    weighted_dice_loss = (dice_loss * class_weights).mean()
+    weights = target * class_weights[1] + (1 - target) * class_weights[0]
+    weights = weights.mean(dim=(2, 3))
+
+    weighted_dice_loss = (dice_loss * weights).mean()
+    weighted_dice_loss = torch.clamp(weighted_dice_loss, min=0)
     return weighted_dice_loss
 
 
 def focal_loss(logits, target, alpha=0.25, gamma=2):
-    bce_loss = F.binary_cross_entropy_with_logits(logits, target, reduction='none')
+    bce_loss = F.binary_cross_entropy_with_logits(logits, target.float(), reduction='none')
     
     probas = torch.sigmoid(logits)
     
@@ -51,9 +49,9 @@ def hybrid_loss(logits, target, dice_weight=0.5, alpha=0.25, gamma=2, class_weig
     if class_weights is not None:
         weight = torch.ones_like(target) * class_weights[1]
         weight[target == 0] = class_weights[0]
-        bce_loss = F.binary_cross_entropy_with_logits(logits, target, weight=weight)
+        bce_loss = F.binary_cross_entropy_with_logits(logits, target.float(), weight=weight)
     else:
-        bce_loss = F.binary_cross_entropy_with_logits(logits, target)
+        bce_loss = F.binary_cross_entropy_with_logits(logits, target.float())
 
     if class_weights is not None:
         dice = weighted_dice_loss(logits, target, class_weights)
@@ -68,4 +66,4 @@ def hybrid_loss(logits, target, dice_weight=0.5, alpha=0.25, gamma=2, class_weig
 
 def mse_loss(logits, target):
     pred = torch.sigmoid(logits)
-    return F.mse_loss(pred, target)
+    return F.mse_loss(pred, target.float())
