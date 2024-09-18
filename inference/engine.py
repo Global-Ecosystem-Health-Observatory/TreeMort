@@ -205,4 +205,10 @@ python -m inference.engine /Users/anisr/Documents/AerialImages/4band_25cm/M4424E
 - For entire folder
 python -m inference.engine /Users/anisr/Documents/AerialImages/4band_25cm --config /Users/anisr/Documents/TreeSeg/configs/inference.txt --outdir /Users/anisr/Documents/AerialImages/predictions
 
+- Run viewer api service
+uvicorn treemort_api:app --reload
+
+- Run viewer application
+streamlit run treemort_app.py
+
 '''

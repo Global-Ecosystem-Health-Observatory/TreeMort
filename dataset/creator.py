@@ -31,61 +31,53 @@ def extract_patches(image, label, window_size, stride):
     image = pad_image(image, window_size)
     label = pad_label(label, window_size)
 
-    patches = []
     h, w = image.shape[:2]
+
+    patches = []
     for y in range(0, h - window_size + 1, stride):
         for x in range(0, w - window_size + 1, stride):
             image_patch = image[y : y + window_size, x : x + window_size]
+            
             label_patch = label[y : y + window_size, x : x + window_size]
-
-            # Convert label_patch to binary mask
             label_patch = (label_patch > 0).astype(np.float32)
 
             patches.append((image_patch, label_patch))
-
     return patches
 
 
 def process_image(
-    file,
-    image_folder,
-    label_folder,
-    nir_rgb_order,
-    normalize_channelwise,
-    normalize_imagewise,
-    window_size,
-    stride,
+    image_path,
+    label_path,
+    conf
 ):
+    image_name = os.path.basename(image_path)
+
     try:
-        if file.endswith(("jp2", "tif", "tiff")):
-            image_filepath = os.path.join(image_folder, file)
-            geojson_filepath = os.path.join(label_folder, file.rsplit(".", 1)[0] + ".geojson")
+        if conf.nir_rgb_order is not None:
+            exim_np, adjusted_polygons = get_image_and_polygons_reorder(
+                image_path,
+                label_path,
+                conf.nir_rgb_order,
+                conf.normalize_channelwise,
+                conf.normalize_imagewise,
+            )
+        else:
+            exim_np, adjusted_polygons = get_image_and_polygons_normalize(
+                image_path,
+                label_path,
+                conf.normalize_channelwise,
+                conf.normalize_imagewise,
+            )
 
-            if nir_rgb_order is not None:
-                exim_np, adjusted_polygons = get_image_and_polygons_reorder(
-                    image_filepath,
-                    geojson_filepath,
-                    nir_rgb_order,
-                    normalize_channelwise,
-                    normalize_imagewise,
-                )
-            else:
-                exim_np, adjusted_polygons = get_image_and_polygons_normalize(
-                    image_filepath,
-                    geojson_filepath,
-                    normalize_channelwise,
-                    normalize_imagewise,
-                )
+        topolabel = segmap_to_topo(exim_np, adjusted_polygons)
+        patches = extract_patches(exim_np, topolabel, conf.window_size, conf.stride)
 
-            topolabel = segmap_to_topo(exim_np, adjusted_polygons)
-            patches = extract_patches(exim_np, topolabel, window_size, stride)
-
-            labeled_patches = [(patch[0], patch[1], int(np.any(patch[1])), file) for patch in patches]
-
-            return file, labeled_patches
+        labeled_patches = [(patch[0], patch[1], int(np.any(patch[1])), image_path) for patch in patches]
+        return image_name, labeled_patches
+    
     except Exception as e:
-        print(f"[ERROR] Failed to process {file}: {e}")
-        return file, []
+        print(f"[ERROR] Failed to process {image_path}: {e}")
+        return image_name, []
 
 
 def write_to_hdf5(hdf5_file, data):
@@ -118,30 +110,42 @@ def convert_to_hdf5(
     
     assert not os.path.exists(hdf5_file), f"[ERROR] The HDF5 file '{hdf5_file}' already exists. Please provide a different file name or delete the existing file."
 
-    file_list = (
-        os.listdir(image_folder)[:no_of_samples]
-        if no_of_samples
-        else os.listdir(image_folder)
-    )
-    chunk_count = len(file_list) // chunk_size + int(len(file_list) % chunk_size != 0)
+    image_list = []
+    label_list = []
+
+    for root, dirs, files in os.walk(image_folder):
+        for file in files:
+            if file.endswith(("jp2", "tif", "tiff")):
+                image_path = os.path.join(root, file)
+                image_list.append(image_path)
+
+                label_path = image_path.replace("/Images/", "/Geojsons/")
+                label_path = os.path.splitext(label_path)[0] + ".geojson"
+
+                if os.path.exists(label_path):
+                    label_list.append(label_path)
+                else:
+                    print(f"[WARNING] Labels not found for {file}")
+
+    chunk_count = len(image_list) // chunk_size + int(len(image_list) % chunk_size != 0)
 
     for chunk_idx in range(chunk_count):
-        chunk_files = file_list[chunk_idx * chunk_size : (chunk_idx + 1) * chunk_size]
+        chunk_files = list(
+            zip(
+                image_list[chunk_idx * chunk_size : (chunk_idx + 1) * chunk_size],
+                label_list[chunk_idx * chunk_size : (chunk_idx + 1) * chunk_size]
+            )
+        )
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
             future_to_file = {
                 executor.submit(
                     process_image,
-                    file,
-                    image_folder,
-                    label_folder,
-                    conf.nir_rgb_order,
-                    conf.normalize_channelwise,
-                    conf.normalize_imagewise,
-                    conf.window_size,
-                    conf.stride,
-                ): file
-                for file in chunk_files
+                    image,
+                    label,
+                    conf
+                ): image
+                for image, label in chunk_files
             }
             results = []
             for future in concurrent.futures.as_completed(future_to_file):
@@ -155,7 +159,7 @@ def convert_to_hdf5(
 
             write_to_hdf5(hdf5_file, results)
 
-        files_left = max(0, len(file_list) - (chunk_idx + 1) * chunk_size)
+        files_left = max(0, len(image_list) - (chunk_idx + 1) * chunk_size)
         print(f"[INFO] Completed chunk {chunk_idx + 1}/{chunk_count}. {files_left} files left to process.")
 
 
@@ -193,3 +197,9 @@ if __name__ == "__main__":
         num_workers=args.num_workers,
         chunk_size=args.chunk_size,
     )
+
+'''
+Usage:
+
+python3 -m dataset.creator ./configs/dead_trees_finland.txt
+'''

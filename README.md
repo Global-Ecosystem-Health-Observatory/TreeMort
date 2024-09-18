@@ -99,7 +99,10 @@ sh ./scripts/run_treemort.sh ./configs/unet_bs8_cs256.txt --eval-only true
 | Model      | Mean IOU Pixels | Mean IOU Trees | Mean IOU | Mean Balanced IOU | Mean Dice Score | Mean Adjusted Dice Score | Mean MCC | 
 | :--------: | :-------------: | :------------: ---------: | :---------------: | :-------------: | :----------------------: | :------: |
 | SA-Unet    | 0.281 | 0.749 | 0.840 | 0.997 | 0.334 | 0.736 | 0.342 |
-| FLAIR-Unet | 0.291 | 0.785 | 0.856 | 0.997 | 0.343 | 0.766 | 0.351 |
+| SA-Unet MS | 0.272 | 0.738 | 0.837 | 0.996 | 0.323 | 0.727 | 0.331 | 
+| FLAIR-Unet | 0.291 | 0.749 | 0.845 | 0.996 | 0.346 | 0.747 | 0.354 |
+| HCFNet     | 0.283 | 0.742 | 0.842 | 0.996 | 0.336 | 0.740 | 0.345 |
+| DeepLabV3+ | 0.287 | 0.773 | 0.856 | 0.997 | 0.342 | 0.769 | 0.350 |
 
 ## Getting Started (Mac OS, for development)
 

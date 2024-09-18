@@ -1,0 +1,13 @@
+# configurations for dataset creation for DRYTREE_Annotations for Finland
+
+#data-folder = /scratch/project_2008436/rahmanan/AerialImageModel_ITD
+data-folder = /Users/anisr/Documents/dead_trees_tmp/Finland/RGBNIR
+image-folder = 25cm
+label-folder = Geojsons
+hdf5-file = dead_trees_finland.h5
+
+window-size = 256
+stride = 128
+nir-rgb-order = [3, 2, 1, 0]
+
+normalize-channelwise

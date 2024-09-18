@@ -4,6 +4,6 @@ window-size = 256
 stride = 128
 nir-rgb-order = [3, 2, 1, 0]
 
-best-model = /Users/anisr/Documents/TreeSeg/output/sa_unet/best.weights.pth
+best-model = /Users/anisr/Documents/TreeSeg/output/flair_unet/best.weights.pth
 
-model-config = /Users/anisr/Documents/TreeSeg/configs/sa_unet_bs8_cs256.txt
+model-config = /Users/anisr/Documents/TreeSeg/configs/flair_unet_bs8_cs256.txt
