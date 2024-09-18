@@ -144,10 +144,11 @@ def run_inference(data_path, config_file_path, output_dir):
 
     if data_path.is_dir():
         print(f"[INFO] Processing all images in folder: {data_path}")
-        image_paths = (list(data_path.glob("*.tiff")) + list(data_path.glob("*.tif")))
+        image_paths = list(data_path.rglob("*.tiff")) + list(data_path.rglob("*.tif")) # What about jp2 format
         if not image_paths:
-            print(f"[ERROR] No images found in directory: {data_path}")
+            print(f"[ERROR] No images found in directory or its subdirectories: {data_path}")
             return
+        print(f"[INFO] Found {len(image_paths)} images.")
 
     elif data_path.is_file():
         print(f"[INFO] Processing single file: {data_path}")
@@ -165,7 +166,13 @@ def run_inference(data_path, config_file_path, output_dir):
 
     for image_path in image_paths:
         try:
-            geojson_path = os.path.join(output_dir, os.path.splitext(os.path.basename(image_path))[0] + ".geojson",)
+            geojson_path = str(image_path).replace("/Images/", "/Predictions/")
+            geojson_path = os.path.splitext(geojson_path)[0] + ".geojson"
+
+            directory = os.path.dirname(geojson_path)
+            if not os.path.exists(directory):
+                os.makedirs(directory, exist_ok=True)
+                print(f"[INFO] Created predictions directory: {directory}")
 
             process_image(model, image_path, geojson_path, window_size=conf.window_size, stride=conf.stride, threshold=conf.threshold, nir_rgb_order=conf.nir_rgb_order)
             print(f"[INFO] Processed image saved to: {geojson_path}")
@@ -200,10 +207,10 @@ if __name__ == "__main__":
 ''' Usage:
 
 - For single file:
-python -m inference.engine /Users/anisr/Documents/AerialImages/4band_25cm/M4424E_4_1.tiff --config /Users/anisr/Documents/TreeSeg/configs/inference.txt --outdir /Users/anisr/Documents/AerialImages/predictions
+python -m inference.engine /Users/anisr/Documents/dead_trees_tmp/Finland/RGBNIR/25cm/2011/Images/M3442B_2011_1.tiff --config ./configs/inference.txt --outdir /Users/anisr/Documents/dead_trees_tmp/Finland/RGBNIR/25cm/2011/predictions
 
 - For entire folder
-python -m inference.engine /Users/anisr/Documents/AerialImages/4band_25cm --config /Users/anisr/Documents/TreeSeg/configs/inference.txt --outdir /Users/anisr/Documents/AerialImages/predictions
+python -m inference.engine /Users/anisr/Documents/dead_trees_tmp/Finland/RGBNIR/25cm --config ./configs/inference.txt
 
 - Run viewer api service
 uvicorn treemort_api:app --reload
