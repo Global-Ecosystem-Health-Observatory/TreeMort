@@ -144,7 +144,7 @@ def run_inference(data_path, config_file_path, output_dir):
 
     if data_path.is_dir():
         print(f"[INFO] Processing all images in folder: {data_path}")
-        image_paths = list(data_path.rglob("*.tiff")) + list(data_path.rglob("*.tif")) # What about jp2 format
+        image_paths = list(data_path.rglob("*.tiff")) + list(data_path.rglob("*.tif")) + list(data_path.rglob("*.jp2"))
         if not image_paths:
             print(f"[ERROR] No images found in directory or its subdirectories: {data_path}")
             return
@@ -166,8 +166,11 @@ def run_inference(data_path, config_file_path, output_dir):
 
     for image_path in image_paths:
         try:
-            geojson_path = str(image_path).replace("/Images/", "/Predictions/")
-            geojson_path = os.path.splitext(geojson_path)[0] + ".geojson"
+            if output_dir:
+                geojson_path = os.path.join(output_dir, os.path.basename(os.path.splitext(image_path)[0] + ".geojson"))
+            else:
+                geojson_path = str(image_path).replace("/Images/", "/Predictions/")
+                geojson_path = os.path.splitext(geojson_path)[0] + ".geojson"
 
             directory = os.path.dirname(geojson_path)
             if not os.path.exists(directory):
@@ -210,7 +213,14 @@ if __name__ == "__main__":
 python -m inference.engine /Users/anisr/Documents/dead_trees_tmp/Finland/RGBNIR/25cm/2011/Images/M3442B_2011_1.tiff --config ./configs/inference.txt --outdir /Users/anisr/Documents/dead_trees_tmp/Finland/RGBNIR/25cm/2011/predictions
 
 - For entire folder
+
+1) save geojsons in a 'Predictions' folder alongside Images and Geojsons
+
 python -m inference.engine /Users/anisr/Documents/dead_trees_tmp/Finland/RGBNIR/25cm --config ./configs/inference.txt
+
+2) save geojsons to a folder rather than create a 'Predictions' folder alongside Images and Geojsons
+
+python -m inference.engine /Users/anisr/Documents/dead_trees_tmp/Finland/RGBNIR/25cm --config ./configs/inference.txt --outdir /Users/anisr/Documents/dead_trees_tmp/Finland/Predictions
 
 - Run viewer api service
 uvicorn treemort_api:app --reload
