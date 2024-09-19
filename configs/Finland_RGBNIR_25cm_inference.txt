@@ -1,0 +1,9 @@
+# configurations for inference creation
+
+window-size = 256
+stride = 128
+nir-rgb-order = [3, 2, 1, 0]
+
+best-model = /projappl/project_2004205/rahmanan/saved_models/flair_unet/best.weights.pth
+
+model-config = /Users/anisr/Documents/TreeSeg/configs/flair_unet_bs8_cs256_inference.txt
