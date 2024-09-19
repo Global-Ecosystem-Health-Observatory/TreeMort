@@ -5,5 +5,5 @@ module load pytorch/2.3
 python -m venv --system-site-packages venv
 source venv/bin/activate
 
-python -m pip install --upgrade .
+python -m pip install --upgrade --no-deps --force-reinstall .
 python -c "import treemort; print(\"TreeMort imported successfully.\")"

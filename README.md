@@ -62,9 +62,7 @@ echo $SHELL
 module load allas
 allas-conf
 
-cd /scratch/project_2008436/rahmanan/AerialImageModel_ITD
-
-swift download DRYTREE-project-AerialImageModel_ITD
+swift download DRYTREE_Annotations -p dead_trees/Finland -D /scratch/project_2008436/rahmanan/dead_trees/Finland
 ```
 
 2. Run script to create the HDF5 dataset.
@@ -120,7 +118,9 @@ python3 -m venv venv
 source venv/bin/activate
 
 pip install --upgrade pip
-pip install --upgrade --no-deps --force-reinstall .
+pip install -e .
+
+python -m pip install treemort@git+https://github.com/aniskhan25/climate-pix.git
 ```
 
 - Train a model

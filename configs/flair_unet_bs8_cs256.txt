@@ -6,7 +6,7 @@ hdf5-file = AerialImageModel_ITD.h5
 
 model = flair_unet
 
-output-dir = output/flair_unet
+output-dir = /projappl/project_2004205/rahmanan/saved_models/flair_unet
 
 train-crop-size = 256
 val-crop-size = 256

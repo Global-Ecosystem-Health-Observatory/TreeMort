@@ -1,9 +1,8 @@
 # configurations for dataset creation for DRYTREE_Annotations for Finland
 
-data-folder = /scratch/project_2008436/rahmanan/dead_trees/Finland/RGBNIR
+data-folder = /scratch/project_2008436/rahmanan/dead_trees/Finland/RGBNIR/25cm
 
-image-folder = 25cm
-hdf5-file = dead_trees_finland.h5
+hdf5-file = Finland_RGBNIR_25cm.h5
 
 window-size = 256
 stride = 128
