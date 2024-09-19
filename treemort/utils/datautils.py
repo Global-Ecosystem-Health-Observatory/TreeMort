@@ -2,7 +2,6 @@ import h5py
 import random
 
 from collections import defaultdict
-from sklearn.model_selection import train_test_split
 
 
 def load_and_organize_data(hdf5_file_path):

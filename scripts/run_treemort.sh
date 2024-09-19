@@ -48,7 +48,7 @@ fi
 cat <<EOT >> $SBATCH_SCRIPT
 
 module load pytorch/2.3
-source venv/bin/activate
+source /projappl/project_2004205/rahmanan/venv/bin/activate
 
 EOT
 

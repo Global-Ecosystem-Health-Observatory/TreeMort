@@ -52,6 +52,8 @@ def process_image(
     label_path,
     conf
 ):
+    image_name = os.path.basename(image_path)
+
     try:
         if conf.nir_rgb_order is not None:
             exim_np, adjusted_polygons = get_image_and_polygons_reorder(
@@ -72,12 +74,12 @@ def process_image(
         topolabel = segmap_to_topo(exim_np, adjusted_polygons)
         patches = extract_patches(exim_np, topolabel, conf.window_size, conf.stride)
 
-        labeled_patches = [(patch[0], patch[1], int(np.any(patch[1])), os.path.basename(image_path)) for patch in patches]
-        return image_path, labeled_patches
+        labeled_patches = [(patch[0], patch[1], int(np.any(patch[1])), image_name) for patch in patches]
+        return image_name, labeled_patches
     
     except Exception as e:
         print(f"[ERROR] Failed to process {image_path}: {e}")
-        return image_path, []
+        return image_name, []
 
 
 def write_to_hdf5(hdf5_file, data):
@@ -200,10 +202,10 @@ if __name__ == "__main__":
 '''
 Usage:
 
-python3 -m dataset.creator ./configs/dead_trees_finland.txt
+python3 -m dataset.creator ./configs/Finland_RGBNIR_25cm.txt
 
 - For testing only
 
-python3 -m dataset.creator ./configs/dead_trees_finland.txt --no-of-samples 3
+python3 -m dataset.creator ./configs/Finland_RGBNIR_25cm.txt --no-of-samples 3
 
 '''

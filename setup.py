@@ -20,5 +20,6 @@ setup(
         'transformers',
         'geojson',
         'geopandas',
+        'scikit-learn',
     ],
 )

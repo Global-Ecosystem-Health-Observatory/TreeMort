@@ -47,7 +47,7 @@ class PretrainedUNetModel:
         return model
 
     def _load_pretrained_weights(self):
-        self.model.load_state_dict(torch.load(self.checkpoint_path), strict=False)
+        self.model.load_state_dict(torch.load(self.checkpoint_path, weights_only=True), strict=False)
 
     def get_model(self):
         return self.model
