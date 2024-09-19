@@ -104,10 +104,10 @@ def convert_to_hdf5(
     num_workers=4,
     chunk_size=10,
 ):
-    data_path = Path(os.path.join(conf.data_folder, conf.image_folder))
-    hdf5_file = Path(os.path.join(conf.data_folder, conf.hdf5_file))
+    data_path = Path(conf.data_folder)
+    hdf5_path = Path(conf.data_folder).parent / conf.hdf5_file
     
-    assert not os.path.exists(hdf5_file), f"[ERROR] The HDF5 file '{hdf5_file}' already exists. Please provide a different file name or delete the existing file."
+    assert not os.path.exists(hdf5_path), f"[ERROR] The HDF5 file '{hdf5_path}' already exists. Please provide a different file name or delete the existing file."
 
     image_list = []
     label_list = []
@@ -115,8 +115,8 @@ def convert_to_hdf5(
     image_list = list(data_path.rglob("*.tiff")) + list(data_path.rglob("*.tif")) + list(data_path.rglob("*.jp2"))
 
     for image_path in image_list[:]:  # Using image_list[:] to make a copy for safe removal
-        label_path = str(image_path).replace("/Images/", "/Geojsons/")
-        label_path = os.path.splitext(label_path)[0] + ".geojson"
+        label_path = Path(str(image_path).replace("/Images/", "/Geojsons/"))
+        label_path = label_path.with_suffix(".geojson")
 
         if os.path.exists(label_path):
             label_list.append(label_path)
@@ -158,7 +158,7 @@ def convert_to_hdf5(
                 except Exception as e:
                     print(f"[ERROR] File {file} generated an exception: {e}")
 
-            #write_to_hdf5(hdf5_file, results)
+            write_to_hdf5(hdf5_path, results)
 
         files_left = max(0, len(image_list) - (chunk_idx + 1) * chunk_size)
         print(f"[INFO] Completed chunk {chunk_idx + 1}/{chunk_count}. {files_left} files left to process.")
@@ -168,7 +168,6 @@ def parse_config(config_file_path):
     parser = configargparse.ArgParser(default_config_files=[config_file_path])
 
     parser.add("--data-folder",             type=str, required=True,    help="directory with aerial image and label data")
-    parser.add("--image-folder",            type=str, required=True,    help="name of image directory")
     parser.add("--hdf5-file",               type=str, required=True,    help="name of output hdf5 file")
     parser.add("--num-workers",             type=int, default=4,        help="number of workers for parallel processing")
     parser.add("--window-size",             type=int, default=256,      help="size of the window")
