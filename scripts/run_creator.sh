@@ -9,5 +9,4 @@
 module load python-data
 source venv/bin/activate
 
-srun python3 ./dataset/creator.py ./configs/dead_trees_finland.txt
-
+srun python3 -m dataset.creator ./configs/dead_trees_finland.txt

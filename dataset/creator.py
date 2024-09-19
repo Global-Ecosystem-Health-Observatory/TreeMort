@@ -6,6 +6,8 @@ import concurrent.futures
 
 import numpy as np
 
+from pathlib import Path
+
 from dataset.preprocessutils import (
     get_image_and_polygons_reorder,
     get_image_and_polygons_normalize,
@@ -50,8 +52,6 @@ def process_image(
     label_path,
     conf
 ):
-    image_name = os.path.basename(image_path)
-
     try:
         if conf.nir_rgb_order is not None:
             exim_np, adjusted_polygons = get_image_and_polygons_reorder(
@@ -72,12 +72,12 @@ def process_image(
         topolabel = segmap_to_topo(exim_np, adjusted_polygons)
         patches = extract_patches(exim_np, topolabel, conf.window_size, conf.stride)
 
-        labeled_patches = [(patch[0], patch[1], int(np.any(patch[1])), image_path) for patch in patches]
-        return image_name, labeled_patches
+        labeled_patches = [(patch[0], patch[1], int(np.any(patch[1])), os.path.basename(image_path)) for patch in patches]
+        return image_path, labeled_patches
     
     except Exception as e:
         print(f"[ERROR] Failed to process {image_path}: {e}")
-        return image_name, []
+        return image_path, []
 
 
 def write_to_hdf5(hdf5_file, data):
@@ -104,28 +104,29 @@ def convert_to_hdf5(
     num_workers=4,
     chunk_size=10,
 ):
-    image_folder = os.path.join(conf.data_folder, conf.image_folder)
-    label_folder = os.path.join(conf.data_folder, conf.label_folder)
-    hdf5_file = os.path.join(conf.data_folder, conf.hdf5_file)
+    data_path = Path(os.path.join(conf.data_folder, conf.image_folder))
+    hdf5_file = Path(os.path.join(conf.data_folder, conf.hdf5_file))
     
     assert not os.path.exists(hdf5_file), f"[ERROR] The HDF5 file '{hdf5_file}' already exists. Please provide a different file name or delete the existing file."
 
     image_list = []
     label_list = []
 
-    for root, dirs, files in os.walk(image_folder):
-        for file in files:
-            if file.endswith(("jp2", "tif", "tiff")):
-                image_path = os.path.join(root, file)
-                image_list.append(image_path)
+    image_list = list(data_path.rglob("*.tiff")) + list(data_path.rglob("*.tif")) + list(data_path.rglob("*.jp2"))
 
-                label_path = image_path.replace("/Images/", "/Geojsons/")
-                label_path = os.path.splitext(label_path)[0] + ".geojson"
+    for image_path in image_list[:]:  # Using image_list[:] to make a copy for safe removal
+        label_path = str(image_path).replace("/Images/", "/Geojsons/")
+        label_path = os.path.splitext(label_path)[0] + ".geojson"
 
-                if os.path.exists(label_path):
-                    label_list.append(label_path)
-                else:
-                    print(f"[WARNING] Labels not found for {file}")
+        if os.path.exists(label_path):
+            label_list.append(label_path)
+        else:
+            image_list.remove(image_path)
+            print(f"[WARNING] Labels not found for {image_path}")
+
+    if no_of_samples is not None:
+        image_list = image_list[:no_of_samples]
+        label_list = label_list[:no_of_samples]
 
     chunk_count = len(image_list) // chunk_size + int(len(image_list) % chunk_size != 0)
 
@@ -157,7 +158,7 @@ def convert_to_hdf5(
                 except Exception as e:
                     print(f"[ERROR] File {file} generated an exception: {e}")
 
-            write_to_hdf5(hdf5_file, results)
+            #write_to_hdf5(hdf5_file, results)
 
         files_left = max(0, len(image_list) - (chunk_idx + 1) * chunk_size)
         print(f"[INFO] Completed chunk {chunk_idx + 1}/{chunk_count}. {files_left} files left to process.")
@@ -168,7 +169,6 @@ def parse_config(config_file_path):
 
     parser.add("--data-folder",             type=str, required=True,    help="directory with aerial image and label data")
     parser.add("--image-folder",            type=str, required=True,    help="name of image directory")
-    parser.add("--label-folder",            type=str, required=True,    help="name of label directory")
     parser.add("--hdf5-file",               type=str, required=True,    help="name of output hdf5 file")
     parser.add("--num-workers",             type=int, default=4,        help="number of workers for parallel processing")
     parser.add("--window-size",             type=int, default=256,      help="size of the window")
@@ -202,4 +202,9 @@ if __name__ == "__main__":
 Usage:
 
 python3 -m dataset.creator ./configs/dead_trees_finland.txt
+
+- For testing only
+
+python3 -m dataset.creator ./configs/dead_trees_finland.txt --no-of-samples 3
+
 '''
