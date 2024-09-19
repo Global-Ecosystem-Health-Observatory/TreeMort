@@ -5,11 +5,13 @@ from tqdm import tqdm
 from treemort.training.output_processing import process_model_output
 
 
-def train_one_epoch(model, optimizer, criterion, metrics, train_loader, conf, device, image_processor, class_weights):
+def train_one_epoch(model, optimizer, criterion, metrics, train_loader, conf, device):
     model.train()
     train_loss = 0.0
     train_metrics = {}
 
+    class_weights = torch.tensor(conf.class_weights, dtype=torch.float32).to(device)
+    
     train_progress_bar = tqdm(train_loader, desc=f"Training", unit="batch")
 
     for batch_idx, (images, labels) in enumerate(train_progress_bar):

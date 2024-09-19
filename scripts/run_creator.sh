@@ -9,4 +9,4 @@
 module load python-data
 source /projappl/project_2004205/rahmanan/venv/bin/activate
 
-srun python3 -m dataset.creator ./configs/dead_trees_finland.txt
+srun python3 -m dataset.creator ./configs/Finland_RGBNIR_25cm.txt

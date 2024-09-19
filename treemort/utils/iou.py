@@ -15,7 +15,6 @@ class IOUCallback:
         batch_size,
         threshold,
         model_name,
-        image_processor=None,
     ):
         self.model = model
         self.dataset = dataset
@@ -23,7 +22,6 @@ class IOUCallback:
         self.batch_size = batch_size
         self.threshold = threshold
         self.model_name = model_name
-        self.image_processor = image_processor
         self.device = next(model.parameters()).device  # Get the device of the model
 
     def evaluate(self):
@@ -243,7 +241,6 @@ class IOUCallback:
         adjusted_dice_scores,
         mcc_scores,
     ):
-
         mean_iou_pixels = np.mean(pixel_ious)
         mean_iou_trees = np.mean(tree_ious)
         mean_iou = np.mean(mean_ious)

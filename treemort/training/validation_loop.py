@@ -5,10 +5,12 @@ from tqdm import tqdm
 from treemort.training.output_processing import process_model_output
 
 
-def validate_one_epoch(model, criterion, metrics, val_loader, conf, device, image_processor, class_weights):
+def validate_one_epoch(model, criterion, metrics, val_loader, conf, device):
     model.eval()
     val_loss = 0.0
     val_metrics = {}
+
+    class_weights = torch.tensor(conf.class_weights, dtype=torch.float32).to(device)
 
     val_progress_bar = tqdm(val_loader, desc=f"Validation", unit="batch")
     
