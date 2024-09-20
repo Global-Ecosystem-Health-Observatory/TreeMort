@@ -9,7 +9,7 @@
 #SBATCH --partition=small
 #SBATCH --mem-per-cpu=6000
 
-module load python-data
+module load pytorch/2.3
 
 VENV_PATH="/projappl/project_2004205/rahmanan/venv"
 
