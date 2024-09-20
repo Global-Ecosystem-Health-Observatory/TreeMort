@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=treemort-creator
+#SBATCH --job-name=treemort-inference
 #SBATCH --account=project_2004205
 #SBATCH --output=output/stdout/%A_%a.out
 #SBATCH --error=output/stderr/%A_%a.err

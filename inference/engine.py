@@ -210,22 +210,33 @@ if __name__ == "__main__":
 ''' Usage:
 
 - For single file:
-python -m inference.engine /Users/anisr/Documents/dead_trees_tmp/Finland/RGBNIR/25cm/2011/Images/M3442B_2011_1.tiff --config ./configs/inference.txt --outdir /Users/anisr/Documents/dead_trees_tmp/Finland/RGBNIR/25cm/2011/predictions
+
+python -m inference.engine \
+    /Users/anisr/Documents/dead_trees_tmp/Finland/RGBNIR/25cm/2011/Images/M3442B_2011_1.tiff \
+    --config ./configs/Finland_RGBNIR_25cm_inference.txt \
+    --outdir /Users/anisr/Documents/dead_trees_tmp/Finland/RGBNIR/25cm/2011/predictions
 
 - For entire folder
 
 1) save geojsons in a 'Predictions' folder alongside Images and Geojsons
 
-python -m inference.engine /Users/anisr/Documents/dead_trees_tmp/Finland/RGBNIR/25cm --config ./configs/inference.txt
+python -m inference.engine \
+    /Users/anisr/Documents/dead_trees_tmp/Finland/RGBNIR/25cm \
+    --config ./configs/Finland_RGBNIR_25cm_inference.txt
 
 2) save geojsons to a folder rather than create a 'Predictions' folder alongside Images and Geojsons
 
-python -m inference.engine /Users/anisr/Documents/dead_trees_tmp/Finland/RGBNIR/25cm --config ./configs/inference.txt --outdir /Users/anisr/Documents/dead_trees_tmp/Finland/Predictions
+python -m inference.engine \
+    /Users/anisr/Documents/dead_trees_tmp/Finland/RGBNIR/25cm \
+    --config ./configs/Finland_RGBNIR_25cm_inference.txt \
+    --outdir /Users/anisr/Documents/dead_trees_tmp/Finland/Predictions
 
 - Run viewer api service
+
 uvicorn treemort_api:app --reload
 
 - Run viewer application
+
 streamlit run treemort_app.py
 
 '''
