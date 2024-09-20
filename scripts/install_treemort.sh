@@ -2,11 +2,11 @@
 
 MODULE_NAME="pytorch/2.3"
 VENV_PATH="/projappl/project_2004205/rahmanan/venv"
-PACKAGE_DIR="."
+PACKAGE_DIR="/users/rahmanan/TreeMort"
 
 module load $MODULE_NAME
 
-python -m venv --system-site-packages $VENV_PATH
+python3 -m venv --system-site-packages $VENV_PATH
 
 if [ $? -ne 0 ]; then
     echo "Error: Failed to create virtual environment."
@@ -20,7 +20,8 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-python -m pip install --upgrade --no-deps --force-reinstall $PACKAGE_DIR
+python -m pip install --upgrade pip
+python -m pip install -e $PACKAGE_DIR
 
 if [ $? -ne 0 ]; then
     echo "Error: Failed to install the package."
