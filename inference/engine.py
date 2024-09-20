@@ -194,14 +194,10 @@ def main():
     args = parser.parse_args()
 
     if args.outdir:
-        output_dir = args.outdir
-    else:
-        output_dir = os.path.dirname(args.data_path) if os.path.isfile(args.data_path) else args.data_path
+        if not os.path.exists(args.outdir):
+            os.makedirs(args.outdir)
 
-    if not os.path.exists(output_dir):
-        os.makedirs(output_dir)
-
-    run_inference(args.data_path, args.config, output_dir)
+    run_inference(args.data_path, args.config, args.outdir)
 
 
 if __name__ == "__main__":
@@ -211,25 +207,33 @@ if __name__ == "__main__":
 
 - For single file:
 
+1) save geojsons in a 'Predictions' folder alongside Images and Geojsons
+
 python -m inference.engine \
-    /Users/anisr/Documents/dead_trees_tmp/Finland/RGBNIR/25cm/2011/Images/M3442B_2011_1.tiff \
+    /Users/anisr/Documents/dead_trees/Finland/RGBNIR/25cm/2011/Images/M3442B_2011_1.tiff \
+    --config ./configs/Finland_RGBNIR_25cm_inference.txt
+
+2) save geojsons to an output folder
+
+python -m inference.engine \
+    /Users/anisr/Documents/dead_trees/Finland/RGBNIR/25cm/2011/Images/M3442B_2011_1.tiff \
     --config ./configs/Finland_RGBNIR_25cm_inference.txt \
-    --outdir /Users/anisr/Documents/dead_trees_tmp/Finland/RGBNIR/25cm/2011/predictions
+    --outdir /Users/anisr/Documents/dead_trees/Finland/RGBNIR/25cm/2011/Predictions
 
 - For entire folder
 
 1) save geojsons in a 'Predictions' folder alongside Images and Geojsons
 
 python -m inference.engine \
-    /Users/anisr/Documents/dead_trees_tmp/Finland/RGBNIR/25cm \
+    /Users/anisr/Documents/dead_trees/Finland/RGBNIR/25cm \
     --config ./configs/Finland_RGBNIR_25cm_inference.txt
 
-2) save geojsons to a folder rather than create a 'Predictions' folder alongside Images and Geojsons
+2) save geojsons to output folder
 
 python -m inference.engine \
-    /Users/anisr/Documents/dead_trees_tmp/Finland/RGBNIR/25cm \
+    /Users/anisr/Documents/dead_trees/Finland/RGBNIR/25cm \
     --config ./configs/Finland_RGBNIR_25cm_inference.txt \
-    --outdir /Users/anisr/Documents/dead_trees_tmp/Finland/Predictions
+    --outdir /Users/anisr/Documents/dead_trees/Finland/Predictions
 
 - Run viewer api service
 
