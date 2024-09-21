@@ -1,4 +1,11 @@
 import torch
+import logging
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 
 class ModelCheckpoint:
@@ -32,12 +39,12 @@ class ModelCheckpoint:
             ):
                 self.best = val_loss
                 if self.verbose:
-                    print(f"Saving best model with {self.monitor}: {val_loss}")
+                    logger.info(f"Saving best model with {self.monitor}: {val_loss}")
                 torch.save(model.state_dict(), self.filepath)
         else:
             if epoch % self.save_freq == 0:
                 if self.verbose:
-                    print(f"Saving model at epoch {epoch}")
+                    logger.info(f"Saving model at epoch {epoch}")
                 torch.save(model.state_dict(), self.filepath.format(epoch=epoch))
 
 
@@ -73,7 +80,7 @@ class ReduceLROnPlateau:
                 if new_lr >= self.min_lr:
                     param_group["lr"] = new_lr
                     if self.verbose:
-                        print(f"Reducing learning rate to {new_lr}")
+                        logger.info(f"Reducing learning rate to {new_lr}")
                 else:
                     param_group["lr"] = self.min_lr
             self.num_bad_epochs = 0
@@ -99,4 +106,4 @@ class EarlyStopping:
             self.stopped_epoch = epoch
             self.stop_training = True
             if self.verbose:
-                print(f"Early stopping at epoch {epoch}")
+                logger.info(f"Early stopping at epoch {epoch}")
