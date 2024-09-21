@@ -208,4 +208,8 @@ python3 -m dataset.creator ./configs/Finland_RGBNIR_25cm.txt
 
 python3 -m dataset.creator ./configs/Finland_RGBNIR_25cm.txt --no-of-samples 3
 
+- For Puhti
+
+sbatch ~/TreeMort/scripts/run_creator.sh
+
 '''

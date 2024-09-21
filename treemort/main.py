@@ -76,3 +76,17 @@ if __name__ == "__main__":
     conf = setup(args.config)
 
     run(conf, args.eval_only)
+
+
+'''
+Usage:
+
+- Train
+
+sh ~/TreeMort/scripts/run_treemort.sh ~/TreeMort/configs/flair_unet_bs8_cs256.txt --eval-only false
+
+- Evaluate
+
+sh ~/TreeMort/scripts/run_treemort.sh ~/TreeMort/configs/flair_unet_bs8_cs256.txt --eval-only true
+
+'''
