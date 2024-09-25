@@ -1,0 +1,11 @@
+# configurations for dataset creation for DRYTREE_Annotations for Poland
+
+data-folder = /scratch/project_2008436/rahmanan/dead_trees/Poland/RGBNIR/25cm
+
+hdf5-file = Poland_RGBNIR_25cm.h5
+
+window-size = 256
+stride = 128
+nir-rgb-order = [3, 2, 1, 0]
+
+normalize-channelwise
