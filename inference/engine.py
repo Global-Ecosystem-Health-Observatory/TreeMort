@@ -1,5 +1,6 @@
 import os
 import torch
+import logging
 import argparse
 import configargparse
 
@@ -18,6 +19,13 @@ from inference.utils import (
     save_geojson,
     pad_image,
 )
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 
 def sliding_window_inference(model, image, window_size=256, stride=128, batch_size=8):
@@ -50,6 +58,7 @@ def sliding_window_inference(model, image, window_size=256, stride=128, batch_si
 
     count_map[count_map == 0] = 1  # Avoid division by zero
     prediction_map /= count_map
+    #prediction_map = np.maximum(prediction_map, count_map)
 
     return prediction_map
 
@@ -63,27 +72,28 @@ def process_batch(patches, coords, prediction_map, count_map, model, device):
 
     for i, (y, x) in enumerate(coords):
         confidence = predictions[i]
+        mask = (confidence >= 0.5).astype(np.float32)
         prediction_map[y : y + confidence.shape[0], x : x + confidence.shape[1]] += confidence
-        count_map[y : y + confidence.shape[0], x : x + confidence.shape[1]] += 1
+        count_map[y : y + confidence.shape[0], x : x + confidence.shape[1]] += mask
 
     return prediction_map, count_map
 
 
 def load_model(config_path, best_model, id2label):
-    print("[INFO] Loading model configuration...")
+    logging.info("Loading model configuration...")
     conf = setup(config_path)
-    print("[INFO] Model configuration are loaded.")
+    logging.info("Model configuration loaded.")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"[INFO] Using device: {device}")
+    logging.info(f"Using device: {device}")
 
-    print("[INFO] Loading or resuming model...")
+    logging.info("Loading or resuming model...")
     model, _, _, _ = build_model(conf, id2label, device)
     model = model.to(device)
-    print(f"[INFO] Model, optimizer, criterion, and metrics are set up.")
+    logging.info("Model, optimizer, criterion, and metrics are set up.")
 
-    model.load_state_dict(torch.load(best_model, map_location=device))
-    print(f"[INFO] Loaded weights from {best_model}.")
+    model.load_state_dict(torch.load(best_model, map_location=device, weights_only=True))
+    logging.info(f"Loaded weights from {best_model}.")
 
     return model
 
@@ -97,25 +107,25 @@ def process_image(
     threshold=0.5,
     nir_rgb_order=[3, 2, 1, 0],
 ):
-    print(f"[INFO] Starting process for image: {image_path}")
+    logging.info(f"Starting process for image: {image_path}")
 
     image, transform, crs = load_and_preprocess_image(image_path, nir_rgb_order)
-    print(f"[INFO] Image loaded and prepr ocessed. Shape: {image.shape}, Transform: {transform}")
+    logging.info(f"Image loaded and preprocessed. Shape: {image.shape}, Transform: {transform}")
 
     prediction_map = sliding_window_inference(model, image, window_size, stride)
-    print(f"[INFO] Prediction map generated with shape: {prediction_map.shape}")
+    logging.info(f"Prediction map generated with shape: {prediction_map.shape}")
 
     binary_mask = threshold_prediction_map(prediction_map, threshold)
-    print(f"[INFO] Binary mask created with threshold: {threshold}. Mask shape: {binary_mask.shape}")
+    logging.info(f"Binary mask created with threshold: {threshold}. Mask shape: {binary_mask.shape}")
 
     contours = extract_contours(binary_mask)
-    print(f"[INFO] {len(contours)} contours extracted from binary mask")
+    logging.info(f"{len(contours)} contours extracted from binary mask")
 
     geojson_data = contours_to_geojson(contours, transform, crs, os.path.splitext(os.path.basename(image_path))[0])
-    print(f"[INFO] Contours converted to GeoJSON format")
+    logging.info("Contours converted to GeoJSON format")
 
     save_geojson(geojson_data, geojson_path)
-    print(f"[INFO] GeoJSON saved to {geojson_path}")
+    logging.info(f"GeoJSON saved to {geojson_path}")
 
 
 def parse_config(config_file_path):
@@ -135,33 +145,31 @@ def parse_config(config_file_path):
 
 def run_inference(data_path, config_file_path, output_dir):
     id2label = {0: "alive", 1: "dead"}
-
     conf = parse_config(config_file_path)
-
     model = load_model(conf.model_config, conf.best_model, id2label)
 
     data_path = Path(data_path)
 
     if data_path.is_dir():
-        print(f"[INFO] Processing all images in folder: {data_path}")
+        logging.info(f"Processing all images in folder: {data_path}")
         image_paths = list(data_path.rglob("*.tiff")) + list(data_path.rglob("*.tif")) + list(data_path.rglob("*.jp2"))
         if not image_paths:
-            print(f"[ERROR] No images found in directory or its subdirectories: {data_path}")
+            logging.error(f"No images found in directory or its subdirectories: {data_path}")
             return
-        print(f"[INFO] Found {len(image_paths)} images.")
+        logging.info(f"Found {len(image_paths)} images.")
 
     elif data_path.is_file():
-        print(f"[INFO] Processing single file: {data_path}")
+        logging.info(f"Processing single file: {data_path}")
         if data_path.suffix.lower() in [".tiff", ".tif"]:
             image_paths = [data_path]
         else:
             with open(data_path, "r") as file:
                 image_paths = [Path(line.strip()) for line in file.readlines() if line.strip()]
             if not image_paths:
-                print(f"[ERROR] No valid image paths found in file: {data_path}")
+                logging.error(f"No valid image paths found in file: {data_path}")
                 return
     else:
-        print(f"[ERROR] Invalid input path: {data_path}")
+        logging.error(f"Invalid input path: {data_path}")
         return
 
     for image_path in image_paths:
@@ -175,13 +183,13 @@ def run_inference(data_path, config_file_path, output_dir):
             directory = os.path.dirname(geojson_path)
             if not os.path.exists(directory):
                 os.makedirs(directory, exist_ok=True)
-                print(f"[INFO] Created predictions directory: {directory}")
+                logging.info(f"Created predictions directory: {directory}")
 
             process_image(model, image_path, geojson_path, window_size=conf.window_size, stride=conf.stride, threshold=conf.threshold, nir_rgb_order=conf.nir_rgb_order)
-            print(f"[INFO] Processed image saved to: {geojson_path}")
+            logging.info(f"Processed image saved to: {geojson_path}")
 
         except Exception as e:
-            print(f"[ERROR] Failed to process image: {image_path}. Error: {e}")
+            logging.error(f"Failed to process image: {image_path}. Error: {e}")
 
 
 def main():
