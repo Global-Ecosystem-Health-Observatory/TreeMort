@@ -20,7 +20,7 @@ else
     exit 1
 fi
 
-CONFIG_PATH="/users/rahmanan/TreeMort/configs/Finland_RGBNIR_25cm.txt"
+CONFIG_PATH="/users/rahmanan/TreeMort/configs/Poland_RGBNIR_25cm.txt"
 
 if [ ! -f "$CONFIG_PATH" ]; then
     echo "[ERROR] Config file not found at $CONFIG_PATH"
