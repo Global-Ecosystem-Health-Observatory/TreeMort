@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 def configure_optimizer(model, learning_rate):
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=learning_rate)
     logger.info(f"{optimizer.__class__.__name__} optimizer configured with learning rate {learning_rate}.")
     return optimizer
 
