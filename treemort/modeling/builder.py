@@ -24,11 +24,6 @@ def resume_or_load(conf, id2label, n_batches, device):
 
     if conf.resume:
         load_checkpoint_if_available(model, conf)
-
-        for param in model.feature_extractor.model.seg_model.encoder.parameters():
-            param.requires_grad = False
-        logger.info("Encoder layers have been re-frozen after loading checkpoint.")
-        
     else:
         logger.info("Training model from scratch.")
 
@@ -50,10 +45,6 @@ def build_model(conf, id2label, device):
     model = configure_model(conf, id2label)
     model.to(device)
     logger.info(f"Model successfully moved to {device}.")
-
-    for param in model.feature_extractor.model.seg_model.encoder.parameters():
-        param.requires_grad = False
-    logger.info("Encoder layers have been frozen for transfer learning.")
 
     optimizer = configure_optimizer(model, conf.learning_rate)
     criterion, metrics = configure_loss_and_metrics(conf)
