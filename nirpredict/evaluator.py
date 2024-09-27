@@ -1,12 +1,14 @@
 import torch
 
-
-def evaluate(nir_model, test_nir_loader, criterion):
+def evaluate(nir_model, test_nir_loader, criterion, device):
     nir_model.eval()
 
     test_loss = 0.0
     with torch.no_grad():
         for rgb_test_batch, nir_test_batch in test_nir_loader:
+            rgb_test_batch = rgb_test_batch.to(device)
+            nir_test_batch = nir_test_batch.to(device)
+
             nir_target = nir_model(rgb_test_batch)
 
             test_loss += criterion(nir_target, nir_test_batch.unsqueeze(1)).item()

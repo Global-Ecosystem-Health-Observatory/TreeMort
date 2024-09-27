@@ -38,11 +38,11 @@ def run(conf):
     logger.info("Data loaded successfully.")
     
     logger.info("Starting training...")
-    train(nir_model, train_nir_loader, val_nir_loader, optimizer, criterion, num_epochs=conf.epochs, outdir=conf.output_dir)
+    train(nir_model, train_nir_loader, val_nir_loader, optimizer, criterion, device, num_epochs=conf.epochs, outdir=conf.output_dir)
     logger.info("Training completed.")
     
     logger.info("Starting evaluation...")
-    evaluate(nir_model, test_nir_loader, criterion)
+    evaluate(nir_model, test_nir_loader, criterion, device)
     logger.info("Evaluation completed.")
 
 

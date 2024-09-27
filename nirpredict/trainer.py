@@ -1,10 +1,8 @@
-import os
 import torch
-
 from tqdm import tqdm
+import os
 
-
-def train(nir_model, train_nir_loader, val_nir_loader, optimizer, criterion, num_epochs=10, outdir="output"):
+def train(nir_model, train_nir_loader, val_nir_loader, optimizer, criterion, device, num_epochs=10, outdir="output"):
     best_val_loss = float("inf")
 
     if not os.path.exists(outdir):
@@ -17,6 +15,9 @@ def train(nir_model, train_nir_loader, val_nir_loader, optimizer, criterion, num
         train_loader_tqdm = tqdm(train_nir_loader, desc=f"Epoch [{epoch+1}/{num_epochs}] Training", leave=False)
 
         for rgb_batch, nir_batch in train_loader_tqdm:
+            rgb_batch = rgb_batch.to(device)
+            nir_batch = nir_batch.to(device)
+
             optimizer.zero_grad()
 
             outputs = nir_model(rgb_batch)
@@ -35,6 +36,9 @@ def train(nir_model, train_nir_loader, val_nir_loader, optimizer, criterion, num
         val_loader_tqdm = tqdm(val_nir_loader, desc=f"Epoch [{epoch+1}/{num_epochs}] Validation", leave=False)
         with torch.no_grad():
             for rgb_val_batch, nir_val_batch in val_loader_tqdm:
+                rgb_val_batch = rgb_val_batch.to(device)
+                nir_val_batch = nir_val_batch.to(device)
+
                 val_outputs = nir_model(rgb_val_batch)
                 val_loss += criterion(val_outputs, nir_val_batch.unsqueeze(1)).item()
 
