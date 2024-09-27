@@ -60,3 +60,17 @@ if __name__ == "__main__":
     logger.info(f"Data folder set to {conf.data_folder}.")
     
     run(conf)
+
+
+    '''
+    Usage:
+
+    - Local machine
+
+    python -m nirpredict.main ./configs/nirpredict.txt  
+
+    - Puhti
+    
+    sbatch ~/TreeMort/scripts/run_nirpredict.sh
+
+    '''
