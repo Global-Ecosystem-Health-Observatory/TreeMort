@@ -2,7 +2,7 @@
 
 window-size = 256
 stride = 128
-nir-rgb-order = [3, 2, 1, 0]
+nir-rgb-order = [3, 0, 1, 2]
 
 best-model = /projappl/project_2004205/rahmanan/saved_models/flair_unet/best.weights.pth
 
