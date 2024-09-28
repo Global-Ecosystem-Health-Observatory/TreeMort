@@ -55,10 +55,7 @@ if __name__ == "__main__":
     logger.info(f"Loading configuration from {args.config}...")
     conf = setup(args.config)
     logger.info("Configuration loaded successfully.")
-    
-    conf.data_folder = '/Users/anisr/Documents/dead_trees/Finland/RGBNIR/25cm'
-    conf.epochs = 1
-    
+
     logger.info(f"Data folder set to {conf.data_folder}.")
     
     run(conf)
