@@ -5,6 +5,7 @@ torch
 geojson
 rasterio
 geopandas
+pydensecrf
 matplotlib
 torchvision
 transformers

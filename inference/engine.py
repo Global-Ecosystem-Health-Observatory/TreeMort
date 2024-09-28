@@ -6,6 +6,9 @@ import configargparse
 
 import numpy as np
 
+import pydensecrf.densecrf as dcrf
+from pydensecrf.utils import unary_from_softmax, create_pairwise_bilateral, create_pairwise_gaussian
+
 from pathlib import Path
 
 from treemort.utils.config import setup
@@ -98,6 +101,39 @@ def load_model(config_path, best_model, id2label):
     return model
 
 
+def refine_prediction_map(image, mask_prob, num_classes=2, num_iterations=10):
+    channels, height, width = image.shape
+
+    # Slice the prediction map to remove the padding from the bottom and right
+    unpadded_mask_prob = mask_prob[:height, :width]
+    
+    # Prepare the CRF model
+    dcrf_model = dcrf.DenseCRF2D(width, height, num_classes)
+    
+    # Create a 2-channel probability map for foreground and background
+    background_prob = 1 - unpadded_mask_prob
+    mask_prob_2d = np.stack([background_prob, unpadded_mask_prob], axis=0)
+
+    # Prepare unary potentials (logits from model)
+    unary = unary_from_softmax(mask_prob_2d)  # Now should be (2, H * W)
+    dcrf_model.setUnaryEnergy(unary)
+
+    # Create pairwise Gaussian potentials (based on pixel position)
+    gaussian_pairwise = create_pairwise_gaussian(sdims=(3, 3), shape=(width, height))
+    dcrf_model.addPairwiseEnergy(gaussian_pairwise, compat=1)  # Lower compatibility weight
+
+    # Create pairwise bilateral potentials (based on pixel position and color)
+    bilateral_pairwise = create_pairwise_bilateral(sdims=(50, 50), schan=(5, 5, 5), img=image.transpose(1, 2, 0), chdim=2)
+    dcrf_model.addPairwiseEnergy(bilateral_pairwise, compat=1)  # Lower compatibility weight
+
+    refined_mask = dcrf_model.inference(num_iterations)
+    
+    refined_mask = np.argmax(refined_mask, axis=0).reshape((height, width))
+    print("Refined mask unique values:", np.unique(refined_mask))
+    
+    return refined_mask
+
+
 def process_image(
     model,
     image_path,
@@ -114,6 +150,9 @@ def process_image(
 
     prediction_map = sliding_window_inference(model, image, window_size, stride)
     logging.info(f"Prediction map generated with shape: {prediction_map.shape}")
+
+    #refined_map = refine_prediction_map(image, prediction_map)
+    #logging.info(f"Refined prediction map generated with shape: {refined_map.shape}")
 
     binary_mask = threshold_prediction_map(prediction_map, threshold)
     logging.info(f"Binary mask created with threshold: {threshold}. Mask shape: {binary_mask.shape}")
