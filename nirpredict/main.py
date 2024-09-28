@@ -6,7 +6,7 @@ import argparse
 from treemort.utils.config import setup
 
 from nirpredict.data import load_data
-from nirpredict.model import build_model
+from nirpredict.model import build_model, load_best_weights
 from nirpredict.trainer import train
 from nirpredict.evaluator import evaluate
 
@@ -30,7 +30,7 @@ def run(conf):
     logger.info(f"Using device: {device}")
     
     logger.info("Building the NIR model...")
-    nir_model, criterion, optimizer = build_model(device)
+    nir_model, criterion, optimizer = build_model(device, outdir=conf.output_dir)
     logger.info("Model built successfully.")
     
     logger.info("Loading data...")
@@ -55,6 +55,9 @@ if __name__ == "__main__":
     logger.info(f"Loading configuration from {args.config}...")
     conf = setup(args.config)
     logger.info("Configuration loaded successfully.")
+
+    conf.data_folder = '/Users/anisr/Documents/dead_trees/Finland/RGBNIR/25cm'
+    conf.epochs = 1
 
     logger.info(f"Data folder set to {conf.data_folder}.")
     
