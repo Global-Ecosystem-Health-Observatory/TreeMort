@@ -28,7 +28,7 @@ if [ ! -f "$CONFIG_PATH" ]; then
     exit 1
 fi
 
-echo "[INFO] Starting dataset creation with the following settings:"
+echo "[INFO] Starting NIR Predictor with the following settings:"
 echo "       Config file: $CONFIG_PATH"
 echo "       CPUs per task: $SLURM_CPUS_PER_TASK"
 echo "       Memory per CPU: $SLURM_MEM_PER_CPU MB"

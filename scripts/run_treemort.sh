@@ -26,7 +26,8 @@ cat <<EOT > $SBATCH_SCRIPT
 #!/bin/bash
 #SBATCH --job-name=tree-mort
 #SBATCH --account=project_2004205
-#SBATCH --output=output/stdout/%A_%a
+#SBATCH --output=output/stdout/%A_%a.out
+#SBATCH --error=output/stderr/%A_%a.err
 #SBATCH --ntasks=1 --cpus-per-task=4
 #SBATCH --mem-per-cpu=32G
 #SBATCH --gres=gpu:v100:1
