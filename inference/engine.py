@@ -151,10 +151,10 @@ def process_image(
     prediction_map = sliding_window_inference(model, image, window_size, stride)
     logging.info(f"Prediction map generated with shape: {prediction_map.shape}")
 
-    refined_map = refine_prediction_map(image, prediction_map)
-    logging.info(f"Refined prediction map generated with shape: {refined_map.shape}")
+    #refined_map = refine_prediction_map(image, prediction_map)
+    #logging.info(f"Refined prediction map generated with shape: {refined_map.shape}")
 
-    binary_mask = threshold_prediction_map(refined_map, threshold)
+    binary_mask = threshold_prediction_map(prediction_map, threshold)
     logging.info(f"Binary mask created with threshold: {threshold}. Mask shape: {binary_mask.shape}")
 
     contours = extract_contours(binary_mask)

@@ -11,8 +11,11 @@ from nirpredict.trainer import train
 from nirpredict.evaluator import evaluate
 
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+logging.basicConfig(
+    level=logging.INFO,  # Set log level to INFO, you can change to DEBUG if needed
+    format="%(asctime)s - %(levelname)s - %(message)s",  # Format for logs
+)
+logger = logging.getLogger(__name__)  # Set logger name
 
 
 def run(conf):
