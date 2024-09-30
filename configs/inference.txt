@@ -2,7 +2,7 @@
 
 window-size = 256
 stride = 128
-nir-rgb-order = [3, 2, 1, 0]
+nir-rgb-order = [3, 0, 1, 2]
 threshold = 0.5
 
 best-model = /Users/anisr/Documents/TreeSeg/output/flair_unet/best.weights.pth
