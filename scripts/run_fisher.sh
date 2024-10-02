@@ -17,7 +17,7 @@ MODULE_NAME="pytorch/2.3"
 TREEMORT_VENV_PATH="${TREEMORT_VENV_PATH:-/projappl/project_2004205/rahmanan/venv}"
 
 echo "Loading module: $MODULE_NAME"
-module load $MODULE_NAME
+module load "$MODULE_NAME"
 
 if [ -d "$TREEMORT_VENV_PATH" ]; then
     echo "[INFO] Activating virtual environment at $TREEMORT_VENV_PATH"
