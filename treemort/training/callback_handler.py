@@ -1,13 +1,7 @@
-import logging
-
+from treemort.utils.logger import get_logger
 from treemort.utils.callbacks import ModelCheckpoint, ReduceLROnPlateau, EarlyStopping
 
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def handle_callbacks(callbacks, epoch, model, optimizer, val_loss):

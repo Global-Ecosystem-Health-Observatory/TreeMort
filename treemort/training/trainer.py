@@ -1,16 +1,11 @@
-import logging
-
 from treemort.training.train_loop import train_one_epoch
 from treemort.training.validation_loop import validate_one_epoch
 from treemort.training.callback_handler import handle_callbacks
+
+from treemort.utils.logger import get_logger
 from treemort.utils.callbacks import EarlyStopping
 
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def trainer(

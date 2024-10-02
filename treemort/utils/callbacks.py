@@ -1,11 +1,8 @@
 import torch
-import logging
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-)
-logger = logging.getLogger(__name__)
+from treemort.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class ModelCheckpoint:

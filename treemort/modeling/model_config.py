@@ -1,4 +1,3 @@
-import logging
 import segmentation_models_pytorch as smp
 
 from transformers import (
@@ -20,13 +19,9 @@ from treemort.modeling.network.custom_models import (
     CustomBeit,
 )
 from treemort.modeling.network.hcfnet.HCFnet import HCFnet
+from treemort.utils.logger import get_logger
 
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def configure_model(conf, id2label):

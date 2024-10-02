@@ -1,18 +1,13 @@
 import torch
-import logging
 
 from treemort.modeling.model_config import configure_model
 from treemort.modeling.callback_builder import build_callbacks
 from treemort.modeling.optimizer_loss_config import configure_optimizer, configure_loss_and_metrics
 
+from treemort.utils.logger import get_logger
 from treemort.utils.checkpoints import get_checkpoint
 
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def resume_or_load(conf, id2label, n_batches, device):
