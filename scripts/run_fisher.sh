@@ -43,8 +43,8 @@ echo "       CPUs per task: $SLURM_CPUS_PER_TASK"
 echo "       Memory per CPU: $SLURM_MEM_PER_CPU MB"
 echo "       Job time limit: $SLURM_TIMELIMIT"
 
-echo python -m treemort.utils.fisher "$CONFIG_PATH"
-srun python -m treemort.utils.fisher "$CONFIG_PATH"
+echo python3 -m treemort.utils.fisher "$CONFIG_PATH"
+srun python3 -m treemort.utils.fisher "$CONFIG_PATH"
 
 EXIT_STATUS=$?
 if [ $EXIT_STATUS -ne 0 ]; then

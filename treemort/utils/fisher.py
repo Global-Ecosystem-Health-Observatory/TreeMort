@@ -55,6 +55,8 @@ if __name__ == "__main__":
 
     conf = setup(args.config)
 
+    print(conf)
+    
     run(conf)
 
 
