@@ -11,7 +11,7 @@
 
 # Usage:
 # export VENV_PATH="/custom/path/to/venv"
-# sbatch --export=CONFIG_PATH="/custom/path/to/config" run_creator.sh
+# sbatch --export=ALL,CONFIG_PATH="/custom/path/to/config" run_creator.sh
 
 MODULE_NAME="pytorch/2.3"
 
