@@ -31,7 +31,7 @@ def trainer(
     optimal_parameters = {name: param.to(device) for name, param in ewc_data["optimal_parameters"].items()}
     fisher_information = {name: fisher.to(device) for name, fisher in ewc_data["fisher_information"].items()}
 
-    lambda_ewc = 1000
+    lambda_ewc = 2000
 
     for epoch in range(conf.epochs):
         logger.info(f"Epoch {epoch + 1}/{conf.epochs} - Training started.")
