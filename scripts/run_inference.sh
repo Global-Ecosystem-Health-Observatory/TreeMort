@@ -12,7 +12,7 @@
 # Usage:
 # export TREEMORT_VENV_PATH="/custom/path/to/venv"
 # export TREEMORT_REPO_PATH="/custom/path/to/treemort/repo"
-# sbatch --export=CONFIG_PATH="/custom/path/to/config",DATA_PATH="/custom/path/to/data" inference_script.sh
+# sbatch --export=ALL,CONFIG_PATH="/custom/path/to/config",DATA_PATH="/custom/path/to/data" inference_script.sh
 
 MODULE_NAME="pytorch/2.3"
 module load $MODULE_NAME
