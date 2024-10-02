@@ -55,7 +55,7 @@ if __name__ == "__main__":
 
     conf = setup(args.config)
 
-    run(conf, args.eval_only)
+    run(conf)
 
 
 '''
