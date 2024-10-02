@@ -46,6 +46,8 @@ fi
 cat <<EOT >> $SBATCH_SCRIPT
 
 MODULE_NAME="pytorch/2.3"
+
+echo "Loading module: $MODULE_NAME"
 module load $MODULE_NAME
 
 TREEMORT_VENV_PATH="${TREEMORT_VENV_PATH:-/projappl/project_2004205/rahmanan/venv}"
