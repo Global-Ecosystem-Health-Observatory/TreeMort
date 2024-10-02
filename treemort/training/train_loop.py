@@ -3,9 +3,10 @@ import torch
 from tqdm import tqdm
 
 from treemort.training.output_processing import process_model_output
+from treemort.utils.loss import ewc_loss
 
 
-def train_one_epoch(model, optimizer, criterion, metrics, train_loader, conf, device):
+def train_one_epoch(model, optimizer, criterion, metrics, train_loader, fisher_information, optimal_parameters, lambda_ewc, conf, device):
     model.train()
     train_loss = 0.0
     train_metrics = {}
@@ -26,7 +27,10 @@ def train_one_epoch(model, optimizer, criterion, metrics, train_loader, conf, de
         loss.backward()
         optimizer.step()
 
-        train_loss += loss.item()
+        ewc_penalty = ewc_loss(model, fisher_information, optimal_parameters, lambda_ewc)
+        total_loss = loss.item() + ewc_penalty
+
+        train_loss += total_loss
 
         pred_probs = torch.sigmoid(logits)
 

@@ -1,3 +1,5 @@
+import os
+import torch
 import logging
 
 from treemort.training.train_loop import train_one_epoch
@@ -25,10 +27,16 @@ def trainer(
 ):
     device = next(model.parameters()).device
 
+    ewc_data = torch.load(os.path.join(conf.output_dir, "ewc_data.pth"))
+    optimal_parameters = {name: param.to(device) for name, param in ewc_data["optimal_parameters"].items()}
+    fisher_information = {name: fisher.to(device) for name, fisher in ewc_data["fisher_information"].items()}
+
+    lambda_ewc = 1000
+
     for epoch in range(conf.epochs):
         logger.info(f"Epoch {epoch + 1}/{conf.epochs} - Training started.")
 
-        train_loss, train_metrics = train_one_epoch(model, optimizer, criterion, metrics, train_loader, conf, device)
+        train_loss, train_metrics = train_one_epoch(model, optimizer, criterion, metrics, train_loader, fisher_information, optimal_parameters, lambda_ewc, conf, device)
 
         logger.info(f"Epoch {epoch + 1} - Training completed.")
         logger.info(f"Training Loss: {train_loss:.4f}")

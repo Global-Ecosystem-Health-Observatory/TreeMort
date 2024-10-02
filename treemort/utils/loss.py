@@ -67,3 +67,11 @@ def hybrid_loss(logits, target, dice_weight=0.5, alpha=0.25, gamma=2, class_weig
 def mse_loss(logits, target):
     pred = torch.sigmoid(logits)
     return F.mse_loss(pred, target.float())
+
+
+def ewc_loss(model, fisher_information, optimal_parameters, lambda_ewc):
+    ewc_reg = 0
+    for name, param in model.named_parameters():
+        if param.requires_grad:
+            ewc_reg += (fisher_information[name] * (param - optimal_parameters[name]) ** 2).sum()
+    return lambda_ewc * ewc_reg
