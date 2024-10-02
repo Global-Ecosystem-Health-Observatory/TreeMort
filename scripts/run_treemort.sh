@@ -47,16 +47,16 @@ cat <<EOT >> $SBATCH_SCRIPT
 
 MODULE_NAME="pytorch/2.3"
 
-echo "Loading module: $MODULE_NAME"
-module load $MODULE_NAME
+echo "Loading module: \$MODULE_NAME"
+module load \$MODULE_NAME
 
-TREEMORT_VENV_PATH="${TREEMORT_VENV_PATH:-/projappl/project_2004205/rahmanan/venv}"
+TREEMORT_VENV_PATH="\${TREEMORT_VENV_PATH:-/projappl/project_2004205/rahmanan/venv}"
 
-if [ -d "$TREEMORT_VENV_PATH" ]; then
-    echo "[INFO] Activating virtual environment at $TREEMORT_VENV_PATH"
-    source "$TREEMORT_VENV_PATH/bin/activate"
+if [ -d "\$TREEMORT_VENV_PATH" ]; then
+    echo "[INFO] Activating virtual environment at \$TREEMORT_VENV_PATH"
+    source "\$TREEMORT_VENV_PATH/bin/activate"
 else
-    echo "[ERROR] Virtual environment not found at $TREEMORT_VENV_PATH"
+    echo "[ERROR] Virtual environment not found at \$TREEMORT_VENV_PATH"
     exit 1
 fi
 
