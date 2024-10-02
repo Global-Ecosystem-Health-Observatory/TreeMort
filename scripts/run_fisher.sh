@@ -27,30 +27,6 @@ else
     exit 1
 fi
 
-if [ -z "$CONFIG_PATH" ]; then
-    echo "[ERROR] CONFIG_PATH variable is not set. Please provide a config path using --export."
-    exit 1
-fi
+srun python3 -c "import torch; print(\"TORCH\")"
+srun python3 -c "import treemort; print(\"TREEMORT\")"
 
-if [ ! -f "$CONFIG_PATH" ]; then
-    echo "[ERROR] Config file not found at $CONFIG_PATH"
-    exit 1
-fi
-
-echo "[INFO] Starting dataset creation with the following settings:"
-echo "       Config file: $CONFIG_PATH"
-echo "       CPUs per task: $SLURM_CPUS_PER_TASK"
-echo "       Memory per CPU: $SLURM_MEM_PER_CPU MB"
-echo "       Job time limit: $SLURM_TIMELIMIT"
-
-echo python3 -m treemort.utils.fisher "$CONFIG_PATH"
-srun python3 -m treemort.utils.fisher "$CONFIG_PATH"
-
-EXIT_STATUS=$?
-if [ $EXIT_STATUS -ne 0 ]; then
-    echo "[ERROR] Fisher matrix creation failed with exit status $EXIT_STATUS"
-else
-    echo "[INFO] Fisher matrix creation completed successfully"
-fi
-
-exit $EXIT_STATUS
