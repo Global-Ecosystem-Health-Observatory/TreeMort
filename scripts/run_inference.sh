@@ -1,31 +1,43 @@
 #!/bin/bash
-#SBATCH --job-name=treemort-inference
-#SBATCH --account=project_2004205
-#SBATCH --output=output/stdout/%A_%a.out
-#SBATCH --error=output/stderr/%A_%a.err
-#SBATCH --ntasks=1
-#SBATCH --cpus-per-task=6
-#SBATCH --time=05:00:00
-#SBATCH --partition=small
-#SBATCH --mem-per-cpu=6000
+#SBATCH --job-name=treemort-inference           # Job name (default: treemort-inference)
+#SBATCH --account=project_2004205               # Project account (default: project_2004205)
+#SBATCH --output=output/stdout/%A_%a.out        # Output log path (default)
+#SBATCH --error=output/stderr/%A_%a.err         # Error log path (default)
+#SBATCH --ntasks=1                              # Number of tasks (1 process)
+#SBATCH --cpus-per-task=6                       # Number of CPU cores per task (default: 6)
+#SBATCH --time=05:00:00                         # Time limit (hh:mm:ss) (default: 05:00:00)
+#SBATCH --partition=small                       # Partition to submit to (default: small)
+#SBATCH --mem-per-cpu=6000                      # Memory per CPU in MB (default: 6000MB)
+
+# Usage:
+# export TREEMORT_VENV_PATH="/custom/path/to/venv"
+# export TREEMORT_REPO_PATH="/custom/path/to/treemort/repo"
+# sbatch --export=CONFIG_PATH="/custom/path/to/config",DATA_PATH="/custom/path/to/data" inference_script.sh
 
 MODULE_NAME="pytorch/2.3"
-VENV_PATH="/projappl/project_2004205/rahmanan/venv"
-DATA_PATH="/scratch/project_2008436/rahmanan/dead_trees/Finland/RGBNIR/25cm"
-CONFIG_PATH="/users/rahmanan/TreeMort/configs/Finland_RGBNIR_25cm_inference.txt"
-ENGINE_PATH="/users/rahmanan/TreeMort/inference/engine.py"
-
 module load $MODULE_NAME
 
-if [ -d "$VENV_PATH" ]; then
-    source "$VENV_PATH/bin/activate"
+TREEMORT_VENV_PATH="${TREEMORT_VENV_PATH:-/projappl/project_2004205/rahmanan/venv}"
+
+if [ -d "$TREEMORT_VENV_PATH" ]; then
+    echo "[INFO] Activating virtual environment at $TREEMORT_VENV_PATH"
+    source "$TREEMORT_VENV_PATH/bin/activate"
 else
-    echo "[ERROR] Virtual environment not found at $VENV_PATH"
+    echo "[ERROR] Virtual environment not found at $TREEMORT_VENV_PATH"
     exit 1
 fi
 
-if [ ! -d "$DATA_PATH" ]; then
-    echo "[ERROR] Data directory not found at $DATA_PATH"
+TREEMORT_REPO_PATH="${TREEMORT_REPO_PATH:-/users/rahmanan/TreeMort}"
+
+ENGINE_PATH="${TREEMORT_REPO_PATH}/inference/engine.py"
+
+if [ ! -f "$ENGINE_PATH" ]; then
+    echo "[ERROR] Inference engine source file not found at $ENGINE_PATH"
+    exit 1
+fi
+
+if [ -z "$CONFIG_PATH" ]; then
+    echo "[ERROR] CONFIG_PATH variable is not set. Please provide a config path using --export."
     exit 1
 fi
 
@@ -34,8 +46,13 @@ if [ ! -f "$CONFIG_PATH" ]; then
     exit 1
 fi
 
-if [ ! -f "$ENGINE_PATH" ]; then
-    echo "[ERROR] Inference engine source file not found at $ENGINE_PATH"
+if [ -z "$DATA_PATH" ]; then
+    echo "[ERROR] DATA_PATH variable is not set. Please provide a data path using --export."
+    exit 1
+fi
+
+if [ ! -d "$DATA_PATH" ]; then
+    echo "[ERROR] Data directory not found at $DATA_PATH"
     exit 1
 fi
 

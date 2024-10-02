@@ -1,17 +1,17 @@
 import os
-import ast  # To parse lists from config files
-import logging
 import configargparse
+
+from treemort.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 def setup(config_file_path=None):
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-    
     if config_file_path:
         if not os.path.exists(config_file_path):
-            logging.error(f"Config file not found at: {config_file_path}")
+            logger.error(f"Config file not found at: {config_file_path}")
             raise FileNotFoundError(f"Config file not found at: {config_file_path}")
-        logging.info(f"Using config file: {config_file_path}")
+        logger.info(f"Using config file: {config_file_path}")
     
     parser = configargparse.ArgParser(default_config_files=[config_file_path] if config_file_path else [])
     
@@ -48,6 +48,6 @@ def setup(config_file_path=None):
     
     conf, _ = parser.parse_known_args()
     
-    logging.info("Configuration successfully loaded.")
+    logger.info("Configuration successfully loaded.")
     
     return conf

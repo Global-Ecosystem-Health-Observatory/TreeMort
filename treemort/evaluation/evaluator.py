@@ -1,13 +1,7 @@
-import logging
-
 from treemort.utils.iou import IOUCallback
+from treemort.utils.logger import get_logger
 
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def evaluator(model, dataset, num_samples, batch_size, threshold, model_name):

@@ -1,5 +1,4 @@
 import cv2
-import json
 import geojson
 import rasterio
 

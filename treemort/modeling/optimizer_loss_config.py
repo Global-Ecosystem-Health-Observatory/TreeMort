@@ -2,17 +2,11 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-import logging
-
 from treemort.utils.loss import hybrid_loss, mse_loss, weighted_dice_loss
+from treemort.utils.logger import get_logger
 from treemort.utils.metrics import iou_score, f_score
 
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def configure_optimizer(model, learning_rate):

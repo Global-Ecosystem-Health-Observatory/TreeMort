@@ -14,7 +14,7 @@ def get_image_and_polygons_reorder(
     normalize_channelwise,
     normalize_imagewise,
 ):
-    exim_np, x_min, y_min, x_max, y_max, pixel_step_meters = load_geotiff_reorder(image_filepath, nir_rgb_order, normalize_channelwise, normalize_imagewise)
+    exim_np, x_min, y_min, x_max, y_max = load_geotiff_reorder(image_filepath, nir_rgb_order, normalize_channelwise, normalize_imagewise)
     label_polygons = load_geojson_labels(geojson_filepath)
     
     k_y = (y_max - y_min) / exim_np.shape[0]
@@ -122,8 +122,7 @@ def load_geotiff_reorder(
 
         x_min, y_min, x_max, y_max = img.bounds
 
-    pixel_step_meters = 0.5 # TODO. undefined
-    return exim_np, x_min, y_min, x_max, y_max, pixel_step_meters
+    return exim_np, x_min, y_min, x_max, y_max
 
 
 def load_geojson_labels(geojson_path: str) -> list:
