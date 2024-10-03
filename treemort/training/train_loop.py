@@ -30,10 +30,9 @@ def train_one_epoch(model, optimizer, criterion, metrics, train_loader, conf, de
 
         #ewc_penalty = ewc_loss(model, fisher_information, optimal_parameters, lambda_ewc)
         #total_loss = loss.item() + ewc_penalty
+        #train_loss += total_loss
 
-        total_loss = loss.item()
-
-        train_loss += total_loss
+        train_loss += loss.item()
 
         pred_probs = torch.sigmoid(logits)
 
