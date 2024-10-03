@@ -18,7 +18,6 @@ def create_label_mask(img_arr: np.ndarray, polys: list[np.ndarray]):
 
 
 def segmap_to_topo(img_arr: np.ndarray, contours: list) -> np.ndarray:
-
     image_h, image_w = img_arr.shape[:2]
     topolabel = np.zeros((image_h, image_w), dtype=np.float32)
 
@@ -40,14 +39,14 @@ def segmap_to_topo(img_arr: np.ndarray, contours: list) -> np.ndarray:
 def get_image_and_polygons(
     image_filepath: str,
     geojson_filepath: str,
-    nir_r_g_b_order: list[int],
+    nir_rgb_order: list[int],
     normalize_channelwise: bool,
     normalize_imagewise: bool,
 ) -> tuple[np.ndarray, list[np.ndarray]]:
 
     img_arr, bounds, resolution = load_geotiff(
         image_filepath,
-        nir_r_g_b_order,
+        nir_rgb_order,
         normalize_channelwise,
         normalize_imagewise
     )
@@ -89,7 +88,7 @@ def geo_to_img_coords(
 
 def load_geotiff(
     filename: str,
-    nir_r_g_b_order: list[int],
+    nir_rgb_order: list[int],
     normalize_channelwise: bool = False,
     normalize_imagewise: bool = False,
 ) -> tuple[np.ndarray, tuple[float], tuple[float]]:
@@ -100,7 +99,7 @@ def load_geotiff(
         img_arr = np.moveaxis(img.read(), 0, -1).astype(np.float32)
 
         # Reorder channels
-        img_arr = img_arr[:,:,nir_r_g_b_order]
+        img_arr = img_arr[:,:,nir_rgb_order]
 
         # Set missing values to zero
         if img.nodata is not None:

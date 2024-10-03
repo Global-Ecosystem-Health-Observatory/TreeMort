@@ -1,4 +1,6 @@
 import torch
+import torch.nn.functional as F
+
 import numpy as np
 
 from tqdm import tqdm
@@ -14,7 +16,6 @@ class IOUCallback:
         batch_size,
         threshold,
         model_name,
-        image_processor=None,
     ):
         self.model = model
         self.dataset = dataset
@@ -22,7 +23,6 @@ class IOUCallback:
         self.batch_size = batch_size
         self.threshold = threshold
         self.model_name = model_name
-        self.image_processor = image_processor
         self.device = next(model.parameters()).device  # Get the device of the model
 
     def evaluate(self):
@@ -63,22 +63,29 @@ class IOUCallback:
 
     def _get_predictions(self, images, labels):
         outputs = self.model(images)
-        target_sizes = [(label.shape[1], label.shape[2]) for label in labels]
+
+        _, _, h, w = images.shape
 
         if self.model_name == "maskformer":
-            predictions = self.image_processor.post_process_semantic_segmentation(outputs, target_sizes=target_sizes)
-        elif self.model_name == "detr":
-            predictions = self.image_processor.post_process_panoptic_segmentation(outputs, target_sizes=target_sizes)
-            predictions = torch.stack([prediction["segmentation"].unsqueeze(0) for prediction in predictions], dim=0,)
-        elif self.model_name == "beit":
-            predictions = self.image_processor.post_process_semantic_segmentation(outputs, target_sizes=target_sizes)
-        elif self.model_name == "dinov2":
-            probabilities = torch.nn.functional.softmax(outputs.logits, dim=1)
-            predictions = torch.argmax(probabilities, dim=1).unsqueeze(1).float()
-        else:
-            predictions = outputs
+            query_logits = outputs['masks_queries_logits']
+            combined_logits = torch.max(query_logits, dim=1).values
+            interpolated_logits = F.interpolate(combined_logits.unsqueeze(1), size=(h, w), mode='bilinear', align_corners=False)
+            predictions = torch.sigmoid(interpolated_logits)
 
-        return torch.stack([prediction.unsqueeze(0) for prediction in predictions], dim=0).float()
+        elif self.model_name == "detr":
+            query_logits = outputs['pred_masks']
+            combined_logits = torch.max(query_logits, dim=1).values
+            interpolated_logits = F.interpolate(combined_logits.unsqueeze(1), size=(h, w), mode='bilinear', align_corners=False)
+            predictions = torch.sigmoid(interpolated_logits)
+
+        elif self.model_name in ["dinov2", "beit"]:
+            logits = outputs.logits[:, 1:2, :, :]
+            predictions = torch.sigmoid(logits)
+
+        else:
+            predictions = torch.sigmoid(outputs)
+
+        return predictions
 
     def _calculate_pixel_iou(self, y_pred, y_true):
         y_pred_binary = np.squeeze(y_pred > self.threshold)
@@ -235,7 +242,6 @@ class IOUCallback:
         adjusted_dice_scores,
         mcc_scores,
     ):
-
         mean_iou_pixels = np.mean(pixel_ious)
         mean_iou_trees = np.mean(tree_ious)
         mean_iou = np.mean(mean_ious)

@@ -1,28 +1,29 @@
 import torch
+import torch.nn.functional as F
 
 
-def process_model_output(model, images, conf, image_processor, labels, device):
-    target_sizes = [(label.shape[1], label.shape[2]) for label in labels]
+def process_model_output(model, images, conf):
+    _, _, h, w = images.shape
 
     if conf.model == "maskformer":
         outputs = model(images)
-        predictions = image_processor.post_process_semantic_segmentation(outputs, target_sizes=target_sizes)
-        predictions = torch.stack([prediction.float().unsqueeze(0).to(device) for prediction in predictions], dim=0)
+        query_logits = outputs['masks_queries_logits']
+        combined_logits = torch.max(query_logits, dim=1).values
+        interpolated_logits = F.interpolate(combined_logits.unsqueeze(1), size=(h, w), mode='bilinear', align_corners=False)
+        logits = interpolated_logits
     
     elif conf.model == "detr":
         outputs = model(images)
-        predictions = image_processor.post_process_panoptic_segmentation(outputs, target_sizes=target_sizes)
-        predictions = torch.stack([prediction['segmentation'].float().unsqueeze(0).to(device) for prediction in predictions], dim=0)
-        
-    elif conf.model == "beit":
-        outputs = model(images)
-        predictions = torch.sigmoid(outputs.logits[:, 1:2, :, :]) 
+        query_logits = outputs['pred_masks']
+        combined_logits = torch.max(query_logits, dim=1).values
+        interpolated_logits = F.interpolate(combined_logits.unsqueeze(1), size=(h, w), mode='bilinear', align_corners=False)
+        logits = interpolated_logits
 
-    elif conf.model == "dinov2":
+    elif conf.model in ["dinov2", "beit"]:
         outputs = model(images)
-        predictions = torch.sigmoid(outputs.logits[:, 1:2, :, :]) 
-
-    else:
-        predictions = model(images)
+        logits = outputs.logits[:, 1:2, :, :]
     
-    return predictions
+    else:
+        logits = model(images)
+    
+    return logits

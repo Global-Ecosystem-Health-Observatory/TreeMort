@@ -6,13 +6,116 @@
 
 ```bash
 git clone https://github.com/Global-Ecosystem-Health-Observatory/TreeMort.git
-cd TreeMort
 
-sh ./scripts/install_treemort.sh
+export TREEMORT_VENV_PATH="/path/to/venv"
+export TREEMORT_REPO_PATH="/path/to/package"
+
+sh $TREEMORT_REPO_PATH/scripts/install_treemort.sh
 ```
 
-**Step B.** Upload aerial image and label data from local machine to Allas cloud storage. Move to Step D, if the dataset in HDF5 is already created and available on scratch.
+**Step B.** Create dataset in HDF5 format.
 
+1. Download aerial image and label data to scratch.
+
+```bash
+module load allas
+allas-conf
+
+swift download <container_name> -p <remote_directory> -D <local_directory>
+```
+
+e.g. download Finnish aerial imagery from Allas
+
+```bash
+swift download DRYTREE_Annotations -p dead_trees/Finland -D /scratch/project_2008436/rahmanan
+```
+
+2. Run script to create the HDF5 dataset.
+
+```bash
+sbatch --export=ALL,CONFIG_PATH="/custom/path/to/config" run_creator.sh
+```
+
+**Step C.** Train/Evaluate TreeMort
+
+```bash
+sh /path/to/scripts/run_treemort.sh /path/to/config.txt --eval-only <true/false>
+```
+
+## Results
+
+| Model | Mean IOU Pixels | Mean IOU Trees | Mean IOU | Mean Balanced IOU | Mean Dice Score | Mean Adjusted Dice Score | Mean MCC |
+| :---: | :-------------: | :------------: | -------: | :---------------: | :-------------: | :----------------------: | :------: |
+| SA-UNet | 0.281 | 0.749 | 0.840 | 0.997 | 0.334 | 0.736 | 0.342 |
+| Multiscale SA-UNet | 0.272 | 0.738 | 0.837 | 0.996 | 0.323 | 0.727 | 0.331 |
+| FLAIR-Unet | 0.291 | 0.749 | 0.845 | 0.996 | 0.346 | 0.747 | 0.354 |
+| HCFNet | 0.283 | 0.742 | 0.842 | 0.996 | 0.336 | 0.740 | 0.345 |
+| DeepLabV3+ | 0.287 | 0.773 | 0.856 | 0.997 | 0.342 | 0.769 | 0.350 |
+
+**Step D.** Run inference engine.
+
+```bash
+sbatch --export=ALL,CONFIG_PATH="/custom/path/to/config",DATA_PATH="/custom/path/to/data" run_inference.sh
+```
+
+## Getting Started (Mac OS, for development)
+
+- Clone repository
+
+```bash
+git clone https://github.com/Global-Ecosystem-Health-Observatory/TreeMort.git
+cd TreeMort
+```
+
+- Create a new environment
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
+
+pip install --upgrade pip
+pip install -e .
+```
+
+- Create a dataset
+
+```bash
+python -m dataset.creator ./configs/<config-file>.txt
+```
+
+- Train a model
+
+```bash
+python -m treemort.main ./configs/<config-file>.txt
+```
+
+- Evaluate the model
+
+```bash
+python -m treemort.main ./configs/<config-file>.txt --eval-only
+```
+
+- Perform inference
+
+```bash
+python -m inference.engine \
+    /path/to/input/data \
+    --config ./configs/<config-file>.txt \
+    --outdir /path/to/output/directory
+```
+
+- Running from source, refer to ./colab/treemort_colab.ipynb
+
+## (Optional) Upload own data
+
+**Method I.** Copy local directory to remote server using scp
+
+```bash
+scp -O -r /path/to/local/directory <username>@puhti.csc.fi:/path/to/remote/directory
+```
+
+**Method II.** Upload files to Allas container using swift
+ 
 1. Clone allas utils and change shell to bash, as zsh is not supported.
 
 ```bash
@@ -35,16 +138,13 @@ source atools-venv/bin/activate
 pip3 install --upgrade pip
 pip3 install openstackclient python-swiftclient
 
-source allas_conf -u <your CSC username>
+source allas_conf -u <username>
 ```
 
 3. Upload aerial image and label data to Allas.
 
 ```bash
-cd ~/Documents/AerialImages
-
-swift upload DRYTREE-project-AerialImageModel_ITD --skip-identical ./4band_25cm/*.*
-swift upload DRYTREE-project-AerialImageModel_ITD --skip-identical ./Geojsons/*.*
+swift upload <container-name> --skip-identical /path/to/files/*.*
 ```
 
 4. Restore zsh
@@ -53,83 +153,3 @@ swift upload DRYTREE-project-AerialImageModel_ITD --skip-identical ./Geojsons/*.
 chsh -s /bin/zsh
 echo $SHELL
 ```
-
-**Step C.** Create dataset in HDF5 format. 
-
-1. Download aerial image and label data to scratch.
-
-```bash
-module load allas
-allas-conf
-
-cd /scratch/project_2008436/rahmanan/AerialImageModel_ITD
-
-swift download DRYTREE-project-AerialImageModel_ITD
-```
-
-2. Run script to create the HDF5 dataset.
-
-```bash
-cd ~/TreeMort
-
-sbatch ./scripts/run_creator.sh
-```
-
-**Step D.** Demo TreeMort
-
-1. Train a model.
-
-```bash
-sh ./scripts/run_treemort.sh ./configs/unet_bs8_cs256.txt --eval-only false
-```
-
-2.  Evaluate the model.
-
-```bash
-sh ./scripts/run_treemort.sh ./configs/unet_bs8_cs256.txt --eval-only true
-```
-
-## Results
-
-|                Model                | Mean IOU Pixels | Mean IOU Trees |
-| :---------------------------------: | :-------------: | :------------: |
-|      Unet with Self Attention       |      0.281      |     0.749      |
-| FLAIR (Encoder) + SA-Unet (Decoder) |      0.291      |     0.785      |
-
-|   Model    | Mean IOU Pixels | Mean IOU Trees | Mean IOU | Mean Balanced IOU | Mean Dice Score | Mean Adjusted Dice Score | Mean MCC |
-| :--------: | :-------------: | :------------: | :------: | :---------------: | :-------------: | :----------------------: | :------: |
-|  SA-Unet   |      0.281      |     0.749      |  0.840   |       0.997       |      0.334      |          0.736           |  0.342   |
-| FLAIR-Unet |      0.291      |     0.785      |  0.856   |       0.997       |      0.343      |          0.766           |  0.351   |
-
-
-## Getting Started (Mac OS, for development)
-
-- Clone repository
-
-```bash
-git clone https://github.com/Global-Ecosystem-Health-Observatory/TreeMort.git
-cd TreeMort
-```
-
-- Create a new environment
-
-```bash
-python3 -m venv venv
-source venv/bin/activate
-
-pip install --upgrade pip
-pip install --upgrade --no-deps --force-reinstall .
-```
-
-- Train a model
-
-```bash
-python -m treemort.main ./configs/kokonet_bs8_cs256.txt
-```
-
-- Evaluate the model
-```bash
-python -m treemort.main ./configs/kokonet_bs8_cs256.txt --eval-only
-```
-
-- Running from source, refer to ./colab/treemort_colab.ipynb
