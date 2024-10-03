@@ -76,12 +76,25 @@ if __name__ == "__main__":
 '''
 Usage:
 
-- Train
+1) Train
 
-sh ~/TreeMort/scripts/run_treemort.sh ~/TreeMort/configs/flair_unet_bs8_cs256.txt --eval-only false
+python3 -m treemort.main ./configs/flair_unet_bs8_cs256.txt
 
-- Evaluate
+2) Evaluate
 
-sh ~/TreeMort/scripts/run_treemort.sh ~/TreeMort/configs/flair_unet_bs8_cs256.txt --eval-only true
+python3 -m treemort.main ./configs/flair_unet_bs8_cs256.txt --eval-only
+
+- For Puhti
+
+export TREEMORT_VENV_PATH="/projappl/project_2004205/rahmanan/venv"
+export TREEMORT_REPO_PATH="/users/rahmanan/TreeMort"
+
+1) Train
+
+sh $TREEMORT_REPO_PATH/scripts/run_treemort.sh $TREEMORT_REPO_PATH/configs/flair_unet_bs8_cs256.txt --eval-only false
+
+2) Evaluate
+
+sh $TREEMORT_REPO_PATH/scripts/run_treemort.sh $TREEMORT_REPO_PATH/configs/flair_unet_bs8_cs256.txt --eval-only true
 
 '''
