@@ -1,8 +1,8 @@
 # settings for self attention unet with flair backbone
 
-data-folder = /scratch/project_2008436/rahmanan/AerialImageModel_ITD
+data-folder = /scratch/project_2008436/rahmanan/dead_trees/Finland/RGBNIR/25cm
 
-hdf5-file = AerialImageModel_ITD.h5
+hdf5-file = Finland_RGBNIR_25cm.h5
 
 model = flair_unet
 
@@ -20,6 +20,8 @@ val-batch-size = 8
 test-batch-size = 8
 
 epochs = 100
+
+class-weights = [0.1, 0.9]
 
 model-weights = best # available options [best, latest]
 

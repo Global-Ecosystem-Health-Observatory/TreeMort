@@ -1,5 +1,5 @@
-import random
 import torch
+import random
 
 import torchvision.transforms.functional as TF
 

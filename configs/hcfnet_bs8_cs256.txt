@@ -1,14 +1,12 @@
-# settings for dinov2
+# settings for HCFNet
 
 data-folder = /scratch/project_2008436/rahmanan/dead_trees/Finland/RGBNIR/25cm
 
 hdf5-file = Finland_RGBNIR_25cm.h5
 
-model = dinov2
+model = hcfnet
 
-backbone = facebook/dinov2-base
-
-output-dir = output/dinov2
+output-dir = output/hcfnet
 
 train-crop-size = 256
 val-crop-size = 256

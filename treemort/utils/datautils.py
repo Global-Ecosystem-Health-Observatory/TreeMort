@@ -2,7 +2,6 @@ import h5py
 import random
 
 from collections import defaultdict
-from sklearn.model_selection import train_test_split
 
 
 def load_and_organize_data(hdf5_file_path):
@@ -17,13 +16,12 @@ def load_and_organize_data(hdf5_file_path):
     return image_patch_map
 
 
-def bin_images_by_patch_count(image_patch_map, val_ratio, test_ratio):
-    """
-    Bin images such that validation and test bins fulfill the given ratios in terms of patch count.
-    """
+def bin_images_by_patch_count(image_patch_map, val_ratio, test_ratio, seed=42):
     keys = list(image_patch_map.keys())
-    random.seed(42) # for replication
+
+    random.seed(seed) # for replication
     random.shuffle(keys)
+    
     shuffled_images = [(key, image_patch_map[key]) for key in keys]
 
     total_patches = sum(len(patches) for patches in image_patch_map.values())
@@ -50,19 +48,14 @@ def bin_images_by_patch_count(image_patch_map, val_ratio, test_ratio):
 
     return train_images, val_images, test_images
 
+
 def extract_keys_from_images(image_patch_map, images):
-    """
-    Extract keys corresponding to images for a specific bin (train/val/test).
-    """
     keys = []
     for img in images:
         keys.extend([key for key, _ in image_patch_map[img]])
     return keys
 
 def stratify_images_by_patch_count(image_patch_map, val_ratio, test_ratio):
-    """
-    Stratify images into training, validation, and test bins based on patch count.
-    """
     train_images, val_images, test_images = bin_images_by_patch_count(image_patch_map, val_ratio, test_ratio)
 
     train_keys = extract_keys_from_images(image_patch_map, train_images)

@@ -16,6 +16,10 @@ setup(
         'segmentation-models-pytorch',
         'opencv-python',
         'h5py',
-        'rasterio'
+        'rasterio',
+        'transformers',
+        'geojson',
+        'geopandas',
+        'scikit-learn',
     ],
 )

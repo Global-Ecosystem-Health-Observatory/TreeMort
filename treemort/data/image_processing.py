@@ -1,6 +1,21 @@
 import torch
 import torch.nn.functional as F
 
+from transformers import AutoImageProcessor
+
+
+def get_image_processor(model_name, backbone):
+    if model_name in ["maskformer", "detr", "beit", "dinov2"]:
+        image_processor = AutoImageProcessor.from_pretrained(backbone)
+
+        if model_name == "beit":
+            image_processor.size["shortest_edge"] = min(image_processor.size["height"], image_processor.size["width"])
+            image_processor.do_pad = False
+        elif model_name in ["maskformer", "dinov2"]:
+            image_processor.do_pad = False
+    else:
+        image_processor = None
+
 
 def apply_image_processor(image, label, image_processor):
     image = _rescale_image(image, image_processor) if image_processor.do_rescale else image

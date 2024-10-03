@@ -5,10 +5,12 @@ from tqdm import tqdm
 from treemort.training.output_processing import process_model_output
 
 
-def validate_one_epoch(model, criterion, metrics, val_loader, conf, device, image_processor):
+def validate_one_epoch(model, criterion, metrics, val_loader, conf, device):
     model.eval()
     val_loss = 0.0
     val_metrics = {}
+
+    class_weights = torch.tensor(conf.class_weights, dtype=torch.float32).to(device)
 
     val_progress_bar = tqdm(val_loader, desc=f"Validation", unit="batch")
     
@@ -16,12 +18,15 @@ def validate_one_epoch(model, criterion, metrics, val_loader, conf, device, imag
         for batch_idx, (images, labels) in enumerate(val_progress_bar):
             images, labels = images.to(device), labels.to(device)
 
-            outputs = process_model_output(model, images, conf, image_processor, labels, device)
-            loss = criterion(outputs, labels)
+            logits = process_model_output(model, images, conf)
+            
+            loss = criterion(logits, labels, class_weights=class_weights)
 
             val_loss += loss.item()
 
-            batch_metrics = metrics(outputs, labels)
+            pred_probs = torch.sigmoid(logits)
+
+            batch_metrics = metrics(pred_probs, labels)
             for key, value in batch_metrics.items():
                 if key not in val_metrics:
                     val_metrics[key] = 0.0
@@ -29,7 +34,6 @@ def validate_one_epoch(model, criterion, metrics, val_loader, conf, device, imag
 
             val_progress_bar.set_postfix({"Val Loss": val_loss / (batch_idx + 1)})
 
-    # Average validation loss and metrics
     val_loss /= len(val_loader)
     for key in val_metrics:
         val_metrics[key] /= len(val_loader)

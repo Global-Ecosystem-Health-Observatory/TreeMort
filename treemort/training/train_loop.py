@@ -5,11 +5,13 @@ from tqdm import tqdm
 from treemort.training.output_processing import process_model_output
 
 
-def train_one_epoch(model, optimizer, criterion, metrics, train_loader, conf, device, image_processor):
+def train_one_epoch(model, optimizer, criterion, metrics, train_loader, conf, device):
     model.train()
     train_loss = 0.0
     train_metrics = {}
 
+    class_weights = torch.tensor(conf.class_weights, dtype=torch.float32).to(device)
+    
     train_progress_bar = tqdm(train_loader, desc=f"Training", unit="batch")
 
     for batch_idx, (images, labels) in enumerate(train_progress_bar):
@@ -17,19 +19,18 @@ def train_one_epoch(model, optimizer, criterion, metrics, train_loader, conf, de
 
         optimizer.zero_grad()
 
-        predictions = process_model_output(model, images, conf, image_processor, labels, device)
-
-        loss = criterion(predictions, labels)
-
-        if conf.model in ["maskformer", "detr"]:
-            loss.requires_grad = True
+        logits = process_model_output(model, images, conf)
+        
+        loss = criterion(logits, labels, class_weights=class_weights)
 
         loss.backward()
         optimizer.step()
 
         train_loss += loss.item()
 
-        batch_metrics = metrics(predictions, labels)
+        pred_probs = torch.sigmoid(logits)
+
+        batch_metrics = metrics(pred_probs, labels)
         for key, value in batch_metrics.items():
             if key not in train_metrics:
                 train_metrics[key] = 0.0
@@ -37,7 +38,6 @@ def train_one_epoch(model, optimizer, criterion, metrics, train_loader, conf, de
 
         train_progress_bar.set_postfix({"Train Loss": train_loss / (batch_idx + 1)})
 
-    # Average train loss and metrics
     train_loss /= len(train_loader)
     for key in train_metrics:
         train_metrics[key] /= len(train_loader)

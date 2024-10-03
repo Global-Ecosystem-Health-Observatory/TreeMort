@@ -1,8 +1,8 @@
 # settings for self attention unet
 
-data-folder = /scratch/project_2008436/rahmanan/AerialImageModel_ITD
+data-folder = /scratch/project_2008436/rahmanan/dead_trees/Finland/RGBNIR/25cm
 
-hdf5-file = AerialImageModel_ITD.h5
+hdf5-file = Finland_RGBNIR_25cm.h5
 
 model = sa_unet
 
@@ -21,6 +21,8 @@ test-batch-size = 8
 
 epochs = 100
 
+class-weights = [0.1, 0.9]
+
 model-weights = best # available options [best, latest]
 
 learning-rate = 1e-4
@@ -29,7 +31,7 @@ threshold = 0.5
 
 # activation = sigmoid # available options [tanh, sigmoid]
 
-loss = hybrid # available options [mse, hybrid]
+loss = hybrid # available options [mse, hybrid, weighted_dice_loss]
 
 val-size = 0.2
 test-size = 0.1
