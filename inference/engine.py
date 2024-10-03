@@ -51,11 +51,15 @@ def sliding_window_inference(model, image, window_size=256, stride=128, batch_si
     if patches:
         prediction_map, count_map = process_batch(patches, coords, prediction_map, count_map, model, device)
 
-    count_map[count_map == 0] = 1  # Avoid division by zero
-    prediction_map /= count_map
-    #prediction_map = np.maximum(prediction_map, count_map)
+    no_contribution_mask = (count_map == 0)
 
-    return prediction_map
+    count_map[count_map == 0] = 1
+
+    final_prediction = prediction_map / count_map
+    final_prediction[no_contribution_mask] = 0
+    final_prediction = np.clip(final_prediction, 0, 1)
+
+    return final_prediction
 
 
 def process_batch(patches, coords, prediction_map, count_map, model, device):
