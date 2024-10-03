@@ -9,9 +9,8 @@ import numpy as np
 from pathlib import Path
 
 from dataset.preprocessutils import (
-    get_image_and_polygons_reorder,
-    get_image_and_polygons_normalize,
-    segmap_to_topo,
+    get_image_and_polygons,
+    create_label_mask,
 )
 
 
@@ -55,24 +54,17 @@ def process_image(
     image_name = os.path.basename(image_path)
 
     try:
-        if conf.nir_rgb_order is not None:
-            exim_np, adjusted_polygons = get_image_and_polygons_reorder(
+        img_arr, polygons = get_image_and_polygons(
                 image_path,
                 label_path,
                 conf.nir_rgb_order,
                 conf.normalize_channelwise,
                 conf.normalize_imagewise,
             )
-        else:
-            exim_np, adjusted_polygons = get_image_and_polygons_normalize(
-                image_path,
-                label_path,
-                conf.normalize_channelwise,
-                conf.normalize_imagewise,
-            )
 
-        topolabel = segmap_to_topo(exim_np, adjusted_polygons)
-        patches = extract_patches(exim_np, topolabel, conf.window_size, conf.stride)
+        label_mask = create_label_mask(img_arr, polygons)
+        
+        patches = extract_patches(img_arr, label_mask, conf.window_size, conf.stride)
 
         labeled_patches = [(patch[0], patch[1], int(np.any(patch[1])), image_name) for patch in patches]
         return image_name, labeled_patches
@@ -192,6 +184,7 @@ if __name__ == "__main__":
 
     conf = parse_config(args.config)
 
+    conf.data_folder = "/Users/anisr/Documents/dead_trees/Finland/RGBNIR/25cm"
     convert_to_hdf5(
         conf,
         no_of_samples=args.no_of_samples,
