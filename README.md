@@ -6,9 +6,11 @@
 
 ```bash
 git clone https://github.com/Global-Ecosystem-Health-Observatory/TreeMort.git
-cd TreeMort
 
-sh ./scripts/install_treemort.sh
+export TREEMORT_VENV_PATH="/path/to/venv"
+export TREEMORT_REPO_PATH="/path/to/package"
+
+sh $TREEMORT_REPO_PATH/scripts/install_treemort.sh
 ```
 
 **Step B.** Create dataset in HDF5 format.
@@ -31,7 +33,7 @@ swift download DRYTREE_Annotations -p dead_trees/Finland -D /scratch/project_200
 2. Run script to create the HDF5 dataset.
 
 ```bash
-sbatch /path/to/scripts/run_creator.sh
+sbatch --export=ALL,CONFIG_PATH="/custom/path/to/config" run_creator.sh
 ```
 
 **Step C.** Train/Evaluate TreeMort
@@ -53,7 +55,7 @@ sh /path/to/scripts/run_treemort.sh /path/to/config.txt --eval-only <true/false>
 **Step D.** Run inference engine.
 
 ```bash
-sbatch /path/to/scripts/run_inference.sh
+sbatch --export=ALL,CONFIG_PATH="/custom/path/to/config",DATA_PATH="/custom/path/to/data" run_inference.sh
 ```
 
 ## Getting Started (Mac OS, for development)
