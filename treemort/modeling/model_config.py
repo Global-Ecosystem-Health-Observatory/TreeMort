@@ -109,7 +109,7 @@ def configure_flair_unet(conf):
         filename=filename,
         architecture="unet",
         encoder="resnet34",
-        n_channels=4,
+        n_channels=conf.input_channels,
         n_classes=15,
         use_metadata=False,
     ).get_model()
