@@ -212,6 +212,9 @@ python3 -m dataset.creator ./configs/Finland_RGBNIR_25cm.txt --no-of-samples 3
 
 - For Puhti
 
-sbatch ~/TreeMort/scripts/run_creator.sh
+export TREEMORT_VENV_PATH="/projappl/project_2004205/rahmanan/venv"
+export TREEMORT_REPO_PATH="/users/rahmanan/TreeMort"
+
+sbatch --export=ALL,CONFIG_PATH="$TREEMORT_REPO_PATH/configs/Finland_RGBNIR_25cm.txt" $TREEMORT_REPO_PATH/scripts/run_creator.sh
 
 '''

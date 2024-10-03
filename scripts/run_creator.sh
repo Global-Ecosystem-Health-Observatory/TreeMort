@@ -10,7 +10,7 @@
 #SBATCH --mem-per-cpu=6000                         # Memory per CPU in MB (6GB per CPU)
 
 # Usage:
-# export VENV_PATH="/custom/path/to/venv"
+# export TREEMORT_VENV_PATH="/custom/path/to/venv"
 # sbatch --export=ALL,CONFIG_PATH="/custom/path/to/config" run_creator.sh
 
 MODULE_NAME="pytorch/2.3"

@@ -7,7 +7,7 @@ set -e
 # export TREEMORT_VENV_PATH="/path/to/venv"
 # export TREEMORT_REPO_PATH="/path/to/package"
 #
-# ./install_script.sh
+# sh $TREEMORT_REPO_PATH/scripts/install_treemort.sh
 
 MODULE_NAME="pytorch/2.3"
 
