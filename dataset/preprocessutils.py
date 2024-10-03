@@ -1,9 +1,8 @@
-import cv2
 import json
-import rasterio
 
+import cv2
 import numpy as np
-
+import rasterio
 from tqdm import tqdm
 
 
@@ -19,7 +18,6 @@ def create_label_mask(img_arr: np.ndarray, polys: list[np.ndarray]):
 
 
 def segmap_to_topo(img_arr: np.ndarray, contours: list) -> np.ndarray:
-
     image_h, image_w = img_arr.shape[:2]
     topolabel = np.zeros((image_h, image_w), dtype=np.float32)
 
