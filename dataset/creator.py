@@ -71,6 +71,8 @@ def process_image(
                 conf.normalize_imagewise,
             )
 
+        exim_np = exim_np[:, :, 1:] # Remove NIR
+
         topolabel = segmap_to_topo(exim_np, adjusted_polygons)
         patches = extract_patches(exim_np, topolabel, conf.window_size, conf.stride)
 
