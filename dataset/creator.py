@@ -1,5 +1,6 @@
 import os
 import h5py
+import torch
 import argparse
 import configargparse
 import concurrent.futures
@@ -7,6 +8,8 @@ import concurrent.futures
 import numpy as np
 
 from pathlib import Path
+
+from nirpredict.model import build_model
 
 from dataset.preprocessutils import (
     get_image_and_polygons,
@@ -53,6 +56,10 @@ def process_image(
 ):
     image_name = os.path.basename(image_path)
 
+    if conf.predict_nir:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        nir_model, _, _ = build_model(device, outdir="output/nirpredict")
+
     try:
         img_arr, polygons = get_image_and_polygons(
                 image_path,
@@ -62,14 +69,30 @@ def process_image(
                 conf.normalize_imagewise,
             )
 
-        print(img_arr.shape)
-
         label_mask = create_label_mask(img_arr, polygons)
-        
-        patches = extract_patches(img_arr, label_mask, conf.window_size, conf.stride)
 
-        labeled_patches = [(patch[0], patch[1], int(np.any(patch[1])), image_name) for patch in patches]
-        return image_name, labeled_patches
+        rgb_patches = extract_patches(img_arr, label_mask, conf.window_size, conf.stride)
+
+        if conf.predict_nir:
+            nir_model.eval()  # Set model to evaluation mode
+            labeled_patches = []
+
+            with torch.no_grad():  # Disable gradient calculation for inference
+                for patch, label in rgb_patches:
+                    img_tensor = torch.tensor(patch, dtype=torch.float32).permute(2, 0, 1).unsqueeze(0).to(device)  # Shape: (1, 3, window_size, window_size)
+
+                    nir_band_tensor = nir_model(img_tensor)  # Forward pass
+                    nir_band = nir_band_tensor.squeeze().cpu().numpy()  # Shape: (window_size, window_size)
+
+                    nir_band = np.expand_dims(nir_band, axis=-1)
+
+                    patch_with_nir = np.concatenate((nir_band, patch), axis=-1)  # Shape: (window_size, window_size, 4)
+                    labeled_patches.append((patch_with_nir, label, int(np.any(label)), image_name))
+
+            return image_name, labeled_patches
+        
+        else:
+            return image_name, rgb_patches
     
     except Exception as e:
         print(f"[ERROR] Failed to process {image_path}: {e}")
@@ -171,6 +194,7 @@ def parse_config(config_file_path):
     parser.add("--nir-rgb-order",           type=int, nargs='+', default=[3, 2, 1, 0],   help="NIR, R, G, B order")
     parser.add("--normalize-imagewise",     action="store_true",        help="normalize imagewise")
     parser.add("--normalize-channelwise",   action="store_true",        help="normalize channelwise")
+    parser.add("--predict-nir",             action="store_true",        help="predict NIR")
 
     conf, _ = parser.parse_known_args()
 
