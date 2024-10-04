@@ -1,0 +1,13 @@
+# configurations for dataset creation for DRYTREE_Annotations for Switzerland
+
+data-folder = /scratch/project_2008436/rahmanan/dead_trees/Switzerland/RGB/10cm
+
+hdf5-file = Switzerland_RGBNIR_10cm.h5
+
+window-size = 256
+stride = 128
+nir-rgb-order = [0, 1, 2]
+
+normalize-channelwise
+
+predict-nir
