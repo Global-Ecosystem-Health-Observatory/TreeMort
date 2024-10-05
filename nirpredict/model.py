@@ -1,15 +1,12 @@
 import os
-import logging
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-)
-logger = logging.getLogger(__name__)
+from treemort.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class NIRPredictor(nn.Module):

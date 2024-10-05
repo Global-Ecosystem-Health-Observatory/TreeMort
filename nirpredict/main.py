@@ -1,21 +1,16 @@
 import os
 import torch
-import logging
 import argparse
 
 from treemort.utils.config import setup
+from treemort.utils.logger import get_logger
 
 from nirpredict.data import load_data
 from nirpredict.model import build_model, load_best_weights
 from nirpredict.trainer import train
 from nirpredict.evaluator import evaluate
 
-
-logging.basicConfig(
-    level=logging.INFO,  # Set log level to INFO, you can change to DEBUG if needed
-    format="%(asctime)s - %(levelname)s - %(message)s",  # Format for logs
-)
-logger = logging.getLogger(__name__)  # Set logger name
+logger = get_logger(__name__)
 
 
 def run(conf):

@@ -3,6 +3,10 @@ import torchmetrics
 
 from torchmetrics.functional import peak_signal_noise_ratio, structural_similarity_index_measure
 
+from treemort.utils.logger import get_logger
+
+logger = get_logger(__name__)
+
 
 def evaluate(nir_model, test_nir_loader, criterion, device):
     nir_model.eval()
