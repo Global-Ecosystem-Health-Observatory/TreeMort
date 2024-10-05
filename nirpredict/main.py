@@ -59,21 +59,22 @@ if __name__ == "__main__":
     conf = setup(args.config)
     logger.info("Configuration loaded successfully.")
 
-    conf.data_folder = "/Users/anisr/Documents/dead_trees/Finland/RGBNIR/25cm"
     logger.info(f"Data folder set to {conf.data_folder}.")
     
     run(conf)
 
 
-    '''
-    Usage:
+'''
 
-    - Local machine
+Usage:
 
-    python -m nirpredict.main ./configs/nirpredict.txt  
+python3 -m nirpredict.main ./configs/nirpredict.txt  
 
-    - Puhti
-    
-    sbatch ~/TreeMort/scripts/run_nirpredict.sh
+- For Puhti
 
-    '''
+export TREEMORT_VENV_PATH="/projappl/project_2004205/rahmanan/venv"
+export TREEMORT_REPO_PATH="/users/rahmanan/TreeMort"
+
+sbatch --export=ALL,CONFIG_PATH="$TREEMORT_REPO_PATH/configs/nirpredict.txt" $TREEMORT_REPO_PATH/scripts/run_nirpredict.sh
+
+'''
