@@ -35,21 +35,23 @@ def build_model(device, outdir="output"):
     criterion = nn.MSELoss()
     optimizer = torch.optim.Adam(nir_model.parameters(), lr=0.001)
 
-    load_best_weights(nir_model, optimizer, outdir)
+    load_best_weights(nir_model, optimizer, outdir, device=device)
 
     return nir_model, criterion, optimizer
 
 
-def load_best_weights(nir_model, optimizer, outdir="output"):
+def load_best_weights(nir_model, optimizer, outdir="output", device=None):
     model_path = os.path.join(outdir, "best_model.pth")
     if os.path.exists(model_path):
-        logging.info(f"Loading best model weights from {model_path}")
-        nir_model.load_state_dict(torch.load(model_path, weights_only=True))
+        logger.info(f"Loading best model weights from {model_path}")
         
+        map_location = torch.device("cpu") if not torch.cuda.is_available() else device
+        nir_model.load_state_dict(torch.load(model_path, map_location=map_location))
+
         optimizer_state_path = os.path.join(outdir, "optimizer.pth")
         if os.path.exists(optimizer_state_path):
-            logging.info(f"Loading best model optimizer from {optimizer_state_path}")
-            optimizer.load_state_dict(torch.load(optimizer_state_path, weights_only=True))
+            logger.info(f"Loading best model optimizer state from {optimizer_state_path}")
+            optimizer.load_state_dict(torch.load(optimizer_state_path, map_location=map_location))
             
         return True
     return False
