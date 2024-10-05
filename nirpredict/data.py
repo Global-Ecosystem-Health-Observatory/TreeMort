@@ -16,14 +16,10 @@ class NIRDataset(Dataset):
         if isinstance(data, tuple) and len(data) == 2:
             image, label = data
         else:
-            raise ValueError(
-                f"Expected a tuple of (image, label) at index {idx}, but got {type(data)}"
-            )
+            raise ValueError(f"Expected a tuple of (image, label) at index {idx}, but got {type(data)}")
 
         if image.shape[0] != 4:
-            raise ValueError(
-                f"Expected image with 4 channels, but got {image.shape[0]} channels."
-            )
+            raise ValueError(f"Expected image with 4 channels, but got {image.shape[0]} channels.")
 
         nir_target = image[0, :, :]
         rgb_input = image[1:, :, :]

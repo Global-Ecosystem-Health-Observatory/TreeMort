@@ -24,9 +24,7 @@ class EarlyStopping:
             self.counter += 1
             if self.counter >= self.patience:
                 self.early_stop = True
-                logging.info(
-                    f"Early stopping triggered at Validation Loss: {val_loss:.4f}"
-                )
+                logger.info(f"Early stopping triggered at Validation Loss: {val_loss:.4f}")
 
 
 def train(
@@ -53,11 +51,7 @@ def train(
         nir_model.train()
         running_loss = 0.0
 
-        train_loader_tqdm = tqdm(
-            train_nir_loader,
-            desc=f"Epoch [{epoch+1}/{num_epochs}] Training",
-            leave=False,
-        )
+        train_loader_tqdm = tqdm(train_nir_loader, desc=f"Epoch [{epoch+1}/{num_epochs}] Training", leave=False,)
         for rgb_batch, nir_batch in train_loader_tqdm:
             rgb_batch = rgb_batch.to(device)
             nir_batch = nir_batch.to(device)
@@ -71,17 +65,11 @@ def train(
             optimizer.step()
 
             running_loss += loss.item()
-            train_loader_tqdm.set_postfix(
-                {"Train Loss": f"{running_loss / len(train_nir_loader):.4f}"}
-            )
+            train_loader_tqdm.set_postfix({"Train Loss": f"{running_loss / len(train_nir_loader):.4f}"})
 
         nir_model.eval()
         val_loss = 0.0
-        val_loader_tqdm = tqdm(
-            val_nir_loader,
-            desc=f"Epoch [{epoch+1}/{num_epochs}] Validation",
-            leave=False,
-        )
+        val_loader_tqdm = tqdm(val_nir_loader, desc=f"Epoch [{epoch+1}/{num_epochs}] Validation", leave=False,)
         with torch.no_grad():
             for rgb_val_batch, nir_val_batch in val_loader_tqdm:
                 rgb_val_batch = rgb_val_batch.to(device)
@@ -91,11 +79,11 @@ def train(
                 val_loss += criterion(val_outputs, nir_val_batch.unsqueeze(1)).item()
 
         val_loss /= len(val_nir_loader)
-        logging.info(f"Epoch [{epoch+1}/{num_epochs}], Validation Loss: {val_loss:.4f}")
+        logger.info(f"Epoch [{epoch+1}/{num_epochs}], Validation Loss: {val_loss:.4f}")
 
         early_stopping(val_loss)
         if early_stopping.early_stop:
-            logging.info(f"Early stopping at epoch {epoch + 1}.")
+            logger.info(f"Early stopping at epoch {epoch + 1}.")
             break
 
         scheduler.step(val_loss)
@@ -105,12 +93,8 @@ def train(
             model_path = os.path.join(outdir, "best_model.pth")
 
             torch.save(nir_model.state_dict(), model_path)
-            logging.info(
-                f"Best model saved with Validation Loss: {best_val_loss:.4f} at {model_path}"
-            )
+            logger.info(f"Best model saved with Validation Loss: {best_val_loss:.4f} at {model_path}")
 
             optimizer_state_path = os.path.join(outdir, "optimizer.pth")
             torch.save(optimizer.state_dict(), optimizer_state_path)
-            logging.info(
-                f"Best optimizer saved with Validation Loss: {best_val_loss:.4f} at {optimizer_state_path}"
-            )
+            logger.info(f"Best optimizer saved with Validation Loss: {best_val_loss:.4f} at {optimizer_state_path}")

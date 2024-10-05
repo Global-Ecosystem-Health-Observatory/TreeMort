@@ -119,12 +119,8 @@ def load_best_weights(nir_model, optimizer, outdir="output", device=None):
 
         optimizer_state_path = os.path.join(outdir, "optimizer.pth")
         if os.path.exists(optimizer_state_path):
-            logger.info(
-                f"Loading best model optimizer state from {optimizer_state_path}"
-            )
-            optimizer.load_state_dict(
-                torch.load(optimizer_state_path, map_location=map_location)
-            )
+            logger.info(f"Loading best model optimizer state from {optimizer_state_path}")
+            optimizer.load_state_dict(torch.load(optimizer_state_path, map_location=map_location))
 
         return True
     return False
