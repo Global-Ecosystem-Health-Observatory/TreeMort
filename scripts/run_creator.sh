@@ -11,7 +11,7 @@
 
 # Usage:
 # export TREEMORT_VENV_PATH="/custom/path/to/venv"
-# sbatch --export=ALL,CONFIG_PATH="/custom/path/to/config" run_creator.sh
+# sbatch --export=ALL,CONFIG_PATH="/custom/path/to/config",CHUNK_SIZE=10 run_creator.sh
 
 MODULE_NAME="pytorch/2.3"
 
@@ -38,13 +38,16 @@ if [ ! -f "$CONFIG_PATH" ]; then
     exit 1
 fi
 
+CHUNK_SIZE="${CHUNK_SIZE:-10}"  # Default chunk size is 10 if not set
+
 echo "[INFO] Starting dataset creation with the following settings:"
 echo "       Config file: $CONFIG_PATH"
 echo "       CPUs per task: $SLURM_CPUS_PER_TASK"
 echo "       Memory per CPU: $SLURM_MEM_PER_CPU MB"
 echo "       Job time limit: $SLURM_TIMELIMIT"
+echo "       Chunk size: $CHUNK_SIZE"
 
-srun python3 -m dataset.creator "$CONFIG_PATH" --num-workers "$SLURM_CPUS_PER_TASK"
+srun python3 -m dataset.creator "$CONFIG_PATH" --num-workers "$SLURM_CPUS_PER_TASK" --chunk-size "$CHUNK_SIZE"
 
 EXIT_STATUS=$?
 if [ $EXIT_STATUS -ne 0 ]; then
