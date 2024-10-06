@@ -69,6 +69,9 @@ def process_image(
                 conf.normalize_imagewise,
             )
 
+        if img_arr.shape[-1] == 4:
+            img_arr = img_arr[..., :3]  # Shape: (height, width, 3)
+
         label_mask = create_label_mask(img_arr, polygons)
 
         rgb_patches = extract_patches(img_arr, label_mask, conf.window_size, conf.stride)
@@ -209,8 +212,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     conf = parse_config(args.config)
-
-    conf.data_folder = "/Users/anisr/Documents/dead_trees/Switzerland/RGB/10cm"
     
     convert_to_hdf5(
         conf,
