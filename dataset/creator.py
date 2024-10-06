@@ -210,6 +210,8 @@ if __name__ == "__main__":
 
     conf = parse_config(args.config)
 
+    conf.data_folder = "/Users/anisr/Documents/dead_trees/Switzerland/RGB/10cm"
+    
     convert_to_hdf5(
         conf,
         no_of_samples=args.no_of_samples,
