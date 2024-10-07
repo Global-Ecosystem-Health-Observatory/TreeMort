@@ -33,7 +33,7 @@ swift download DRYTREE_Annotations -p dead_trees/Finland -D /scratch/project_200
 2. Run script to create the HDF5 dataset.
 
 ```bash
-sbatch --export=ALL,CONFIG_PATH="/custom/path/to/config" run_creator.sh
+sbatch --export=ALL,CONFIG_PATH="/custom/path/to/config",CHUNK_SIZE=<integer> run_creator.sh
 ```
 
 **Step C.** Train/Evaluate TreeMort
@@ -46,11 +46,8 @@ sh /path/to/scripts/run_treemort.sh /path/to/config.txt --eval-only <true/false>
 
 | Model | Mean IOU Pixels | Mean IOU Trees | Mean IOU | Mean Balanced IOU | Mean Dice Score | Mean Adjusted Dice Score | Mean MCC |
 | :---: | :-------------: | :------------: | -------: | :---------------: | :-------------: | :----------------------: | :------: |
-| SA-UNet | 0.281 | 0.749 | 0.840 | 0.997 | 0.334 | 0.736 | 0.342 |
-| Multiscale SA-UNet | 0.272 | 0.738 | 0.837 | 0.996 | 0.323 | 0.727 | 0.331 |
-| FLAIR-Unet | 0.291 | 0.749 | 0.845 | 0.996 | 0.346 | 0.747 | 0.354 |
-| HCFNet | 0.283 | 0.742 | 0.842 | 0.996 | 0.336 | 0.740 | 0.345 |
-| DeepLabV3+ | 0.287 | 0.773 | 0.856 | 0.997 | 0.342 | 0.769 | 0.350 |
+| FLAIR-Unet | 0.263 | 0.774 | 0.861 | 0.996 | 0.313 | 0.773 | 0.318 |
+| DeepLabV3+ | 0.261 | 0.790 | 0.867 | 0.996 | 0.311 | 0.786 | 0.316 |
 
 **Step D.** Run inference engine.
 
