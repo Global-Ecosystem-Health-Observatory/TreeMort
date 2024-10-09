@@ -50,6 +50,8 @@ def train(
     for epoch in range(num_epochs):
         nir_model.train()
         running_loss = 0.0
+        running_mse_loss = 0.0
+        running_ssim_loss = 0.0
 
         train_loader_tqdm = tqdm(train_nir_loader, desc=f"Epoch [{epoch+1}/{num_epochs}] Training", leave=False,)
         for rgb_batch, nir_batch in train_loader_tqdm:
@@ -58,17 +60,28 @@ def train(
 
             optimizer.zero_grad()
             outputs = nir_model(rgb_batch)
-            loss = criterion(outputs, nir_batch.unsqueeze(1))
-            loss.backward()
+            
+            combined_loss, mse_loss, ssim_loss = criterion(outputs, nir_batch.unsqueeze(1))
+            combined_loss.backward()
 
             torch.nn.utils.clip_grad_norm_(nir_model.parameters(), max_norm=1.0)
             optimizer.step()
 
-            running_loss += loss.item()
-            train_loader_tqdm.set_postfix({"Train Loss": f"{running_loss / len(train_nir_loader):.4f}"})
+            running_loss += combined_loss.item()
+            running_mse_loss += mse_loss.item()
+            running_ssim_loss += ssim_loss.item()
+
+            train_loader_tqdm.set_postfix({
+                "Train Loss": f"{running_loss / len(train_nir_loader):.4f}",
+                "MSE": f"{running_mse_loss / len(train_nir_loader):.4f}",
+                "SSIM": f"{running_ssim_loss / len(train_nir_loader):.4f}"
+            })
 
         nir_model.eval()
         val_loss = 0.0
+        val_mse_loss = 0.0
+        val_ssim_loss = 0.0
+
         val_loader_tqdm = tqdm(val_nir_loader, desc=f"Epoch [{epoch+1}/{num_epochs}] Validation", leave=False,)
         with torch.no_grad():
             for rgb_val_batch, nir_val_batch in val_loader_tqdm:
@@ -76,10 +89,17 @@ def train(
                 nir_val_batch = nir_val_batch.to(device)
 
                 val_outputs = nir_model(rgb_val_batch)
-                val_loss += criterion(val_outputs, nir_val_batch.unsqueeze(1)).item()
+                
+                combined_val_loss, mse_val_loss, ssim_val_loss = criterion(val_outputs, nir_val_batch.unsqueeze(1))
+                val_loss += combined_val_loss.item()
+                val_mse_loss += mse_val_loss.item()
+                val_ssim_loss += ssim_val_loss.item()
 
         val_loss /= len(val_nir_loader)
-        logger.info(f"Epoch [{epoch+1}/{num_epochs}], Validation Loss: {val_loss:.4f}")
+        val_mse_loss /= len(val_nir_loader)
+        val_ssim_loss /= len(val_nir_loader)
+
+        logger.info(f"Epoch [{epoch+1}/{num_epochs}], Validation Loss: {val_loss:.4f}, MSE: {val_mse_loss:.4f}, SSIM: {val_ssim_loss:.4f}")
 
         early_stopping(val_loss)
         if early_stopping.early_stop:

@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from nirpredict.loss import CombinedLoss
 from treemort.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -19,6 +20,9 @@ class NIRPredictor(nn.Module):
             nn.BatchNorm2d(64),
             nn.ReLU(),
             nn.Conv2d(64, 64, kernel_size=3, padding=1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(),
+            nn.Conv2d(64, 64, kernel_size=3, padding=1),  # Added Layer
             nn.BatchNorm2d(64),
             nn.ReLU(),
         )
@@ -38,19 +42,20 @@ class NIRPredictor(nn.Module):
 
         # Bottleneck
         self.bottleneck = nn.Sequential(
-            nn.Conv2d(128, 256, kernel_size=3, padding=1),
-            nn.BatchNorm2d(256),
+            nn.Conv2d(128, 512, kernel_size=3, padding=1),  # Increase to 512 filters
+            nn.BatchNorm2d(512),
             nn.ReLU(),
-            nn.Conv2d(256, 256, kernel_size=3, padding=1),
-            nn.BatchNorm2d(256),
+            nn.Dropout(0.5),
+            nn.Conv2d(512, 512, kernel_size=3, padding=1),
+            nn.BatchNorm2d(512),
             nn.ReLU(),
         )
 
         # Decoder part - Upsampling
-        self.upsample1 = nn.ConvTranspose2d(256, 128, kernel_size=2, stride=2)
+        self.upsample1 = nn.ConvTranspose2d(512, 256, kernel_size=2, stride=2)  # Input is now 512, output is 256
 
         self.decoder1 = nn.Sequential(
-            nn.Conv2d(256, 128, kernel_size=3, padding=1),
+            nn.Conv2d(384, 128, kernel_size=3, padding=1),  # 256 (from upsample1) + 128 (from encoder2)
             nn.BatchNorm2d(128),
             nn.ReLU(),
             nn.Conv2d(128, 128, kernel_size=3, padding=1),
@@ -61,7 +66,7 @@ class NIRPredictor(nn.Module):
         self.upsample2 = nn.ConvTranspose2d(128, 64, kernel_size=2, stride=2)
 
         self.decoder2 = nn.Sequential(
-            nn.Conv2d(128, 64, kernel_size=3, padding=1),
+            nn.Conv2d(128, 64, kernel_size=3, padding=1),  # 64 (from upsample2) + 64 (from encoder1)
             nn.BatchNorm2d(64),
             nn.ReLU(),
             nn.Conv2d(64, 64, kernel_size=3, padding=1),
@@ -96,13 +101,13 @@ class NIRPredictor(nn.Module):
         output = self.final_conv(x4)
 
         return output
-
+        
 
 def build_model(device, outdir="output"):
     nir_model = NIRPredictor().to(device)
 
-    criterion = nn.MSELoss()
-    optimizer = torch.optim.Adam(nir_model.parameters(), lr=0.001)
+    criterion = CombinedLoss(ssim_weight=0.1)
+    optimizer = torch.optim.Adam(nir_model.parameters(), lr=0.005)
 
     load_best_weights(nir_model, optimizer, outdir, device=device)
 
@@ -115,12 +120,12 @@ def load_best_weights(nir_model, optimizer, outdir="output", device=None):
         logger.info(f"Loading best model weights from {model_path}")
 
         map_location = torch.device("cpu") if not torch.cuda.is_available() else device
-        nir_model.load_state_dict(torch.load(model_path, map_location=map_location))
+        nir_model.load_state_dict(torch.load(model_path, map_location=map_location, weights_only=True))
 
         optimizer_state_path = os.path.join(outdir, "optimizer.pth")
         if os.path.exists(optimizer_state_path):
             logger.info(f"Loading best model optimizer state from {optimizer_state_path}")
-            optimizer.load_state_dict(torch.load(optimizer_state_path, map_location=map_location))
+            optimizer.load_state_dict(torch.load(optimizer_state_path, map_location=map_location, weights_only=True))
 
         return True
     return False

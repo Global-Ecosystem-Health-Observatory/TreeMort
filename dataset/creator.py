@@ -89,7 +89,11 @@ def process_image(
 
                     nir_band = np.expand_dims(nir_band, axis=-1)
 
+                    print(patch.shape)
+                    print(nir_band.shape)
                     patch_with_nir = np.concatenate((nir_band, patch), axis=-1)  # Shape: (window_size, window_size, 4)
+                    print(patch_with_nir.shape)
+
                     labeled_patches.append((patch_with_nir, label, int(np.any(label)), image_name))
 
             return image_name, labeled_patches
@@ -212,7 +216,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     conf = parse_config(args.config)
-    
+
     convert_to_hdf5(
         conf,
         no_of_samples=args.no_of_samples,
