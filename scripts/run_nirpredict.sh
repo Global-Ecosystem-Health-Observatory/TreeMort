@@ -5,7 +5,7 @@
 #SBATCH --error=output/stderr/%A_%a.err            # Error log
 #SBATCH --ntasks=1                                 # Number of tasks (1 process)
 #SBATCH --cpus-per-task=4                          # Number of CPU cores per task
-#SBATCH --time=24:00:00                            # Time limit (hh:mm:ss)
+#SBATCH --time=12:00:00                            # Time limit (hh:mm:ss)
 #SBATCH --partition=gpu                            # Partition to submit to
 #SBATCH --gres=gpu:v100:1                          # Number and type of GPU
 #SBATCH --mem-per-cpu=32G                          # Memory per GPU in GB
