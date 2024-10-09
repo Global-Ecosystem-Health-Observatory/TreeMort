@@ -20,6 +20,7 @@ setup(
         'scikit-learn',
         'torchmetrics',
         'opencv-python',
+        'pytorch_msssim',
         'configargparse',
         'segmentation-models-pytorch',
     ],

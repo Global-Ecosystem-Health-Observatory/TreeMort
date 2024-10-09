@@ -5,7 +5,7 @@ from treemort.data.loader import prepare_datasets
 
 class NIRDataset(Dataset):
     def __init__(self, original_dataset):
-        self.original_dataset = original_dataset  # This should be a dataset object
+        self.original_dataset = original_dataset
 
     def __len__(self):
         return len(self.original_dataset)

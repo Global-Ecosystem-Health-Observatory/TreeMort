@@ -9,8 +9,8 @@ def evaluate(nir_model, test_nir_loader, criterion, device):
 
     test_loss = 0.0
     mae_metric = torchmetrics.MeanAbsoluteError().to(device)
-    psnr_metric = PeakSignalNoiseRatio(data_range=1.0).to(device)  # Instantiate PSNR
-    ssim_metric = StructuralSimilarityIndexMeasure(data_range=1.0).to(device)  # Instantiate SSIM
+    psnr_metric = PeakSignalNoiseRatio(data_range=1.0).to(device)
+    ssim_metric = StructuralSimilarityIndexMeasure(data_range=1.0).to(device)
 
     with torch.no_grad():
         for rgb_test_batch, nir_test_batch in test_nir_loader:
@@ -23,17 +23,17 @@ def evaluate(nir_model, test_nir_loader, criterion, device):
             test_loss += combined_loss.item()
 
             mae_metric.update(nir_pred, nir_test_batch.unsqueeze(1))
-            psnr_metric.update(nir_pred, nir_test_batch.unsqueeze(1))  # Update PSNR metric
-            ssim_metric.update(nir_pred, nir_test_batch.unsqueeze(1))  # Update SSIM metric
+            psnr_metric.update(nir_pred, nir_test_batch.unsqueeze(1))
+            ssim_metric.update(nir_pred, nir_test_batch.unsqueeze(1))
 
     test_loss /= len(test_nir_loader)
     avg_mae = mae_metric.compute().item()
 
     psnr_value = psnr_metric.compute()
-    avg_psnr = psnr_value.mean().item() if isinstance(psnr_value, torch.Tensor) else sum(psnr_value) / len(psnr_value)  # Average across channels if tuple
+    avg_psnr = psnr_value.mean().item() if isinstance(psnr_value, torch.Tensor) else sum(psnr_value) / len(psnr_value)
 
     ssim_value = ssim_metric.compute()
-    avg_ssim = ssim_value.mean().item() if isinstance(ssim_value, torch.Tensor) else sum(ssim_value) / len(ssim_value)  # Average across channels if tuple
+    avg_ssim = ssim_value.mean().item() if isinstance(ssim_value, torch.Tensor) else sum(ssim_value) / len(ssim_value)
 
     mae_metric.reset()
     psnr_metric.reset()

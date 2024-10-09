@@ -11,5 +11,6 @@ torchmetrics
 transformers
 scikit-learn
 opencv-python
+pytorch_msssim
 configargparse
 segmentation-models-pytorch
