@@ -10,6 +10,7 @@ import numpy as np
 from pathlib import Path
 
 from nirpredict.model import build_model
+from nirpredict.predict import predict
 
 from dataset.preprocessutils import (
     get_image_and_polygons,
@@ -49,62 +50,72 @@ def extract_patches(image, label, window_size, stride):
     return patches
 
 
-def process_image(
-    image_path,
-    label_path,
-    conf
-):
+def load_model_if_needed(predict_nir, device):
+    if predict_nir:
+        nir_model, _, _ = build_model(device, outdir="output/nirpredict")
+        return nir_model
+    return None
+
+def preprocess_image(image_path, label_path, conf, predict_nir):
+    img_arr, polygons = get_image_and_polygons(
+        image_path,
+        label_path,
+        conf.nir_rgb_order,
+        conf.normalize_channelwise,
+        conf.normalize_imagewise,
+    )
+
+    if predict_nir and img_arr.shape[-1] == 4:
+        img_arr = img_arr[..., :3]  # Shape: (height, width, 3)
+
+    label_mask = create_label_mask(img_arr, polygons)
+    return img_arr, label_mask
+
+
+def predict_nir_for_patches(nir_model, rgb_patch, device):
+    with torch.no_grad():
+        rgb_tensor = torch.from_numpy(rgb_patch).float().permute(2, 0, 1).unsqueeze(0).to(device)
+
+        nir_band_tensor = predict(nir_model, rgb_tensor, device)
+        nir_band = nir_band_tensor.squeeze().cpu().numpy()  # Shape (window_size, window_size)
+
+        nir_band = np.expand_dims(nir_band, axis=-1)
+        patch_with_nir = np.concatenate((nir_band, rgb_patch), axis=-1)
+
+    return patch_with_nir
+
+
+def process_image(image_path, label_path, conf):
     image_name = os.path.basename(image_path)
 
-    if conf.predict_nir:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        nir_model, _, _ = build_model(device, outdir="output/nirpredict")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    nir_model = load_model_if_needed(conf.predict_nir, device)
 
     try:
-        img_arr, polygons = get_image_and_polygons(
-                image_path,
-                label_path,
-                conf.nir_rgb_order,
-                conf.normalize_channelwise,
-                conf.normalize_imagewise,
-            )
-
-        if img_arr.shape[-1] == 4:
-            img_arr = img_arr[..., :3]  # Shape: (height, width, 3)
-
-        label_mask = create_label_mask(img_arr, polygons)
+        img_arr, label_mask = preprocess_image(image_path, label_path, conf, conf.predict_nir)
 
         rgb_patches = extract_patches(img_arr, label_mask, conf.window_size, conf.stride)
 
-        if conf.predict_nir:
-            nir_model.eval()  # Set model to evaluation mode
-            labeled_patches = []
+        if not rgb_patches:
+            print(f"[INFO] No patches extracted for {image_name}.")
+            return image_name, []
 
-            with torch.no_grad():  # Disable gradient calculation for inference
-                for patch, label in rgb_patches:
-                    img_tensor = torch.tensor(patch, dtype=torch.float32).permute(2, 0, 1).unsqueeze(0).to(device)  # Shape: (1, 3, window_size, window_size)
+        labeled_patches = []
 
-                    nir_band_tensor = nir_model(img_tensor)  # Forward pass
-                    nir_band = nir_band_tensor.squeeze().cpu().numpy()  # Shape: (window_size, window_size)
+        for patch, label in rgb_patches:
+            if conf.predict_nir:
+                patch_with_nir = predict_nir_for_patches(nir_model, patch, device)
+            else:
+                patch_with_nir = patch
 
-                    nir_band = np.expand_dims(nir_band, axis=-1)
+            labeled_patches.append((patch_with_nir, label, int(np.any(label)), image_name))
 
-                    print(patch.shape)
-                    print(nir_band.shape)
-                    patch_with_nir = np.concatenate((nir_band, patch), axis=-1)  # Shape: (window_size, window_size, 4)
-                    print(patch_with_nir.shape)
+        return image_name, labeled_patches
 
-                    labeled_patches.append((patch_with_nir, label, int(np.any(label)), image_name))
-
-            return image_name, labeled_patches
-        
-        else:
-            return image_name, rgb_patches
-    
     except Exception as e:
-        print(f"[ERROR] Failed to process {image_path}: {e}")
+        print(f"[ERROR] Failed to process {image_path}: {type(e).__name__}: {e}")
         return image_name, []
-
+    
 
 def write_to_hdf5(hdf5_file, data):
     with h5py.File(hdf5_file, "a") as hf:  # Open in append mode

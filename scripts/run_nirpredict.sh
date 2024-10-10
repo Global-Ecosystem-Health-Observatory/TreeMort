@@ -8,7 +8,7 @@
 #SBATCH --time=08:00:00                            # Time limit (hh:mm:ss)
 #SBATCH --partition=gpu                            # Partition to submit to
 #SBATCH --gres=gpu:v100:1                          # Number and type of GPU
-#SBATCH --mem-per-cpu=32G                          # Memory per GPU in GB
+#SBATCH --mem-per-cpu=8G                           # Memory per GPU in GB
 
 # Usage:
 # export TREEMORT_VENV_PATH="/custom/path/to/venv"
