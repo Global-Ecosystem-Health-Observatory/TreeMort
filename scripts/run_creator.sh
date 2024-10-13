@@ -5,7 +5,7 @@
 #SBATCH --error=output/stderr/%A_%a.err            # Error log
 #SBATCH --ntasks=1                                 # Number of tasks (1 process)
 #SBATCH --cpus-per-task=6                          # Number of CPU cores per task
-#SBATCH --time=05:00:00                            # Time limit (hh:mm:ss)
+#SBATCH --time=08:00:00                            # Time limit (hh:mm:ss)
 #SBATCH --partition=small                          # Partition to submit to
 #SBATCH --mem-per-cpu=6000                         # Memory per CPU in MB (6GB per CPU)
 
