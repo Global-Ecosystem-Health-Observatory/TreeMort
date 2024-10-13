@@ -166,7 +166,7 @@ def parse_config(config_file_path):
     parser.add("--num-workers",             type=int, default=4,        help="number of workers for parallel processing")
     parser.add("--window-size",             type=int, default=256,      help="size of the window")
     parser.add("--stride",                  type=int, default=128,      help="stride for the window")
-    parser.add("--nir-rgb-order",           type=int, nargs='+', default=[3, 2, 1, 0],   help="NIR, R, G, B order")
+    parser.add("--nir-rgb-order",           type=int, nargs='+', default=[3, 0, 1, 2],   help="NIR, R, G, B order")
     parser.add("--normalize-imagewise",     action="store_true",        help="normalize imagewise")
     parser.add("--normalize-channelwise",   action="store_true",        help="normalize channelwise")
 
