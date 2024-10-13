@@ -21,19 +21,16 @@ done
 # Create a temporary SBATCH script in the local directory
 SBATCH_SCRIPT=$(mktemp)
 
-# Common SBATCH script part
 cat <<EOT > $SBATCH_SCRIPT
 #!/bin/bash
 #SBATCH --job-name=tree-mort
 #SBATCH --account=project_2004205
-#SBATCH --output=output/stdout/%A_%a.out
-#SBATCH --error=output/stderr/%A_%a.err
+#SBATCH --output=output/stdout/%A_%a
 #SBATCH --ntasks=1 --cpus-per-task=4
 #SBATCH --mem-per-cpu=32G
 #SBATCH --gres=gpu:v100:1
 EOT
 
-# Conditional SBATCH settings
 if [ "$TEST_RUN" = true ]; then
     echo "#SBATCH --time=00:15:00" >> $SBATCH_SCRIPT
     echo "#SBATCH --partition=gputest" >> $SBATCH_SCRIPT
@@ -41,15 +38,27 @@ elif [ "$EVAL_ONLY" = true ]; then
     echo "#SBATCH --time=01:00:00" >> $SBATCH_SCRIPT
     echo "#SBATCH --partition=gpu" >> $SBATCH_SCRIPT
 else
-    echo "#SBATCH --time=03:00:00" >> $SBATCH_SCRIPT
+    echo "#SBATCH --time=16:00:00" >> $SBATCH_SCRIPT
     echo "#SBATCH --partition=gpu" >> $SBATCH_SCRIPT
 fi
 
 # Add the rest of the script
 cat <<EOT >> $SBATCH_SCRIPT
 
-module load pytorch/2.3
-source /projappl/project_2004205/rahmanan/venv/bin/activate
+MODULE_NAME="pytorch/2.3"
+
+echo "Loading module: \$MODULE_NAME"
+module load \$MODULE_NAME
+
+TREEMORT_VENV_PATH="\${TREEMORT_VENV_PATH:-/projappl/project_2004205/rahmanan/venv}"
+
+if [ -d "\$TREEMORT_VENV_PATH" ]; then
+    echo "[INFO] Activating virtual environment at \$TREEMORT_VENV_PATH"
+    source "\$TREEMORT_VENV_PATH/bin/activate"
+else
+    echo "[ERROR] Virtual environment not found at \$TREEMORT_VENV_PATH"
+    exit 1
+fi
 
 EOT
 
@@ -59,13 +68,10 @@ else
     echo "srun python3 -m treemort.main \"$CONFIG_FILE\"" >> $SBATCH_SCRIPT
 fi
 
-# Print the contents of the SBATCH script
 echo "Generated SBATCH script:"
 cat $SBATCH_SCRIPT
 
-# Submit the job
 sbatch $SBATCH_SCRIPT
 
-# Remove the temporary SBATCH script
 rm $SBATCH_SCRIPT
 
