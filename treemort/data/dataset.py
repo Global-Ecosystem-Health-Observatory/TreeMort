@@ -29,7 +29,7 @@ class DeadTreeDataset(Dataset):
     def __len__(self):
         return len(self.keys)
 
-    def __getitem__(self, idx):            
+    def __getitem__(self, idx):         
         image, label = self._load_data(idx)
         image, label = self._preprocess_image_and_label(image, label)
 

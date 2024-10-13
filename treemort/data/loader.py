@@ -4,7 +4,7 @@ from pathlib import Path
 from torch.utils.data import DataLoader, ConcatDataset
 
 from treemort.data.dataset import DeadTreeDataset
-from treemort.data.sampler import BalancedSampler, DatasetAwareBalancedSampler
+from treemort.data.sampler import BalancedSampler, DatasetAwareBalancedSampler, ClassPrioritizedSampler
 from treemort.data.image_processing import get_image_processor
 
 from treemort.utils.augment import Augmentations
@@ -48,10 +48,42 @@ def prepare_datasets(conf):
         image_processor=image_processor,
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=conf.train_batch_size, sampler=BalancedSampler(hdf5_path, train_keys), drop_last=True)
-    val_loader = DataLoader(val_dataset, batch_size=conf.val_batch_size, sampler=BalancedSampler(hdf5_path, val_keys), shuffle=False, drop_last=True)
-    test_loader = DataLoader(test_dataset, batch_size=conf.test_batch_size, sampler=BalancedSampler(hdf5_path, test_keys), shuffle=False, drop_last=True)
-    
+    train_loader = DataLoader(
+        train_dataset, batch_size=conf.train_batch_size, 
+        sampler=ClassPrioritizedSampler(
+            hdf5_file=hdf5_path, 
+            keys=train_keys, 
+            prioritized_class_label=1,  # Replace 1 with the actual label of your prioritized class
+            sample_ratio=1.0
+        ), 
+        drop_last=True
+    )
+
+    val_loader = DataLoader(
+        val_dataset, 
+        batch_size=conf.val_batch_size, 
+        sampler=ClassPrioritizedSampler(
+            hdf5_file=hdf5_path, 
+            keys=val_keys, 
+            prioritized_class_label=1,  # Replace 1 with the actual label of your prioritized class
+            sample_ratio=1.0
+        ), 
+        shuffle=False, 
+        drop_last=True
+    )
+
+    test_loader = DataLoader(
+        test_dataset, 
+        batch_size=conf.test_batch_size, 
+        sampler=ClassPrioritizedSampler(
+            hdf5_file=hdf5_path, 
+            keys=test_keys, 
+            prioritized_class_label=1,  # Replace 1 with the actual label of your prioritized class
+            sample_ratio=1.0
+        ), 
+        shuffle=False, 
+        drop_last=True
+    )
     return train_loader, val_loader, test_loader
 
 

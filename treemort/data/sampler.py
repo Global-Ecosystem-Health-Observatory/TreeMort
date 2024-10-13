@@ -34,6 +34,41 @@ class BalancedSampler(Sampler):
         return 2 * min(len(self.dead_tree_indices), len(self.no_dead_tree_indices))
 
 
+class ClassPrioritizedSampler(Sampler):
+    def __init__(self, hdf5_file, keys, prioritized_class_label, sample_count=None, sample_ratio=None):
+        self.hdf5_file = hdf5_file
+        self.keys = keys
+        self.prioritized_class_indices = []
+        self.other_class_indices = []
+
+        with h5py.File(self.hdf5_file, "r") as hf:
+            for idx, key in enumerate(self.keys):
+                class_label = hf[key].attrs.get("contains_dead_tree", 0)  # Assuming "contains_dead_tree" is the attribute for class label
+                if class_label == prioritized_class_label:
+                    self.prioritized_class_indices.append(idx)
+                else:
+                    self.other_class_indices.append(idx)
+
+        if sample_count is not None:
+            self.sample_count = sample_count
+        elif sample_ratio is not None:
+            self.sample_count = int(len(self.prioritized_class_indices) * sample_ratio)
+        else:
+            raise ValueError("Either sample_count or sample_ratio must be specified.")
+
+    def __iter__(self):
+        balanced_indices = self.prioritized_class_indices.copy()
+
+        other_class_sample = random.sample(self.other_class_indices, min(self.sample_count, len(self.other_class_indices)))
+        balanced_indices.extend(other_class_sample)
+
+        random.shuffle(balanced_indices)
+        return iter(balanced_indices)
+
+    def __len__(self):
+        return len(self.prioritized_class_indices) + min(self.sample_count, len(self.other_class_indices))
+    
+
 class DatasetAwareBalancedSampler(Sampler):
     def __init__(self, hdf5_file_finnish, keys_finnish, hdf5_file_polish, keys_polish):
         self.hdf5_file_finnish = hdf5_file_finnish
