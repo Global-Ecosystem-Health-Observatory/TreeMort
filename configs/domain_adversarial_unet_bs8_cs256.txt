@@ -1,0 +1,42 @@
+# settings for domain adversarial unet
+
+data-folder-finnish = /scratch/project_2008436/rahmanan/dead_trees/Finland/RGBNIR/25cm
+data-folder-us = /scratch/project_2008436/rahmanan/dead_trees/USA_MO/RGBNIR/60cm
+
+hdf5-file-finnish = Finland_RGBNIR_25cm.h5
+hdf5-file-us = USA_MO_RGBNIR_60cm.h5
+
+model = domain_adversarial_unet
+output-dir = output/domain_adversarial_unet
+
+train-crop-size = 256
+val-crop-size = 256
+test-crop-size = 256
+
+input-channels = 4
+output-channels = 1
+
+train-batch-size = 8
+val-batch-size = 8
+test-batch-size = 8
+
+epochs = 100
+
+class-weights = [0.1, 0.9]
+
+model-weights = best  # available options [best, latest]
+learning-rate = 1e-4
+threshold = 0.5
+
+activation = sigmoid  # available options [tanh, sigmoid]
+
+loss = hybrid  # available options [mse, hybrid, weighted_dice_loss]
+
+# Domain-Adversarial Training Parameters
+lambda_adv = 0.5  # Weight for the adversarial domain classification loss
+domain_loss = cross_entropy  # Loss function for domain classification (usually CrossEntropyLoss)
+
+val-size = 0.2
+test-size = 0.1
+
+resume = False
