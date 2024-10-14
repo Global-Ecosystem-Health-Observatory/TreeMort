@@ -1,8 +1,8 @@
-# settings for self attention unet with flair backbone
+# settings for self-attention UNet with flair backbone
 
-data-folder = /scratch/project_2008436/rahmanan/dead_trees/Finland/RGBNIR/25cm
+data-folder = /scratch/project_2008436/rahmanan/dead_trees/USA_MO/RGBNIR/60cm
 
-hdf5-file = Finland_RGBNIR_25cm.h5
+hdf5-file = USA_MO_RGBNIR_60cm.h5
 
 model = flair_unet
 
@@ -23,7 +23,7 @@ epochs = 100
 
 class-weights = [0.1, 0.9]
 
-model-weights = best # available options [best, latest]
+model-weights = best  # available options [best, latest]
 
 learning-rate = 1e-4
 
@@ -31,9 +31,13 @@ threshold = 0.5
 
 # activation = sigmoid # available options [tanh, sigmoid]
 
-loss = hybrid # available options [mse, hybrid]
+loss = hybrid  # available options [mse, hybrid]
 
 val-size = 0.2
 test-size = 0.1
 
-resume
+resume = False
+
+teacher-model-name = best.weights.finland.pth
+distillation-alpha = 0.5
+distillation-temperature = 2.0

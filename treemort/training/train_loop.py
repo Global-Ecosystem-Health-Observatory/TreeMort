@@ -1,12 +1,13 @@
 import torch
-
 from tqdm import tqdm
 
 from treemort.training.output_processing import process_model_output
 
 
-def train_one_epoch(model, optimizer, criterion, metrics, train_loader, conf, device):
-    model.train()
+def train_one_epoch_kd(student_model, teacher_model, optimizer, criterion, kd_criterion, metrics, train_loader, conf, device, alpha=0.5, temperature=2.0):
+    student_model.train()
+    teacher_model.eval()
+    
     train_loss = 0.0
     train_metrics = {}
 
@@ -19,16 +20,26 @@ def train_one_epoch(model, optimizer, criterion, metrics, train_loader, conf, de
 
         optimizer.zero_grad()
 
-        logits = process_model_output(model, images, conf)
-        
-        loss = criterion(logits, labels, class_weights=class_weights)
+        student_logits = process_model_output(student_model, images, conf)
+
+        with torch.no_grad():
+            teacher_logits = process_model_output(teacher_model, images, conf)
+
+        loss_standard = criterion(student_logits, labels, class_weights=class_weights)
+
+        loss_distillation = kd_criterion(
+            torch.sigmoid(student_logits / temperature), 
+            torch.sigmoid(teacher_logits / temperature)
+        )
+
+        loss = alpha * loss_distillation + (1 - alpha) * loss_standard
 
         loss.backward()
         optimizer.step()
 
         train_loss += loss.item()
 
-        pred_probs = torch.sigmoid(logits)
+        pred_probs = torch.sigmoid(student_logits)
 
         batch_metrics = metrics(pred_probs, labels)
         for key, value in batch_metrics.items():

@@ -11,37 +11,53 @@ logger = get_logger(__name__)
 
 
 def resume_or_load(conf, id2label, n_batches, device):
-    logger.info("Building model...")
+    logger.info("Building student and teacher models...")
 
-    model, optimizer, criterion, metrics = build_model(conf, id2label, device)
+    student_model, teacher_model, optimizer, criterion, metrics = build_model(conf, id2label, device)
 
     callbacks = build_callbacks(n_batches, conf.output_dir, optimizer)
 
+    if conf.teacher_model_name:
+        load_teacher_weights(teacher_model, conf, device)
+
     if conf.resume:
-        load_checkpoint_if_available(model, conf)
+        load_checkpoint(student_model, conf, device)
     else:
-        logger.info("Training model from scratch.")
+        logger.info("Training student model from scratch.")
 
-    return model, optimizer, criterion, metrics, callbacks
+    return student_model, teacher_model, optimizer, criterion, metrics, callbacks
 
 
-def load_checkpoint_if_available(model, conf):
-    checkpoint_path = get_checkpoint(conf.model_weights, conf.output_dir)
+def load_teacher_weights(teacher_model, conf, device):
+    checkpoint_path = get_checkpoint(conf.output_dir, model_type="teacher", teacher_model_name=conf.teacher_model_name)
 
     if checkpoint_path:
-        device = next(model.parameters()).device  # Get the device of the model
-        model.load_state_dict(torch.load(checkpoint_path, map_location=device, weights_only=True))
-        logger.info(f"Loaded weights from {checkpoint_path}.")
+        teacher_model.load_state_dict(torch.load(checkpoint_path, map_location=device))
+        logger.info(f"Loaded teacher model weights from {checkpoint_path}.")
     else:
-        logger.info("No checkpoint found. Training from scratch.")
+        raise FileNotFoundError("Teacher model checkpoint not found.")
+
+
+def load_checkpoint(model, conf, device):
+    checkpoint_path = get_checkpoint(conf.output_dir, model_weights=conf.model_weights, model_type="student")
+
+    if checkpoint_path:
+        model.load_state_dict(torch.load(checkpoint_path, map_location=device))
+        logger.info(f"Loaded student model weights from {checkpoint_path}.")
+    else:
+        logger.info("No student model checkpoint found. Training from scratch.")
 
 
 def build_model(conf, id2label, device):
-    model = configure_model(conf, id2label)
-    model.to(device)
-    logger.info(f"Model successfully moved to {device}.")
+    student_model = configure_model(conf, id2label)
+    student_model.to(device)
+    logger.info("Student model successfully moved to device.")
 
-    optimizer = configure_optimizer(model, conf.learning_rate)
+    teacher_model = configure_model(conf, id2label)
+    teacher_model.to(device)
+    logger.info("Teacher model successfully moved to device.")
+
+    optimizer = configure_optimizer(student_model, conf.learning_rate)
     criterion, metrics = configure_loss_and_metrics(conf)
 
-    return model, optimizer, criterion, metrics
+    return student_model, teacher_model, optimizer, criterion, metrics
