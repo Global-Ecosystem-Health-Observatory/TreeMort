@@ -11,9 +11,9 @@ logger = get_logger(__name__)
 
 
 def resume_or_load(conf, id2label, n_batches, device):
-    logger.info("Building model...")
-
-    model, optimizer, criterion, metrics = build_model(conf, id2label, device)
+    logger.info("Building domain-adversarial model...")
+    
+    model, optimizer, seg_criterion, domain_criterion, metrics = build_model(conf, id2label, device)
 
     callbacks = build_callbacks(n_batches, conf.output_dir, optimizer)
 
@@ -22,14 +22,14 @@ def resume_or_load(conf, id2label, n_batches, device):
     else:
         logger.info("Training model from scratch.")
 
-    return model, optimizer, criterion, metrics, callbacks
+    return model, optimizer, seg_criterion, domain_criterion, metrics, callbacks
 
 
 def load_checkpoint_if_available(model, conf):
     checkpoint_path = get_checkpoint(conf.model_weights, conf.output_dir)
 
     if checkpoint_path:
-        device = next(model.parameters()).device  # Get the device of the model
+        device = next(model.parameters()).device
         model.load_state_dict(torch.load(checkpoint_path, map_location=device, weights_only=True))
         logger.info(f"Loaded weights from {checkpoint_path}.")
     else:
@@ -42,6 +42,7 @@ def build_model(conf, id2label, device):
     logger.info(f"Model successfully moved to {device}.")
 
     optimizer = configure_optimizer(model, conf.learning_rate)
-    criterion, metrics = configure_loss_and_metrics(conf)
 
-    return model, optimizer, criterion, metrics
+    seg_criterion, domain_criterion, metrics = configure_loss_and_metrics(conf)
+
+    return model, optimizer, seg_criterion, domain_criterion, metrics

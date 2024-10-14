@@ -19,6 +19,8 @@ from treemort.modeling.network.custom_models import (
     CustomBeit,
 )
 from treemort.modeling.network.hcfnet.HCFnet import HCFnet
+from treemort.modeling.network.domain_adversarial_unet import DomainAdversarialUNet
+
 from treemort.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -36,6 +38,7 @@ def configure_model(conf, id2label):
         "beit": lambda: configure_beit(conf, id2label),
         "flair_unet": lambda: configure_flair_unet(conf),
         "hcfnet": lambda: configure_hcfnet(conf),
+        "domain_adversarial_unet": lambda: configure_domain_adversarial_unet(conf)
     }
 
     assert conf.model in model_choices, f"[ERROR] Invalid model: {conf.model}."
@@ -124,4 +127,29 @@ def configure_flair_unet(conf):
 
 def configure_hcfnet(conf):
     model = HCFnet(conf.input_channels, conf.output_channels)
+    return model
+
+
+def configure_domain_adversarial_unet(conf):
+    # Load the pretrained FLAIR-INC ResNet34 UNet model
+    repo_id = "IGNF/FLAIR-INC_rgbi_15cl_resnet34-unet"
+    filename = "FLAIR-INC_rgbi_15cl_resnet34-unet_weights.pth"
+
+    pretrained_model = PretrainedUNetModel(
+        repo_id=repo_id,
+        filename=filename,
+        architecture="unet",
+        encoder="resnet34",
+        n_channels=conf.input_channels,
+        n_classes=conf.output_channels,  # Number of output classes for the FLAIR model
+        use_metadata=False,  # Not using metadata for now
+    ).get_model()
+
+    model = DomainAdversarialUNet(
+        base_segmentation_model=pretrained_model,
+        lambda_adv=conf.lambda_adv,
+        output_size=conf.test_crop_size,  # Output size for segmentation map
+    )
+
+    logger.info(f"Domain-Adversarial UNet model configured using the FLAIR-INC pretrained model with lambda_adv={conf.lambda_adv}.")
     return model

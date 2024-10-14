@@ -7,11 +7,11 @@ from treemort.utils.callbacks import EarlyStopping
 
 logger = get_logger(__name__)
 
-
 def trainer(
     model,
     optimizer,
-    criterion,
+    seg_criterion,
+    domain_criterion,
     metrics,
     train_loader,
     val_loader,
@@ -23,13 +23,30 @@ def trainer(
     for epoch in range(conf.epochs):
         logger.info(f"Epoch {epoch + 1}/{conf.epochs} - Training started.")
 
-        train_loss, train_metrics = train_one_epoch(model, optimizer, criterion, metrics, train_loader, conf, device)
+        train_loss, train_metrics = train_one_epoch(
+            model,
+            optimizer,
+            seg_criterion,
+            domain_criterion,
+            metrics,
+            train_loader,
+            conf,
+            device
+        )
 
         logger.info(f"Epoch {epoch + 1} - Training completed.")
         logger.info(f"Training Loss: {train_loss:.4f}")
         logger.info(f"Training Metrics: {train_metrics}")
 
-        val_loss, val_metrics = validate_one_epoch(model, criterion, metrics, val_loader, conf, device)
+        val_loss, val_metrics = validate_one_epoch(
+            model,
+            seg_criterion,
+            domain_criterion,
+            metrics,
+            val_loader,
+            conf,
+            device
+        )
 
         logger.info(f"Epoch {epoch + 1} - Validation completed.")
         logger.info(f"Validation Loss: {val_loss:.4f}")

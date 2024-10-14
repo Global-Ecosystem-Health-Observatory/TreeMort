@@ -22,27 +22,37 @@ def configure_loss_and_metrics(conf):
         "weighted_dice_loss",
     ], f"[ERROR] Invalid loss function: {conf.loss}."
 
-    if conf.loss == "hybrid": # TODO. plateau-ed in local minima
-        criterion = hybrid_loss
+    if conf.loss == "hybrid":
+        seg_criterion = hybrid_loss
+        logger.info("Hybrid loss configured for segmentation.")
+    elif conf.loss == "mse":
+        seg_criterion = mse_loss
+        logger.info("MSE loss configured for segmentation.")
+    elif conf.loss == "weighted_dice_loss":
+        seg_criterion = weighted_dice_loss
+        logger.info("Weighted Dice loss configured for segmentation.")
+
+    domain_criterion = nn.CrossEntropyLoss()
+    logger.info("CrossEntropyLoss configured for domain classification.")
+
+    metrics = configure_metrics(conf)
+
+    return seg_criterion, domain_criterion, metrics
+
+
+def configure_metrics(conf):
+    if conf.loss in ["hybrid", "weighted_dice_loss"]:
         metrics = lambda pred, target: {
             "iou_score": iou_score(pred, target, conf.threshold),
             "f_score": f_score(pred, target, conf.threshold),
         }
-        logger.info("Hybrid loss and metrics (IOU, F-Score) configured.")
+        logger.info("Metrics (IOU, F-Score) configured.")
     elif conf.loss == "mse":
-        criterion = mse_loss
         metrics = lambda pred, target: {
             "mse": mse_loss(pred, target),
             "mae": nn.functional.l1_loss(pred, target),
             "rmse": torch.sqrt(mse_loss(pred, target)),
         }
-        logger.info("MSE loss and metrics (MSE, MAE, RMSE) configured.")
-    elif conf.loss == "weighted_dice_loss":
-        criterion = weighted_dice_loss
-        metrics = lambda pred, target: {
-            "iou_score": iou_score(pred, target, conf.threshold),
-            "f_score": f_score(pred, target, conf.threshold),
-        }
-        logger.info("Weighted Dice loss and metrics (IOU, F-Score) configured.")
-
-    return criterion, metrics
+        logger.info("Metrics (MSE, MAE, RMSE) configured.")
+    
+    return metrics

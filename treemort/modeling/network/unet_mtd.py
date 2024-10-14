@@ -31,9 +31,7 @@ class metadata_mlp(nn.Module):
 
 class smp_unet_mtd(nn.Module):
     """
-    Pytorch segmentation U-Net with ResNet34 (default)
-    with added metadata information at encoder output
-
+    PyTorch segmentation U-Net with ResNet34 (default) with added metadata information at encoder output
     """
 
     def __init__(
@@ -44,7 +42,6 @@ class smp_unet_mtd(nn.Module):
         n_classes: int,
         use_metadata: bool = False,
     ):
-
         super(smp_unet_mtd, self).__init__()
 
         self.seg_model = smp.create_model(
@@ -59,20 +56,18 @@ class smp_unet_mtd(nn.Module):
         if use_metadata == True:
             self.enc = metadata_mlp()
 
-    def forward(
-        self,
-        x,
-        met='',
-    ):
-
+    def forward(self, x, met=''):
         if self.use_metadata == True:
             feats = self.seg_model.encoder(x)
             x_enc = self.enc(met)
             x_enc = x_enc.unsqueeze(1).unsqueeze(-1).repeat(1, 512, 1, 16)
             feats[-1] = torch.add(feats[-1], x_enc)
-            output = self.seg_model.decoder(*feats)
-            output = self.seg_model.segmentation_head(output)
+            seg_output = self.seg_model.decoder(*feats)
+            seg_output = self.seg_model.segmentation_head(seg_output)
         else:
-            output = self.seg_model(x)
+            feats = self.seg_model.encoder(x)  # Extract encoder features
+            seg_output = self.seg_model.decoder(*feats)
+            seg_output = self.seg_model.segmentation_head(seg_output)
 
-        return output
+        # Return both segmentation output and encoder features (last layer of encoder)
+        return seg_output, feats[-1]  # feats[-1] is the final encoder layer

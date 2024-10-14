@@ -5,19 +5,19 @@ import numpy as np
 import torch.nn.functional as F
 
 from torch.utils.data import Dataset
-
 from treemort.data.image_processing import apply_image_processor
 
 
 class DeadTreeDataset(Dataset):
-    def __init__(self, hdf5_file, keys, crop_size=256, transform=None, image_processor=None):
+    def __init__(self, hdf5_file, keys, crop_size=256, transform=None, image_processor=None, domain_label=0):
         self.hdf5_file = hdf5_file
         self.keys = keys
         self.crop_size = crop_size
         self.transform = transform
         self.image_processor = image_processor
+        self.domain_label = domain_label  # Added domain label to dataset
 
-        self._adjust_image_processor_mean_std() # Fix incompatable image mean/std to support four channels
+        self._adjust_image_processor_mean_std()  # Fix incompatible image mean/std to support four channels
 
     def _adjust_image_processor_mean_std(self):
         if self.image_processor:
@@ -29,11 +29,11 @@ class DeadTreeDataset(Dataset):
     def __len__(self):
         return len(self.keys)
 
-    def __getitem__(self, idx):            
+    def __getitem__(self, idx):
         image, label = self._load_data(idx)
         image, label = self._preprocess_image_and_label(image, label)
 
-        return image, label
+        return image, label, self.domain_label  # Return domain label as part of the dataset
 
     def _load_data(self, idx):
         key = self.keys[idx]
@@ -49,7 +49,6 @@ class DeadTreeDataset(Dataset):
         label = torch.from_numpy(label.astype(np.float32))
 
         image = image / 255.0
-
         image = image.permute(2, 0, 1)  # Convert to (C, H, W) format
         label = label.unsqueeze(0)  # Convert to (1, H, W) format
 
