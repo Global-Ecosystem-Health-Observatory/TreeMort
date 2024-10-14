@@ -23,6 +23,9 @@ def run(conf, eval_only):
 
     id2label = {0: "alive", 1: "dead"}
 
+    if eval_only:
+        conf.resume = True
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info(f"Using device: {device}")
 
@@ -31,7 +34,7 @@ def run(conf, eval_only):
     logger.info(f"Datasets prepared: Train({len(train_dataset)}), Val({len(val_dataset)}), Test({len(test_dataset)})")
 
     logger.info("Loading or resuming models (student and teacher)...")
-    student_model, teacher_model, optimizer, criterion, metrics, callbacks = resume_or_load(conf, id2label, len(train_dataset), device)
+    student_model, teacher_model, optimizer, criterion, metrics, callbacks = resume_or_load(conf, id2label, len(train_dataset), device, eval_only)
     logger.info("Student and teacher models, optimizer, criterion, metrics, and callbacks are set up.")
 
     if eval_only:
