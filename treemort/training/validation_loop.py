@@ -3,9 +3,10 @@ import torch
 from tqdm import tqdm
 
 from treemort.training.output_processing import process_model_output
+from treemort.utils.loss import compute_weighted_domain_loss
 
 
-def validate_one_epoch(model, seg_criterion, domain_criterion, metrics, val_loader, conf, device):
+def validate_one_epoch(model, seg_criterion, metrics, val_loader, conf, device, num_finnish, num_us):    
     model.eval()
     val_loss = 0.0
     val_metrics = {}
@@ -24,7 +25,7 @@ def validate_one_epoch(model, seg_criterion, domain_criterion, metrics, val_load
 
             seg_loss = seg_criterion(seg_logits, seg_labels, class_weights=class_weights)
 
-            domain_loss = domain_criterion(domain_logits, domain_labels)
+            domain_loss = compute_weighted_domain_loss(domain_logits, domain_labels, num_finnish, num_us)
 
             total_loss = seg_loss + conf.lambda_adv * domain_loss
 
