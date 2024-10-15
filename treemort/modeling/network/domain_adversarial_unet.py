@@ -41,7 +41,7 @@ class DomainClassifier(nn.Module):
     def forward(self, x):
         x = torch.flatten(x, 1)  # Flatten the feature map for classification
         return self.classifier(x)
-    
+
 
 class DomainAdversarialUNet(nn.Module):
     def __init__(self, base_segmentation_model, lambda_adv, output_size):
@@ -49,9 +49,9 @@ class DomainAdversarialUNet(nn.Module):
         self.base_segmentation_model = base_segmentation_model  # Pretrained FLAIR-INC model
         self.grl = GradientReversalLayer(lambda_adv)  # GRL for domain classification
         
-        # Update input_dim to match the flattened size of the domain features: 512 * 8 * 8 = 32768
+        # Domain classifier after global average pooling
         self.domain_classifier = nn.Sequential(
-            nn.Linear(32768, 256),  # Adjusted input_dim
+            nn.Linear(512, 256),  # Input size is now 512 after pooling (based on encoder output channels)
             nn.ReLU(),
             nn.Linear(256, 2),  # Binary classification: Finnish (0) or US (1)
         )
@@ -65,11 +65,14 @@ class DomainAdversarialUNet(nn.Module):
         # Apply Gradient Reversal Layer (GRL) to encoder features for domain classification
         domain_features = self.grl(encoder_features)
 
-        # Flatten the domain features (batch_size, channels, height, width) -> (batch_size, flattened_size)
-        domain_features = domain_features.view(domain_features.size(0), -1)  # Flatten spatial dimensions
+        # Apply global average pooling: this reduces (batch_size, channels, height, width) to (batch_size, channels, 1, 1)
+        pooled_features = F.adaptive_avg_pool2d(domain_features, (1, 1))
 
-        # Pass through domain classifier
-        domain_output = self.domain_classifier(domain_features)
+        # Flatten the pooled features: from (batch_size, channels, 1, 1) -> (batch_size, channels)
+        flattened_features = pooled_features.view(pooled_features.size(0), -1)
+
+        # Pass the flattened features through the domain classifier
+        domain_output = self.domain_classifier(flattened_features)
 
         return seg_output, domain_output
     
@@ -100,6 +103,12 @@ class PretrainedUNetModel:
         self.model = self._initialize_model()
 
         self._load_pretrained_weights()
+
+    def forward(self, x, met=''):
+        # Forward through the segmentation model, return both output and encoder features
+        seg_output = self.model.seg_model(x)
+        encoder_features = self.model.seg_model.encoder(x)
+        return seg_output, encoder_features
 
     def _initialize_model(self):
         model = smp_unet_mtd(
@@ -258,4 +267,3 @@ class FeatureExtractor(nn.Module):
         else:
             self.model(x)
         return self.features
-

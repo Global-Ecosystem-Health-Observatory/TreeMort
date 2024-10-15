@@ -13,9 +13,6 @@ logger = get_logger(__name__)
 
 
 def run(conf, eval_only):
-    #assert os.path.exists(conf.hdf5_file_finnish), f"[ERROR] Finnish data file {conf.hdf5_file_finnish} does not exist."
-    #assert os.path.exists(conf.hdf5_file_us), f"[ERROR] US data file {conf.hdf5_file_us} does not exist."
-
     if not os.path.exists(conf.output_dir):
         os.makedirs(conf.output_dir)
         logger.info(f"Created output directory: {conf.output_dir}")
@@ -31,9 +28,12 @@ def run(conf, eval_only):
     train_loader, val_loader, test_loader_finnish, test_loader_us = prepare_datasets(conf)
     logger.info(f"Datasets prepared: Train({len(train_loader)}), Val({len(val_loader)}), Test_Finnish({len(test_loader_finnish)}), Test_US({len(test_loader_us)})")
 
+    num_finnish = len(test_loader_finnish.dataset)
+    num_us = len(test_loader_us.dataset)
+
     logger.info("Loading or resuming model...")
-    model, optimizer, seg_criterion, domain_criterion, metrics, callbacks = resume_or_load(conf, id2label, len(train_loader), device)
-    logger.info("Model, optimizer, segmentation loss, domain loss, and metrics are set up.")
+    model, optimizer, seg_criterion, metrics, callbacks = resume_or_load(conf, id2label, len(train_loader), device)
+    logger.info("Model, optimizer, segmentation loss, and metrics are set up.")
 
     if eval_only:
         logger.info("Evaluation-only mode started.")
@@ -66,12 +66,13 @@ def run(conf, eval_only):
             model=model,
             optimizer=optimizer,
             seg_criterion=seg_criterion,
-            domain_criterion=domain_criterion,
             metrics=metrics,
             train_loader=train_loader,
             val_loader=val_loader,
             conf=conf,
             callbacks=callbacks,
+            num_finnish=num_finnish,
+            num_us=num_us
         )
         logger.info("Training completed.")
 

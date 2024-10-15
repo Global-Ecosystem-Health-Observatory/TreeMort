@@ -13,7 +13,7 @@ logger = get_logger(__name__)
 def resume_or_load(conf, id2label, n_batches, device):
     logger.info("Building domain-adversarial model...")
     
-    model, optimizer, seg_criterion, domain_criterion, metrics = build_model(conf, id2label, device)
+    model, optimizer, seg_criterion, metrics = build_model(conf, id2label, device)
 
     callbacks = build_callbacks(n_batches, conf.output_dir, optimizer)
 
@@ -22,7 +22,7 @@ def resume_or_load(conf, id2label, n_batches, device):
     else:
         logger.info("Training model from scratch.")
 
-    return model, optimizer, seg_criterion, domain_criterion, metrics, callbacks
+    return model, optimizer, seg_criterion, metrics, callbacks
 
 
 def load_checkpoint_if_available(model, conf):
@@ -43,6 +43,6 @@ def build_model(conf, id2label, device):
 
     optimizer = configure_optimizer(model, conf.learning_rate)
 
-    seg_criterion, domain_criterion, metrics = configure_loss_and_metrics(conf)
+    seg_criterion, metrics = configure_loss_and_metrics(conf)
 
-    return model, optimizer, seg_criterion, domain_criterion, metrics
+    return model, optimizer, seg_criterion, metrics

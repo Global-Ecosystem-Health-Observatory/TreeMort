@@ -32,12 +32,9 @@ def configure_loss_and_metrics(conf):
         seg_criterion = weighted_dice_loss
         logger.info("Weighted Dice loss configured for segmentation.")
 
-    domain_criterion = nn.CrossEntropyLoss()
-    logger.info("CrossEntropyLoss configured for domain classification.")
-
     metrics = configure_metrics(conf)
 
-    return seg_criterion, domain_criterion, metrics
+    return seg_criterion, metrics
 
 
 def configure_metrics(conf):

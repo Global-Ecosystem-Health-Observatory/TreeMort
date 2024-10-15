@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 
 
@@ -67,3 +68,18 @@ def hybrid_loss(logits, target, dice_weight=0.5, alpha=0.25, gamma=2, class_weig
 def mse_loss(logits, target):
     pred = torch.sigmoid(logits)
     return F.mse_loss(pred, target.float())
+
+
+def compute_weighted_domain_loss(domain_output, domain_labels, num_finnish, num_us):
+    domain_loss_fn = nn.CrossEntropyLoss(reduction='none')
+
+    weight_finnish = num_us / (num_finnish + num_us)
+    weight_us = num_finnish / (num_finnish + num_us)
+
+    unweighted_loss = domain_loss_fn(domain_output, domain_labels)
+    
+    weights = torch.where(domain_labels == 0, weight_finnish, weight_us)
+    
+    weighted_loss = unweighted_loss * weights
+
+    return weighted_loss.mean()
