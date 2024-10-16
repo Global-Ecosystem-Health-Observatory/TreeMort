@@ -32,7 +32,7 @@ class IOUCallback:
 
         with tqdm(total=self.num_samples, desc="Evaluating") as pbar:
             with torch.no_grad():
-                for images, labels in self.dataset:
+                for images, labels, _ in self.dataset:
                     images, labels = images.to(self.device), labels.to(self.device)
                     predictions = self._get_predictions(images, labels)
                     predictions, labels = (predictions.cpu().numpy(), labels.cpu().numpy(),)
@@ -62,7 +62,7 @@ class IOUCallback:
         )
 
     def _get_predictions(self, images, labels):
-        outputs = self.model(images)
+        outputs, _ = self.model(images)
 
         _, _, h, w = images.shape
 
