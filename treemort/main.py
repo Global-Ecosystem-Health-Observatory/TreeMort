@@ -21,6 +21,9 @@ def run(conf, eval_only):
 
     id2label = {0: "alive", 1: "dead"}
 
+    if eval_only:
+        conf.resume = True
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info(f"Using device: {device}")
 
