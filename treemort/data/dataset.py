@@ -32,7 +32,6 @@ class DeadTreeDataset(Dataset):
     def __getitem__(self, idx):            
         image, label = self._load_data(idx)
         image, label = self._preprocess_image_and_label(image, label)
-
         return image, label
 
     def _load_data(self, idx):
