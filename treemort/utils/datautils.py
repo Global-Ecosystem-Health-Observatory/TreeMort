@@ -1,5 +1,6 @@
 import h5py
 import random
+import numpy as np
 
 from collections import defaultdict
 
@@ -11,6 +12,10 @@ def load_and_organize_data(hdf5_file_path):
         for key in hf.keys():
             contains_dead_tree = hf[key].attrs.get("contains_dead_tree", 0)
             filename = hf[key].attrs.get("source_image", "")
+
+            if isinstance(filename, (np.ndarray, bytes)):
+                filename = filename.item()
+
             image_patch_map[filename].append((key, contains_dead_tree))
 
     return image_patch_map

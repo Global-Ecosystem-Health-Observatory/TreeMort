@@ -1,15 +1,15 @@
 # settings for self attention unet with flair backbone
 
-data-folder = /scratch/project_2008436/rahmanan/dead_trees/Finland/RGBNIR/25cm
+data-folder = /scratch/project_2008436/rahmanan/USA2Finland/model22_200
 
-hdf5-file = Finland_RGBNIR_25cm.h5
+hdf5-file = fake_B.h5
 
 model = flair_unet
 
 output-dir = output/flair_unet
 
 train-crop-size = 256
-val-crop-size = 256
+val-crop-size = 256 
 test-crop-size = 256
 
 input-channels = 4
@@ -33,7 +33,7 @@ threshold = 0.5
 
 loss = hybrid # available options [mse, hybrid]
 
-val-size = 0.2
-test-size = 0.1
+val-size = 0.0
+test-size = 1.0
 
-resume
+resume = False

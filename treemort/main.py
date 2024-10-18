@@ -26,6 +26,9 @@ def run(conf, eval_only):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info(f"Using device: {device}")
 
+    if eval_only:
+        conf.resume = True
+        
     logger.info("Preparing datasets...")
     train_dataset, val_dataset, test_dataset = prepare_datasets(conf)
     logger.info(f"Datasets prepared: Train({len(train_dataset)}), Val({len(val_dataset)}), Test({len(test_dataset)})")
