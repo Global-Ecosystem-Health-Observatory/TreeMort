@@ -99,7 +99,8 @@ def load_geotiff(
         img_arr = np.moveaxis(img.read(), 0, -1).astype(np.float32)
 
         # Reorder channels
-        img_arr = img_arr[:,:,nir_rgb_order]
+        if img_arr.shape[-1] == 4:
+            img_arr = img_arr[:,:,nir_rgb_order]
 
         # Set missing values to zero
         if img.nodata is not None:

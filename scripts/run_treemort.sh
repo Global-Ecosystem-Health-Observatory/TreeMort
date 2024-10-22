@@ -27,7 +27,7 @@ cat <<EOT > $SBATCH_SCRIPT
 #SBATCH --account=project_2004205
 #SBATCH --output=output/stdout/%A_%a
 #SBATCH --ntasks=1 --cpus-per-task=4
-#SBATCH --mem-per-cpu=32G
+#SBATCH --mem-per-cpu=8G
 #SBATCH --gres=gpu:v100:1
 EOT
 
@@ -38,7 +38,7 @@ elif [ "$EVAL_ONLY" = true ]; then
     echo "#SBATCH --time=01:00:00" >> $SBATCH_SCRIPT
     echo "#SBATCH --partition=gpu" >> $SBATCH_SCRIPT
 else
-    echo "#SBATCH --time=16:00:00" >> $SBATCH_SCRIPT
+    echo "#SBATCH --time=08:00:00" >> $SBATCH_SCRIPT
     echo "#SBATCH --partition=gpu" >> $SBATCH_SCRIPT
 fi
 

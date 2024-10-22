@@ -1,5 +1,6 @@
 import os
 import h5py
+import torch
 import argparse
 import configargparse
 import concurrent.futures
@@ -7,6 +8,9 @@ import concurrent.futures
 import numpy as np
 
 from pathlib import Path
+
+from nirpredict.model import build_model
+from nirpredict.predict import predict
 
 from dataset.preprocessutils import (
     get_image_and_polygons,
@@ -46,33 +50,68 @@ def extract_patches(image, label, window_size, stride):
     return patches
 
 
-def process_image(
-    image_path,
-    label_path,
-    conf
-):
+def load_model_if_needed(predict_nir, device):
+    if predict_nir:
+        nir_model, _, _ = build_model(device, outdir="output/nirpredict")
+        return nir_model
+    return None
+
+def preprocess_image(image_path, label_path, conf):
+    img_arr, polygons = get_image_and_polygons(
+        image_path,
+        label_path,
+        conf.nir_rgb_order,
+        conf.normalize_channelwise,
+        conf.normalize_imagewise,
+    )
+    label_mask = create_label_mask(img_arr, polygons)
+    return img_arr, label_mask
+
+
+def predict_nir_for_patches(nir_model, rgb_patch, device):
+    with torch.no_grad():
+        rgb_tensor = torch.from_numpy(rgb_patch).float().permute(2, 0, 1).unsqueeze(0).to(device)
+
+        nir_band_tensor = predict(nir_model, rgb_tensor, device)
+        nir_band = nir_band_tensor.squeeze().cpu().numpy()  # Shape (window_size, window_size)
+
+        nir_band = np.expand_dims(nir_band, axis=-1)
+        patch_with_nir = np.concatenate((nir_band, rgb_patch), axis=-1)
+
+    return patch_with_nir
+
+
+def process_image(image_path, label_path, conf):
     image_name = os.path.basename(image_path)
 
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    nir_model = load_model_if_needed(conf.predict_nir, device)
+
     try:
-        img_arr, polygons = get_image_and_polygons(
-                image_path,
-                label_path,
-                conf.nir_rgb_order,
-                conf.normalize_channelwise,
-                conf.normalize_imagewise,
-            )
+        img_arr, label_mask = preprocess_image(image_path, label_path, conf)
 
-        label_mask = create_label_mask(img_arr, polygons)
-        
-        patches = extract_patches(img_arr, label_mask, conf.window_size, conf.stride)
+        rgb_patches = extract_patches(img_arr, label_mask, conf.window_size, conf.stride)
 
-        labeled_patches = [(patch[0], patch[1], int(np.any(patch[1])), image_name) for patch in patches]
+        if not rgb_patches:
+            print(f"[INFO] No patches extracted for {image_name}.")
+            return image_name, []
+
+        labeled_patches = []
+
+        for patch, label in rgb_patches:
+            if conf.predict_nir and patch.shape[2] == 3:
+                patch_with_nir = predict_nir_for_patches(nir_model, patch, device)
+            else:
+                patch_with_nir = patch
+
+            labeled_patches.append((patch_with_nir, label, int(np.any(label)), image_name))
+
         return image_name, labeled_patches
-    
-    except Exception as e:
-        print(f"[ERROR] Failed to process {image_path}: {e}")
-        return image_name, []
 
+    except Exception as e:
+        print(f"[ERROR] Failed to process {image_path}: {type(e).__name__}: {e}")
+        return image_name, []
+    
 
 def write_to_hdf5(hdf5_file, data):
     with h5py.File(hdf5_file, "a") as hf:  # Open in append mode
@@ -99,7 +138,7 @@ def convert_to_hdf5(
     chunk_size=10,
 ):
     data_path = Path(conf.data_folder)
-    hdf5_path = Path(conf.data_folder).parent / conf.hdf5_file
+    hdf5_path = Path(conf.data_folder) / conf.hdf5_file
     
     assert not os.path.exists(hdf5_path), f"[ERROR] The HDF5 file '{hdf5_path}' already exists. Please provide a different file name or delete the existing file."
 
@@ -169,6 +208,7 @@ def parse_config(config_file_path):
     parser.add("--nir-rgb-order",           type=int, nargs='+', default=[3, 0, 1, 2],   help="NIR, R, G, B order")
     parser.add("--normalize-imagewise",     action="store_true",        help="normalize imagewise")
     parser.add("--normalize-channelwise",   action="store_true",        help="normalize channelwise")
+    parser.add("--predict-nir",             action="store_true",        help="predict NIR")
 
     conf, _ = parser.parse_known_args()
 
@@ -183,6 +223,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     conf = parse_config(args.config)
+
+    print(conf)
 
     convert_to_hdf5(
         conf,
@@ -205,6 +247,6 @@ python3 -m dataset.creator ./configs/Finland_RGBNIR_25cm.txt --no-of-samples 3
 export TREEMORT_VENV_PATH="/projappl/project_2004205/rahmanan/venv"
 export TREEMORT_REPO_PATH="/users/rahmanan/TreeMort"
 
-sbatch --export=ALL,CONFIG_PATH="$TREEMORT_REPO_PATH/configs/Finland_RGBNIR_25cm.txt" $TREEMORT_REPO_PATH/scripts/run_creator.sh
+sbatch --export=ALL,CONFIG_PATH="$TREEMORT_REPO_PATH/configs/Switzerland_RGBNIR_10cm.txt",CHUNK_SIZE=5 $TREEMORT_REPO_PATH/scripts/run_creator.sh
 
 '''
