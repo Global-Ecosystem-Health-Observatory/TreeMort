@@ -1,10 +1,10 @@
 # settings for domain adversarial unet
 
-data-folder-finnish = /scratch/project_2008436/rahmanan/dead_trees/Finland/RGBNIR/25cm
-data-folder-us = /scratch/project_2008436/rahmanan/dead_trees/USA_MO/RGBNIR/60cm
+data-folder-finnish = /scratch/project_2008436/rahmanan/dead_trees/Finland/RGBNIR
+data-folder-us = /scratch/project_2008436/rahmanan/USA
 
 hdf5-file-finnish = Finland_RGBNIR_25cm.h5
-hdf5-file-us = USA_MO_RGBNIR_60cm.h5
+hdf5-file-us = USA.h5
 
 model = domain_adversarial_unet
 output-dir = output/domain_adversarial_unet

@@ -11,8 +11,8 @@ from treemort.utils.datautils import load_and_organize_data, stratify_images_by_
 
 
 def prepare_datasets(conf):
-    hdf5_path_finnish = Path(conf.data_folder_finnish).parent / conf.hdf5_file_finnish
-    hdf5_path_us = Path(conf.data_folder_us).parent / conf.hdf5_file_us
+    hdf5_path_finnish = Path(conf.data_folder_finnish) / conf.hdf5_file_finnish
+    hdf5_path_us = Path(conf.data_folder_us) / conf.hdf5_file_us
 
     image_patch_map_finnish = load_and_organize_data(hdf5_path_finnish)
     image_patch_map_us = load_and_organize_data(hdf5_path_us)

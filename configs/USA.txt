@@ -1,0 +1,13 @@
+# configurations for dataset creation for DRYTREE_Annotations for USA
+
+#data-folder = /scratch/project_2008436/rahmanan/USA
+data-folder = /Users/anisr/Documents/USA
+hdf5-file = USA.h5
+
+window-size = 256
+stride = 128
+nir-rgb-order = [3, 0, 1, 2]
+
+normalize-channelwise
+
+predict-nir = True
