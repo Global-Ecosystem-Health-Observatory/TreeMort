@@ -2,7 +2,7 @@
 
 data-folder = /scratch/project_2008436/rahmanan/dead_trees/Finland/RGBNIR/25cm
 
-hdf5-file = Finland_RGBNIR_25cm.h5
+hdf5-file = Finland_RGB_25cm.h5
 
 window-size = 256
 stride = 128
@@ -10,4 +10,4 @@ nir-rgb-order = [3, 0, 1, 2]
 
 normalize-channelwise = True
 predict-nir = False
-keep-nir = True
+keep-nir = False

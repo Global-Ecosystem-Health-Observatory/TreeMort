@@ -56,7 +56,8 @@ def load_model_if_needed(predict_nir, device):
         return nir_model
     return None
 
-def preprocess_image(image_path, label_path, conf, predict_nir):
+
+def preprocess_image(image_path, label_path, conf):
     img_arr, polygons = get_image_and_polygons(
         image_path,
         label_path,
@@ -65,10 +66,16 @@ def preprocess_image(image_path, label_path, conf, predict_nir):
         conf.normalize_imagewise,
     )
 
-    if predict_nir and img_arr.shape[-1] == 4:
-        img_arr = img_arr[..., :3]  # Shape: (height, width, 3)
+    num_bands = img_arr.shape[-1]
+
+    if conf.predict_nir and conf.keep_nir:
+        raise ValueError("Invalid combination: cannot predict NIR and keep NIR simultaneously.")
+
+    if num_bands == 4 and (conf.predict_nir or not conf.keep_nir):
+        img_arr = img_arr[..., :3]  # Discard the NIR band (keep only RGB)
 
     label_mask = create_label_mask(img_arr, polygons)
+    
     return img_arr, label_mask
 
 
@@ -92,7 +99,7 @@ def process_image(image_path, label_path, conf):
     nir_model = load_model_if_needed(conf.predict_nir, device)
 
     try:
-        img_arr, label_mask = preprocess_image(image_path, label_path, conf, conf.predict_nir)
+        img_arr, label_mask = preprocess_image(image_path, label_path, conf)
 
         rgb_patches = extract_patches(img_arr, label_mask, conf.window_size, conf.stride)
 
@@ -103,7 +110,7 @@ def process_image(image_path, label_path, conf):
         labeled_patches = []
 
         for patch, label in rgb_patches:
-            if conf.predict_nir:
+            if conf.predict_nir and not conf.keep_nir:
                 patch_with_nir = predict_nir_for_patches(nir_model, patch, device)
             else:
                 patch_with_nir = patch
@@ -209,10 +216,11 @@ def parse_config(config_file_path):
     parser.add("--num-workers",             type=int, default=4,        help="number of workers for parallel processing")
     parser.add("--window-size",             type=int, default=256,      help="size of the window")
     parser.add("--stride",                  type=int, default=128,      help="stride for the window")
-    parser.add("--nir-rgb-order",           type=int, nargs='+', default=[3, 2, 1, 0],   help="NIR, R, G, B order")
+    parser.add("--nir-rgb-order",           type=int, nargs='+', default=[3, 0, 1, 2],   help="NIR, R, G, B order")
     parser.add("--normalize-imagewise",     action="store_true",        help="normalize imagewise")
     parser.add("--normalize-channelwise",   action="store_true",        help="normalize channelwise")
-    parser.add("--predict-nir",             action="store_true",        help="predict NIR")
+    parser.add("--predict-nir",             action="store_true",       help="predict NIR, replace existing, if one")
+    parser.add("--keep-nir",                action="store_true",        help="keep NIR, if one")
 
     conf, _ = parser.parse_known_args()
 
