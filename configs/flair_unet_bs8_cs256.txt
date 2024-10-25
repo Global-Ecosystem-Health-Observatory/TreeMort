@@ -1,8 +1,8 @@
 # settings for self attention unet with flair backbone
 
-data-folder = /scratch/project_2008436/rahmanan/dead_trees/USA_MO/RGBNIR/60cm
+data-folder = /scratch/project_2008436/rahmanan/USA
 
-hdf5-file = USA_MO_RGBNIR_60cm.h5
+hdf5-file = USA.h5
 
 model = flair_unet
 
@@ -36,4 +36,4 @@ loss = hybrid # available options [mse, hybrid]
 val-size = 0.2
 test-size = 0.1
 
-resume
+resume = True

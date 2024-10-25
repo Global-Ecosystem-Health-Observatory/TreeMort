@@ -12,7 +12,7 @@ from treemort.utils.datautils import load_and_organize_data, stratify_images_by_
 
 
 def prepare_datasets(conf):
-    hdf5_path = Path(conf.data_folder).parent / conf.hdf5_file
+    hdf5_path = Path(conf.data_folder) / conf.hdf5_file
 
     image_patch_map = load_and_organize_data(hdf5_path)
 
