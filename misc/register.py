@@ -2,8 +2,10 @@ import os
 import cv2
 import rasterio
 import numpy as np
-from concurrent.futures import ThreadPoolExecutor, as_completed
+
+from tqdm import tqdm
 from scipy import optimize
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
 def read_image(path, bands=None):
@@ -108,7 +110,15 @@ def apply_difference_of_gaussians(image, kernel_size1=(5, 5), kernel_size2=(11, 
     return normalize_image(dog_image)
 
 
+import os
+
 def process_image_pair(image_path, chm_path, output_folder, method, save_intermediate):
+    aligned_image_output_path = os.path.join(output_folder, os.path.basename(image_path))
+
+    if os.path.exists(aligned_image_output_path):
+        print(f"[INFO] Aligned image already exists at: {aligned_image_output_path}. Skipping computation.")
+        return
+
     aerial_img, aerial_metadata = read_image(image_path, [1, 2, 3])
     chm_data, _ = read_image(chm_path)
 
@@ -133,14 +143,11 @@ def process_image_pair(image_path, chm_path, output_folder, method, save_interme
     aligned_aerial_img = np.roll(grayscale_img, int(optimal_shift[0]), axis=0)
     aligned_aerial_img = np.roll(aligned_aerial_img, int(optimal_shift[1]), axis=1)
 
-    aligned_image_output_path = os.path.join(output_folder, os.path.basename(image_path))
     save_tiff(aligned_aerial_img, aligned_image_output_path, aerial_metadata)
 
     print(f"Optimal Shift for {os.path.basename(image_path)} (using {method}): {optimal_shift}")
     print(f"Aligned image saved as TIFF at: {aligned_image_output_path}")
 
-
-from tqdm import tqdm
 
 def main(data_folder, method="dog", save_intermediate=False):
     image_folder = os.path.join(data_folder, 'Images')
@@ -169,7 +176,7 @@ def main(data_folder, method="dog", save_intermediate=False):
     batch_size = 2  # Adjust based on available RAM
     for i in range(0, len(image_paths), batch_size):
         batch = image_paths[i:i + batch_size]
-        with ThreadPoolExecutor(max_workers=2) as executor:
+        with ThreadPoolExecutor() as executor:
             futures = {
                 executor.submit(
                     process_image_pair, image_path, chm_path, output_folder, method, save_intermediate
