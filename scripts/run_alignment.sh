@@ -9,7 +9,12 @@
 #SBATCH --partition=small                      # Partition to submit to
 #SBATCH --mem-per-cpu=4000                     # Memory per CPU in MB
 
-MODULE_NAME="python/3.10"
+# Usage:
+# export TREEMORT_VENV_PATH="/custom/path/to/venv"
+# export TREEMORT_REPO_PATH="/custom/path/to/treemort/repo"
+# sbatch --export=ALL,SCRIPT_PATH="/custom/path/to/function.py",DATA_PATH="/custom/path/to/data" run_alignment.sh
+
+MODULE_NAME="python-data"
 module load $MODULE_NAME
 
 VENV_PATH="${VENV_PATH:-/projappl/project_2004205/rahmanan/venv}"
@@ -60,3 +65,11 @@ else
 fi
 
 exit $EXIT_STATUS
+
+'''
+
+Usage:
+
+sbatch --export=ALL,SCRIPT_PATH="$TREEMORT_REPO_PATH/misc/register.py",DATA_PATH="./Finland_CHM" $TREEMORT_REPO_PATH/scripts/run_alignment.sh
+
+'''

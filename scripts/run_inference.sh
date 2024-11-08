@@ -12,9 +12,9 @@
 # Usage:
 # export TREEMORT_VENV_PATH="/custom/path/to/venv"
 # export TREEMORT_REPO_PATH="/custom/path/to/treemort/repo"
-# sbatch --export=ALL,SCRIPT_PATH="/custom/path/to/function.py",DATA_PATH="/custom/path/to/data" run_alignment.sh
+# sbatch --export=ALL,CONFIG_PATH="/custom/path/to/config",DATA_PATH="/custom/path/to/data" run_inference.sh
 
-MODULE_NAME="python-data"
+MODULE_NAME="pytorch/2.3"
 module load $MODULE_NAME
 
 TREEMORT_VENV_PATH="${TREEMORT_VENV_PATH:-/projappl/project_2004205/rahmanan/venv}"
@@ -73,11 +73,3 @@ else
 fi
 
 exit $EXIT_STATUS
-
-'''
-
-Usage:
-
-sbatch --export=ALL,SCRIPT_PATH="$TREEMORT_REPO_PATH/misc/register.py",DATA_PATH="./Finland_CHM" $TREEMORT_REPO_PATH/scripts/run_alignment.sh
-
-'''
