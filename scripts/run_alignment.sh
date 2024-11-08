@@ -50,7 +50,7 @@ echo "       Data path: $DATA_PATH"
 echo "       CPUs per task: $SLURM_CPUS_PER_TASK"
 echo "       Memory per CPU: $SLURM_MEM_PER_CPU MB"
 
-srun python3 "$TREEMORT_REPO_PATH"/misc/register.py "$DATA_PATH"
+srun python3 "$SCRIPT_PATH" "$DATA_PATH"
 
 EXIT_STATUS=$?
 if [ $EXIT_STATUS -ne 0 ]; then
