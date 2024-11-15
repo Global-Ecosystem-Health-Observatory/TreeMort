@@ -5,7 +5,7 @@ import numpy as np
 
 from tqdm import tqdm
 from scipy import optimize
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from multiprocessing import Pool, cpu_count
 
 
 def read_image(path, bands=None):
@@ -36,9 +36,7 @@ def save_tiff(image_data, image_path, metadata, nchannels=1):
 
 
 def grayscale_conversion(red_band, green_band, blue_band):
-    return (0.2989 * red_band + 0.5870 * green_band + 0.1140 * blue_band).astype(
-        np.uint8
-    )
+    return (0.2989 * red_band + 0.5870 * green_band + 0.1140 * blue_band).astype(np.uint8)
 
 
 def apply_clahe(image, clip_limit=2.0, tile_grid_size=(8, 8)):
@@ -47,9 +45,7 @@ def apply_clahe(image, clip_limit=2.0, tile_grid_size=(8, 8)):
 
 
 def normalize_image(image, norm_min=0, norm_max=255):
-    return cv2.normalize(image, None, norm_min, norm_max, cv2.NORM_MINMAX).astype(
-        "uint8"
-    )
+    return cv2.normalize(image, None, norm_min, norm_max, cv2.NORM_MINMAX).astype("uint8")
 
 
 def resize_image(image, size=(12000, 12000)):
@@ -95,9 +91,7 @@ def apply_sobel(image):
 
 def detect_contours(image, threshold=30):
     _, binary = cv2.threshold(image, threshold, 255, cv2.THRESH_BINARY)
-    contours, _ = cv2.findContours(
-        binary.astype("uint8"), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE
-    )
+    contours, _ = cv2.findContours(binary.astype("uint8"), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     contour_image = np.zeros_like(image)
     cv2.drawContours(contour_image, contours, -1, 255, thickness=1)
     return contour_image
@@ -110,9 +104,8 @@ def apply_difference_of_gaussians(image, kernel_size1=(5, 5), kernel_size2=(11, 
     return normalize_image(dog_image)
 
 
-import os
-
-def process_image_pair(image_path, chm_path, output_folder, method, save_intermediate):
+def process_image_pair(args):
+    image_path, chm_path, output_folder, method, save_intermediate = args
     aligned_image_output_path = os.path.join(output_folder, os.path.basename(image_path))
 
     if os.path.exists(aligned_image_output_path):
@@ -150,48 +143,47 @@ def process_image_pair(image_path, chm_path, output_folder, method, save_interme
 
 
 def main(data_folder, method="dog", save_intermediate=False):
-    image_folder = os.path.join(data_folder, 'Images')
-    chm_folder = os.path.join(data_folder, 'CHM')
+    image_folder = os.path.join(data_folder, "Images")
+    chm_folder = os.path.join(data_folder, "CHM")
 
     if not os.path.exists(image_folder) or not os.path.exists(chm_folder):
         raise FileNotFoundError("One or both of the specified folders do not exist. Please check the paths.")
 
-    output_folder = os.path.join(data_folder, 'Aligned_Images')
+    output_folder = os.path.join(data_folder, "Aligned_Images")
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
 
-    image_files = [f for f in os.listdir(image_folder) if f.endswith('.jp2')]
-    chm_files = [f for f in os.listdir(chm_folder) if f.endswith('.tif')]
+    image_files = [f for f in os.listdir(image_folder) if f.endswith(".jp2")]
+    chm_files = [f for f in os.listdir(chm_folder) if f.endswith(".tif")]
 
     image_paths = []
     for image_file in image_files:
         image_name = os.path.splitext(image_file)[0]
         chm_name = f"CHM_{image_name}_2016.tif"
         if chm_name in chm_files:
-            image_paths.append((
-                os.path.join(image_folder, image_file),
-                os.path.join(chm_folder, chm_name)
-            ))
-    
-    batch_size = 2  # Adjust based on available RAM
-    for i in range(0, len(image_paths), batch_size):
-        batch = image_paths[i:i + batch_size]
-        with ThreadPoolExecutor() as executor:
-            futures = {
-                executor.submit(
-                    process_image_pair, image_path, chm_path, output_folder, method, save_intermediate
-                ): (image_path, chm_path) for image_path, chm_path in batch
-            }
-            for future in tqdm(as_completed(futures), total=len(futures), desc="Processing images"):
-                image_path, chm_path = futures[future]
-                try:
-                    future.result()
-                except Exception as e:
-                    print(f"Error processing {os.path.basename(image_path)}: {e}")
+            image_paths.append(
+                (
+                    os.path.join(image_folder, image_file),
+                    os.path.join(chm_folder, chm_name),
+                    output_folder,
+                    method,
+                    save_intermediate,
+                )
+            )
+
+    num_processes = min(cpu_count(), len(image_paths))
+
+    with Pool(processes=num_processes) as pool:
+        for _ in tqdm(
+            pool.imap_unordered(process_image_pair, image_paths),
+            total=len(image_paths),
+            desc="Processing images",
+        ):
+            pass
 
 
 if __name__ == "__main__":
-    data_folder = os.getenv('DATA_PATH')
+    data_folder = os.getenv("DATA_PATH")
     if not data_folder:
         raise ValueError("DATA_PATH environment variable is not set. Please set it before running the script.")
 

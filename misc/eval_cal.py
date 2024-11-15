@@ -1,203 +1,139 @@
-import geopandas as gpd
-from shapely.ops import polygonize
-from shapely.geometry import MultiPolygon
 import os
 
-def fix_geometry(geometry):
-    """
-    Fix an invalid geometry by attempting to repair self-intersections.
-    
-    Parameters:
-    - geometry (shapely.geometry): The input geometry to be fixed.
-
-    Returns:
-    - shapely.geometry: A valid geometry or the original if it cannot be fixed.
-    """
-    if not geometry.is_valid:
-        try:
-            # Buffer with zero distance can sometimes fix minor self-intersections
-            fixed_geometry = geometry.buffer(0)
-            
-            # If the buffer operation results in an invalid or empty geometry, use polygonize
-            if not fixed_geometry.is_valid or fixed_geometry.is_empty:
-                fixed_geometry = MultiPolygon(polygonize(geometry))
-                
-            if fixed_geometry.is_valid:
-                return fixed_geometry
-            else:
-                return geometry  # Return the original if the fix fails
-        except Exception:
-            return geometry  # Return the original geometry if an error occurs
-    else:
-        return geometry
-
-def fix_geometries_in_folder(input_folder, output_folder):
-    """
-    Fix geometries in all GeoJSON files in a folder and save them in a new folder.
-
-    Parameters:
-    - input_folder (str): Path to the folder containing the original GeoJSON files.
-    - output_folder (str): Path to the folder where corrected GeoJSON files will be saved.
-    """
-    # Create the output folder if it doesn't exist
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder)
-
-    # Iterate through each file in the input folder
-    for filename in os.listdir(input_folder):
-        if filename.endswith('.geojson'):
-            input_path = os.path.join(input_folder, filename)
-            output_path = os.path.join(output_folder, filename)
-            
-            try:
-                # Load the GeoJSON file
-                gdf = gpd.read_file(input_path)
-                
-                # Keep track of whether any geometry has been fixed
-                original_gdf = gdf.copy()
-                gdf['geometry'] = gdf['geometry'].apply(fix_geometry)
-                
-                # Check if any geometries were changed
-                if not gdf.equals(original_gdf):
-                    # Save the corrected GeoDataFrame to the output folder
-                    gdf.to_file(output_path, driver='GeoJSON')
-                    print(f"Corrected file saved: {output_path}")
-                else:
-                    # Copy the original file without modifications if no changes were made
-                    gdf.to_file(output_path, driver='GeoJSON')
-                    print(f"No changes needed; file saved as is: {output_path}")
-            except Exception as e:
-                print(f"Error processing {filename}: {e}")
-
-# Example usage:
-input_folder = '/Users/anisr/Documents/copenhagen_data/Predictions'
-output_folder = '/Users/anisr/Documents/copenhagen_data/Corrected_Predictions'
-fix_geometries_in_folder(input_folder, output_folder)
-
-
-import geopandas as gpd
-from shapely.validation import make_valid
-from shapely.geometry import box
 import numpy as np
-import os
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import geopandas as gpd
+
 from tqdm import tqdm
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+from shapely.validation import make_valid
+
+
+def calculate_pixel_iou(prediction_gdf, ground_truth_gdf):
+    intersection_gdf = gpd.overlay(prediction_gdf, ground_truth_gdf, how='intersection')
+
+    intersection_gdf['iou'] = intersection_gdf['geometry'].apply(
+        lambda geom: geom.area / (
+            prediction_gdf.loc[prediction_gdf.intersects(geom), 'geometry'].area.values[0] +
+            ground_truth_gdf.loc[ground_truth_gdf.intersects(geom), 'geometry'].area.values[0] -
+            geom.area
+        )
+    )
+
+    if intersection_gdf.empty:
+        return 0
+    
+    iou_pixels = intersection_gdf['iou'].mean()
+    return iou_pixels
+
+
+def calculate_tree_iou(prediction_gdf, ground_truth_gdf):
+    prediction_gdf = prediction_gdf.copy()
+    ground_truth_gdf = ground_truth_gdf.copy()
+
+    prediction_gdf.loc[:, 'geometry'] = prediction_gdf['geometry'].apply(lambda x: x.buffer(0) if not x.is_valid else x)
+    ground_truth_gdf.loc[:, 'geometry'] = ground_truth_gdf['geometry'].apply(lambda x: x.buffer(0) if not x.is_valid else x)
+    
+    prediction_union = prediction_gdf.geometry.union_all()
+
+    filtered_ground_truth_gdf = ground_truth_gdf[ground_truth_gdf.intersects(prediction_union)]
+    
+    tp_trees, fp_trees, fn_trees = 0, 0, 0
+    
+    for pred_geom in prediction_gdf['geometry']:
+        if filtered_ground_truth_gdf.intersects(pred_geom).any():
+            tp_trees += 1
+        else:
+            fp_trees += 1
+
+    for gt_geom in filtered_ground_truth_gdf['geometry']:
+        if not prediction_gdf.intersects(gt_geom).any():
+            fn_trees += 1
+
+    if (tp_trees + fp_trees + fn_trees) == 0:
+        iou_trees = 1.0 if len(filtered_ground_truth_gdf) == 0 else 0.0
+    else:
+        iou_trees = tp_trees / (tp_trees + fp_trees + fn_trees)
+    
+    return iou_trees
+
 
 def validate_and_fix_geometry(geom):
-    """
-    Validate and fix geometry. Return None if the geometry cannot be fixed.
-    """
     try:
-        # Apply make_valid to fix the geometry
         valid_geom = make_valid(geom)
+
         if valid_geom.is_valid and not valid_geom.is_empty:
             return valid_geom
         else:
             return None
+        
     except Exception:
         return None
 
-def process_prediction_file(prediction_path, ground_truth_segments):
-    """
-    Process a single prediction file and calculate IoU values against the ground truth.
-
-    Parameters:
-    - prediction_path (str): Path to the prediction GeoJSON file.
-    - ground_truth_segments (GeoDataFrame): The ground truth GeoDataFrame.
-
-    Returns:
-    - list: IoU values for the prediction file.
-    """
+def process_prediction_file(prediction_path, ground_truth_gdf):
     try:
-        predicted_segments = gpd.read_file(prediction_path)
-
-        # Check if the GeoDataFrame is empty
-        if predicted_segments.empty:
+        prediction_gdf = gpd.read_file(prediction_path)
+        
+        if prediction_gdf.empty:
             print(f"File {prediction_path} is empty. Skipping...")
-            return []
+            return 0, 0
+        
+        prediction_gdf['geometry'] = prediction_gdf['geometry'].apply(validate_and_fix_geometry)
+        prediction_gdf = prediction_gdf[prediction_gdf['geometry'].notnull()]
 
-        # Ensure both GeoDataFrames use the same CRS
-        if predicted_segments.crs != ground_truth_segments.crs:
-            ground_truth_segments = ground_truth_segments.to_crs(predicted_segments.crs)
-
-        # Clean and validate predicted geometries
-        predicted_segments['geometry'] = predicted_segments['geometry'].apply(validate_and_fix_geometry)
-        predicted_segments = predicted_segments[predicted_segments['geometry'].notnull()]
-
-        # Check again if the GeoDataFrame is empty after cleaning
-        if predicted_segments.empty:
+        if prediction_gdf.empty:
             print(f"File {prediction_path} has no valid geometries after cleaning. Skipping...")
-            return []
+            return 0, 0
+        
+        if ground_truth_gdf.crs != prediction_gdf.crs:
+            ground_truth_gdf = ground_truth_gdf.to_crs(prediction_gdf.crs)
 
-        # Get the bounding box of the predicted segments
-        bounds = predicted_segments.total_bounds  # [minx, miny, maxx, maxy]
-        bounding_box = box(*bounds)
+        filtered_ground_truth_gdf = ground_truth_gdf[ground_truth_gdf.intersects(prediction_gdf.geometry.union_all())]
 
-        # Filter ground truth segments to those within the bounds of the predicted geometries
-        filtered_ground_truth = ground_truth_segments[ground_truth_segments.intersects(bounding_box)]
+        mean_pixel_iou = calculate_pixel_iou(prediction_gdf, filtered_ground_truth_gdf)
+        mean_tree_iou = calculate_tree_iou(prediction_gdf, filtered_ground_truth_gdf)
 
-        # Calculate IoU for overlapping segments
-        iou_values = []
-
-        for pred_geom in predicted_segments.geometry:
-            for truth_geom in filtered_ground_truth.geometry:
-                if pred_geom.is_valid and truth_geom.is_valid:
-                    if pred_geom.intersects(truth_geom):
-                        intersection_area = pred_geom.intersection(truth_geom).area
-                        union_area = pred_geom.union(truth_geom).area
-                        iou = intersection_area / union_area if union_area != 0 else 0
-                        iou_values.append(iou)
-
-        return iou_values
+        return mean_pixel_iou, mean_tree_iou
 
     except Exception as e:
         print(f"Error processing {prediction_path}: {e}")
-        return []
+        return 0, 0  # Return default IoUs on error
 
-def calculate_mean_iou_multithreaded(predictions_dir, ground_truth_path):
-    """
-    Calculate the mean IoU for all GeoJSON predictions in a directory against a ground truth GPKG file using multithreading.
 
-    Parameters:
-    - predictions_dir (str): Path to the directory containing prediction GeoJSON files.
-    - ground_truth_path (str): Path to the ground truth GPKG file.
+def calculate_mean_ious(predictions_dir, ground_truth_path):
+    ground_truth_gdf = gpd.read_file(ground_truth_path)
 
-    Returns:
-    - float: The mean IoU for all predictions.
-    """
-    # Load the ground truth segments
-    ground_truth_segments = gpd.read_file(ground_truth_path)
-
-    # Check if the ground truth is empty
-    if ground_truth_segments.empty:
+    if ground_truth_gdf.empty:
         print("The ground truth GeoDataFrame is empty. Exiting...")
-        return 0
+        return 0, 0  # mean pixel-level IoU, mean tree-level IoU
 
-    # Ensure ground truth geometries are valid
-    ground_truth_segments['geometry'] = ground_truth_segments['geometry'].apply(validate_and_fix_geometry)
-    ground_truth_segments = ground_truth_segments[ground_truth_segments['geometry'].notnull()]
+    ground_truth_gdf['geometry'] = ground_truth_gdf['geometry'].apply(validate_and_fix_geometry)
+    ground_truth_gdf = ground_truth_gdf[ground_truth_gdf['geometry'].notnull()]
 
-    all_iou_values = []
+    pixel_iou_values = []
+    tree_iou_values = []
 
-    # Get a list of GeoJSON files in the directory
     prediction_files = [os.path.join(predictions_dir, filename) for filename in os.listdir(predictions_dir) if filename.endswith('.geojson')]
 
-    # Use ThreadPoolExecutor for multithreading and tqdm for progress
     with ThreadPoolExecutor() as executor:
-        future_to_file = {executor.submit(process_prediction_file, prediction_path, ground_truth_segments): prediction_path for prediction_path in prediction_files}
+        future_to_file = {executor.submit(process_prediction_file, prediction_path, ground_truth_gdf): prediction_path for prediction_path in prediction_files}
         for future in tqdm(as_completed(future_to_file), total=len(future_to_file), desc="Processing Files"):
             try:
-                iou_values = future.result()
-                all_iou_values.extend(iou_values)
+                pixel_iou, tree_iou = future.result()
+                pixel_iou_values.append(pixel_iou)
+                tree_iou_values.append(tree_iou)
             except Exception as e:
                 print(f"Error processing file {future_to_file[future]}: {e}")
 
-    # Calculate and return the mean IoU
-    mean_iou = np.mean(all_iou_values) if all_iou_values else 0
-    return mean_iou
+    mean_pixel_iou = np.mean(pixel_iou_values) if pixel_iou_values else 0
+    mean_tree_iou = np.mean(tree_iou_values) if tree_iou_values else 0
 
-# Example usage:
-predictions_dir = "/Users/anisr/Documents/copenhagen_data/Corrected_Predictions"
-ground_truth_path = "/Users/anisr/Documents/copenhagen_data/labels/target_features_20241031.gpkg"
-mean_iou = calculate_mean_iou_multithreaded(predictions_dir, ground_truth_path)
-print(f"Mean IoU for all predictions: {mean_iou:.4f}")
+    return mean_pixel_iou, mean_tree_iou
+
+if __name__ == "__main__":
+    predictions_dir = "/Users/anisr/Documents/copenhagen_data/Predictions"
+    ground_truth_path = "/Users/anisr/Documents/copenhagen_data/labels/target_features_20241031.gpkg"
+
+    mean_pixel_iou, mean_tree_iou = calculate_mean_ious(predictions_dir, ground_truth_path)
+    print(f"Mean Pixel IoU for all predictions: {mean_pixel_iou:.4f}")
+    print(f"Mean Tree IoU for all predictions: {mean_tree_iou:.4f}")

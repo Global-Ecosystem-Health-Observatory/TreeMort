@@ -12,12 +12,10 @@ from treemort.utils.logger import get_logger
 from treemort.modeling.builder import build_model
 
 from inference.utils import (
-    load_and_preprocess_image,
-    threshold_prediction_map,
-    contours_to_geojson,
-    extract_contours,
-    save_geojson,
     pad_image,
+    save_labels_as_geojson,
+    load_and_preprocess_image,
+    generate_watershed_labels,
 )
 
 logger = get_logger(__name__)
@@ -26,7 +24,7 @@ logger = get_logger(__name__)
 def sliding_window_inference(model, image, window_size=256, stride=128, batch_size=8):
     model.eval()
 
-    device = next(model.parameters()).device  # Get the device of the model
+    device = next(model.parameters()).device
 
     padded_image = pad_image(image, window_size)
 
@@ -104,7 +102,10 @@ def process_image(
     window_size=256,
     stride=128,
     threshold=0.5,
-    nir_rgb_order=[3, 2, 1, 0],
+    nir_rgb_order=[3, 0, 1, 2],
+    min_distance=3,
+    dilation_radius=0,
+    blur_sigma=1
 ):
     logger.info(f"Starting process for image: {image_path}")
 
@@ -114,17 +115,16 @@ def process_image(
     prediction_map = sliding_window_inference(model, image, window_size, stride)
     logger.info(f"Prediction map generated with shape: {prediction_map.shape}")
 
-    binary_mask = threshold_prediction_map(prediction_map, threshold)
-    logger.info(f"Binary mask created with threshold: {threshold}. Mask shape: {binary_mask.shape}")
+    mask = prediction_map > threshold
+    logger.info(f"Mask created with shape: {mask.shape} and coverage: {np.sum(mask)} pixels")
 
-    contours = extract_contours(binary_mask)
-    logger.info(f"{len(contours)} contours extracted from binary mask")
+    
+    labels = generate_watershed_labels(prediction_map, mask, min_distance, blur_sigma, dilation_radius)
+    logger.info(f"Watershed segmentation completed with max label: {np.max(labels)}")
 
-    geojson_data = contours_to_geojson(contours, transform, crs, os.path.splitext(os.path.basename(image_path))[0])
-    logger.info("Contours converted to GeoJSON format")
-
-    save_geojson(geojson_data, geojson_path)
-    logger.info(f"GeoJSON saved to {geojson_path}")
+    if labels is not None:
+        save_labels_as_geojson(labels, transform, crs, geojson_path)
+        logger.info(f"GeoJSON saved to {geojson_path}")
 
 
 def parse_config(config_file_path):
@@ -183,7 +183,7 @@ def run_inference(data_path, config_file_path, output_dir):
             if not os.path.exists(directory):
                 os.makedirs(directory, exist_ok=True)
                 logger.info(f"Created predictions directory: {directory}")
-
+            
             process_image(model, image_path, geojson_path, window_size=conf.window_size, stride=conf.stride, threshold=conf.threshold, nir_rgb_order=conf.nir_rgb_order)
             logger.info(f"Processed image saved to: {geojson_path}")
 
@@ -217,8 +217,8 @@ if __name__ == "__main__":
 1) save geojsons in a 'Predictions' folder alongside Images and Geojsons
 
 python -m inference.engine \
-    /Users/anisr/Documents/dead_trees/Finland/RGBNIR/25cm/2011/Images/M3442B_2011_1.tiff \
-    --config ./configs/Finland_RGBNIR_25cm_inference.txt
+    /Users/anisr/Documents/copenhagen_data/Images/patches_3095_377.tif \
+    --config ./configs/USA_RGBNIR_60cm_inference.txt
 
 2) save geojsons to an output folder
 
@@ -232,8 +232,8 @@ python -m inference.engine \
 1) save geojsons in a 'Predictions' folder alongside Images and Geojsons
 
 python -m inference.engine \
-    /Users/anisr/Documents/dead_trees/Finland/RGBNIR/25cm \
-    --config ./configs/Finland_RGBNIR_25cm_inference.txt
+    /Users/anisr/Documents/copenhagen_data \
+    --config ./configs/USA_RGBNIR_60cm_inference.txt
 
 2) save geojsons to output folder
 
