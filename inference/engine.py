@@ -17,6 +17,7 @@ from inference.utils import (
     load_and_preprocess_image,
     generate_watershed_labels,
 )
+from misc.graph_partition import perform_graph_partitioning
 
 logger = get_logger(__name__)
 
@@ -57,7 +58,8 @@ def sliding_window_inference(model, image, window_size=256, stride=128, batch_si
     final_prediction[no_contribution_mask] = 0
     final_prediction = np.clip(final_prediction, 0, 1)
 
-    return final_prediction
+    _, original_h, original_w = image.shape
+    return final_prediction[:original_h, :original_w]
 
 
 def process_batch(patches, coords, prediction_map, count_map, model, device):
@@ -110,20 +112,22 @@ def process_image(
     logger.info(f"Starting process for image: {image_path}")
 
     image, transform, crs = load_and_preprocess_image(image_path, nir_rgb_order)
-    logger.info(f"Image loaded and preprocessed. Shape: {image.shape}, Transform: {transform}")
+    logger.info(f"Image loaded and preprocessed. Shape: {image.shape}")
 
     prediction_map = sliding_window_inference(model, image, window_size, stride)
     logger.info(f"Prediction map generated with shape: {prediction_map.shape}")
 
-    mask = prediction_map > threshold
-    logger.info(f"Mask created with shape: {mask.shape} and coverage: {np.sum(mask)} pixels")
+    predicted_mask = prediction_map > threshold
+    logger.info(f"Mask created with shape: {predicted_mask.shape} and coverage: {np.sum(predicted_mask)} pixels")
 
+    partitioned_labels = perform_graph_partitioning(image, predicted_mask)
+    logger.info(f"Partition graph segmentation completed with max label: {np.max(partitioned_labels)}")
     
-    labels = generate_watershed_labels(prediction_map, mask, min_distance, blur_sigma, dilation_radius)
-    logger.info(f"Watershed segmentation completed with max label: {np.max(labels)}")
+    refined_labels = generate_watershed_labels(prediction_map*predicted_mask, partitioned_labels, min_distance, blur_sigma, dilation_radius)
+    logger.info(f"Watershed segmentation completed with max label: {np.max(refined_labels)}")
 
-    if labels is not None:
-        save_labels_as_geojson(labels, transform, crs, geojson_path)
+    if refined_labels is not None:
+        save_labels_as_geojson(refined_labels, transform, crs, geojson_path)
         logger.info(f"GeoJSON saved to {geojson_path}")
 
 

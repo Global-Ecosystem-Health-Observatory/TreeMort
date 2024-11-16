@@ -99,7 +99,7 @@ def save_geojson(geojson_data, output_path):
         geojson.dump(geojson_data, f, indent=2, ensure_ascii=False)
 
 
-def save_labels_as_geojson(labels, transform, crs, output_path, min_area_threshold=1.0):
+def save_labels_as_geojson(labels, transform, crs, output_path, min_area_threshold=3.0):
     geometries = []
     for label_value in np.unique(labels):
         if label_value == 0:

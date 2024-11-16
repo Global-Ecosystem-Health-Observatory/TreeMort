@@ -4,10 +4,10 @@
 #SBATCH --output=output/stdout/%A_%a.out       # Output log path
 #SBATCH --error=output/stderr/%A_%a.err        # Error log path
 #SBATCH --ntasks=1                             # Number of tasks (1 process)
-#SBATCH --cpus-per-task=20                      # Number of CPU cores per task
+#SBATCH --cpus-per-task=8                      # Number of CPU cores per task
 #SBATCH --time=05:00:00                        # Time limit (hh:mm:ss)
 #SBATCH --partition=small                      # Partition to submit to
-#SBATCH --mem-per-cpu=4000                     # Memory per CPU in MB
+#SBATCH --mem-per-cpu=10000                     # Memory per CPU in MB
 
 # Usage:
 # export TREEMORT_VENV_PATH="/custom/path/to/venv"

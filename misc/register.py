@@ -105,41 +105,44 @@ def apply_difference_of_gaussians(image, kernel_size1=(5, 5), kernel_size2=(11, 
 
 
 def process_image_pair(args):
-    image_path, chm_path, output_folder, method, save_intermediate = args
-    aligned_image_output_path = os.path.join(output_folder, os.path.basename(image_path))
+    try:
+        image_path, chm_path, output_folder, method, save_intermediate = args
+        aligned_image_output_path = os.path.join(output_folder, os.path.basename(image_path))
 
-    if os.path.exists(aligned_image_output_path):
-        print(f"[INFO] Aligned image already exists at: {aligned_image_output_path}. Skipping computation.")
-        return
+        if os.path.exists(aligned_image_output_path):
+            print(f"[INFO] Aligned image already exists at: {aligned_image_output_path}. Skipping computation.")
+            return
 
-    aerial_img, aerial_metadata = read_image(image_path, [1, 2, 3])
-    chm_data, _ = read_image(chm_path)
+        aerial_img, aerial_metadata = read_image(image_path, [1, 2, 3])
+        chm_data, _ = read_image(chm_path)
 
-    grayscale_img = grayscale_conversion(*aerial_img)
-    enhanced_img = apply_clahe(grayscale_img)
-    rescaled_chm_data = resize_image(chm_data)
-    rescaled_chm_data_8u = normalize_image(rescaled_chm_data)
-    edges_aerial = generate_edges(enhanced_img, 100, 200)
+        grayscale_img = grayscale_conversion(*aerial_img)
+        enhanced_img = apply_clahe(grayscale_img)
+        rescaled_chm_data = resize_image(chm_data)
+        rescaled_chm_data_8u = normalize_image(rescaled_chm_data)
+        edges_aerial = generate_edges(enhanced_img, 100, 200)
 
-    if method == "edges":
-        reference_image = generate_edges(rescaled_chm_data_8u, 50, 150)
-    elif method == "sobel":
-        reference_image = apply_sobel(rescaled_chm_data)
-    elif method == "contour":
-        reference_image = detect_contours(rescaled_chm_data)
-    elif method == "dog":
-        reference_image = apply_difference_of_gaussians(rescaled_chm_data)
-    else:
-        raise ValueError("Invalid method. Choose 'edges', 'sobel', or 'dog'.")
+        if method == "edges":
+            reference_image = generate_edges(rescaled_chm_data_8u, 50, 150)
+        elif method == "sobel":
+            reference_image = apply_sobel(rescaled_chm_data)
+        elif method == "contour":
+            reference_image = detect_contours(rescaled_chm_data)
+        elif method == "dog":
+            reference_image = apply_difference_of_gaussians(rescaled_chm_data)
+        else:
+            raise ValueError("Invalid method. Choose 'edges', 'sobel', or 'dog'.")
 
-    optimal_shift = align_images_using_mutual_information(edges_aerial, reference_image)
-    aligned_aerial_img = np.roll(grayscale_img, int(optimal_shift[0]), axis=0)
-    aligned_aerial_img = np.roll(aligned_aerial_img, int(optimal_shift[1]), axis=1)
+        optimal_shift = align_images_using_mutual_information(edges_aerial, reference_image)
+        aligned_aerial_img = np.roll(grayscale_img, int(optimal_shift[0]), axis=0)
+        aligned_aerial_img = np.roll(aligned_aerial_img, int(optimal_shift[1]), axis=1)
 
-    save_tiff(aligned_aerial_img, aligned_image_output_path, aerial_metadata)
+        save_tiff(aligned_aerial_img, aligned_image_output_path, aerial_metadata)
 
-    print(f"Optimal Shift for {os.path.basename(image_path)} (using {method}): {optimal_shift}")
-    print(f"Aligned image saved as TIFF at: {aligned_image_output_path}")
+        print(f"Optimal Shift for {os.path.basename(image_path)} (using {method}): {optimal_shift}")
+        print(f"Aligned image saved as TIFF at: {aligned_image_output_path}")
+    except Exception as e:
+        print(f"Error processing {args[0]}: {e}")
 
 
 def main(data_folder, method="dog", save_intermediate=False):
@@ -171,7 +174,7 @@ def main(data_folder, method="dog", save_intermediate=False):
                 )
             )
 
-    num_processes = min(cpu_count(), len(image_paths))
+    num_processes = min(cpu_count(), len(image_paths), 8)
 
     with Pool(processes=num_processes) as pool:
         for _ in tqdm(
