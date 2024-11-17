@@ -146,11 +146,18 @@ class SegmentationRefinementDataset(Dataset):
     @staticmethod
     def load_geojsons_to_mask(geojson_path, image_shape, transform):
         gdf = gpd.read_file(geojson_path)
-        gdf["geometry"] = gdf["geometry"].apply(lambda geom: geom if geom.is_valid else geom.buffer(0))
+
+        gdf['geometry'] = gdf['geometry'].apply(lambda geom: geom if geom.is_valid else geom.buffer(0))
+        
+        gdf = gdf[gdf['geometry'].notnull() & gdf['geometry'].is_valid & ~gdf['geometry'].is_empty]
+
+        if gdf.empty:
+            raise ValueError(f"No valid geometry objects found in {geojson_path} for rasterize.")
 
         gdf = add_unique_ids(gdf)
 
-        shapes = [(geom, 1) for geom in gdf.geometry if geom.is_valid and not geom.is_empty]
+        shapes = [(geom, 1) for geom in gdf.geometry]
+
         mask = rasterize(shapes, out_shape=image_shape, transform=transform, fill=0, all_touched=True)
         return mask
 
