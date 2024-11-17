@@ -1,5 +1,6 @@
 import os
 import rasterio
+import numpy as np
 import geopandas as gpd
 
 import torch
@@ -152,7 +153,7 @@ class SegmentationRefinementDataset(Dataset):
         gdf = gdf[gdf['geometry'].notnull() & gdf['geometry'].is_valid & ~gdf['geometry'].is_empty]
 
         if gdf.empty:
-            raise ValueError(f"No valid geometry objects found in {geojson_path} for rasterize.")
+            return np.zeros(image_shape, dtype=np.uint8)
 
         gdf = add_unique_ids(gdf)
 
