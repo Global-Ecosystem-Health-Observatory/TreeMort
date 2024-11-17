@@ -188,8 +188,11 @@ def run_inference(data_path, config_file_path, output_dir):
                 os.makedirs(directory, exist_ok=True)
                 logger.info(f"Created predictions directory: {directory}")
             
-            process_image(model, image_path, geojson_path, window_size=conf.window_size, stride=conf.stride, threshold=conf.threshold, nir_rgb_order=conf.nir_rgb_order)
-            logger.info(f"Processed image saved to: {geojson_path}")
+            if not os.path.exists(geojson_path):
+                process_image(model, image_path, geojson_path, window_size=conf.window_size, stride=conf.stride, threshold=conf.threshold, nir_rgb_order=conf.nir_rgb_order)
+                logger.info(f"Processed image saved to: {geojson_path}")
+            else:
+                logger.info(f"Skipping {image_path} as it has already been processed and saved at {geojson_path}")
 
         except Exception as e:
             logger.error(f"Failed to process image: {image_path}. Error: {e}")

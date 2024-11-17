@@ -12,6 +12,10 @@ from skimage.feature import peak_local_max
 from skimage.morphology import binary_dilation, disk
 from skimage.segmentation import watershed
 
+from treemort.utils.logger import get_logger
+
+logger = get_logger(__name__)
+
 
 def load_and_preprocess_image(tiff_file, nir_rgb_order):
     with rasterio.open(tiff_file) as src:
@@ -63,7 +67,7 @@ def contours_to_geojson(contours, transform, crs, name):
                 }
             }
         else:
-            print("CRS is not in EPSG format; setting CRS to null in GeoJSON.")
+            logger.info("CRS is not in EPSG format; setting CRS to null in GeoJSON.")
     
     geojson = {
         "type": "FeatureCollection",
@@ -89,7 +93,7 @@ def contours_to_geojson(contours, transform, crs, name):
             }
             geojson["features"].append(new_feature)
         else:
-            print(f"Skipped contour with {len(contour)} points")
+            logger.info(f"Skipped contour with {len(contour)} points")
 
     return geojson
 
@@ -117,29 +121,29 @@ def save_labels_as_geojson(labels, transform, crs, output_path, min_area_thresho
                     if convex_hull.is_valid and not convex_hull.is_empty:
                         geometries.append({'geometry': convex_hull, 'properties': {'label': int(label_value)}})
                     else:
-                        print(f"Warning: Convex hull for label {label_value} is invalid or empty.")
+                        logger.warning(f"Convex hull for label {label_value} is invalid or empty.")
                 else:
-                    print(f"Warning: Geometry for label {label_value} is invalid or empty.")
+                    logger.warning(f"Geometry for label {label_value} is invalid or empty.")
 
     if not geometries:
-        print("No valid geometries found. GeoJSON will be empty.")
+        logger.info("No valid geometries found. GeoJSON will be empty.")
         return
 
     gdf = gpd.GeoDataFrame.from_features(geometries, crs=crs)
 
     if gdf.crs.is_geographic:
         projected_crs = gdf.estimate_utm_crs()
-        print(f"Reprojecting to {projected_crs} for accurate area calculations...")
+        logger.info(f"Reprojecting to {projected_crs} for accurate area calculations...")
         gdf = gdf.to_crs(projected_crs)
 
     gdf = gdf[gdf['geometry'].area >= min_area_threshold]
     
     if gdf.empty:
-        print("No valid geometries meet the area threshold. GeoJSON will be empty.")
+        logger.info("No valid geometries meet the area threshold. GeoJSON will be empty.")
         return
 
     gdf.to_file(output_path, driver="GeoJSON")
-    print(f"GeoJSON saved to {output_path}")
+    logger.info(f"GeoJSON saved to {output_path}")
 
 
 def generate_watershed_labels(prediction_map, mask, min_distance=4, blur_sigma=2, dilation_radius=1):
