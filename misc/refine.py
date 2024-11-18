@@ -150,7 +150,7 @@ class SegmentationRefinementDataset(Dataset):
 
         gdf['geometry'] = gdf['geometry'].apply(lambda geom: geom if geom.is_valid else geom.buffer(0))
         
-        gdf = gdf[gdf['geometry'].notnull() & gdf['geometry'].is_valid & ~gdf['geometry'].is_empty]
+        gdf = gdf[~gdf['geometry'].is_empty & gdf['geometry'].notna() & gdf['geometry'].is_valid]
 
         if gdf.empty:
             return np.zeros(image_shape, dtype=np.uint8)
