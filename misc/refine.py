@@ -250,7 +250,19 @@ class UNet(nn.Module):
         return torch.sigmoid(self.final(dec1))
 
 
+def load_model_if_exists(model, model_save_path, device):
+    if os.path.exists(model_save_path):
+        model.load_state_dict(torch.load(model_save_path))
+        print(f"Loaded model weights from {model_save_path}")
+    else:
+        print("No previous model found. Starting training from scratch.")
+    model.to(device)
+    return model
+
+
 def train_refinement_model(train_dataloader, val_dataloader, model, criterion, optimizer, num_epochs, device):
+    model = load_model_if_exists(model, model_save_path, device)
+
     best_val_loss = float("inf")
 
     for epoch in range(num_epochs):
@@ -309,20 +321,16 @@ def test_refinement_model(
 
     with torch.no_grad():
         with tqdm(total=len(test_dataloader), desc="Testing", unit="batch") as pbar:
-            for (
-                images,
-                pred_masks,
-                gt_masks,
-            ) in test_dataloader:
-                images, gt_masks = images.to(device), gt_masks.to(device)
+            for inputs, targets in test_dataloader:
+                inputs, targets = inputs.to(device), targets.to(device)
+            
+                outputs = model(inputs)
 
-                outputs = model(images)
-
-                loss = criterion(outputs, gt_masks)
+                loss = criterion(outputs, targets)
                 test_loss += loss.item()
 
                 all_outputs.append(outputs.cpu())
-                all_gt_masks.append(gt_masks.cpu())
+                all_gt_masks.append(targets.cpu())
 
                 pbar.set_postfix(loss=loss.item())
                 pbar.update(1)
