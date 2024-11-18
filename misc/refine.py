@@ -150,7 +150,7 @@ class SegmentationRefinementDataset(Dataset):
 
         gdf['geometry'] = gdf['geometry'].apply(lambda geom: geom if geom.is_valid else geom.buffer(0))
         
-        gdf = gdf[~gdf['geometry'].is_empty & gdf['geometry'].notna() & gdf['geometry'].is_valid]
+        gdf = gdf[(~gdf['geometry'].is_empty) & gdf['geometry'].notna() & gdf['geometry'].is_valid]
 
         if gdf.empty:
             return np.zeros(image_shape, dtype=np.uint8)
@@ -252,7 +252,7 @@ class UNet(nn.Module):
 
 def train_refinement_model(train_dataloader, val_dataloader, model, criterion, optimizer, num_epochs, device):
     best_val_loss = float("inf")
-    
+
     for epoch in range(num_epochs):
         model.train()
         running_loss = 0.0
@@ -287,6 +287,11 @@ def train_refinement_model(train_dataloader, val_dataloader, model, criterion, o
 
         if avg_val_loss < best_val_loss:
             best_val_loss = avg_val_loss
+
+            output_dir = os.path.dirname(model_save_path)
+            if not os.path.exists(output_dir):
+                os.makedirs(output_dir)
+
             torch.save(model.state_dict(), model_save_path)
             print(f"New best model saved with Validation Loss: {best_val_loss:.4f}")
 
