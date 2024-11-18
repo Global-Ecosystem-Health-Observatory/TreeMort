@@ -251,6 +251,8 @@ class UNet(nn.Module):
 
 
 def train_refinement_model(train_dataloader, val_dataloader, model, criterion, optimizer, num_epochs, device):
+    best_val_loss = float("inf")
+    
     for epoch in range(num_epochs):
         model.train()
         running_loss = 0.0
@@ -358,7 +360,6 @@ if __name__ == "__main__":
     criterion = nn.BCELoss()
     optimizer = Adam(model.parameters(), lr=0.001)
     num_epochs = 10
-    best_val_loss = float("inf")
     model_save_path = "output/refine/best_model.pth"
 
     train_refinement_model(train_dataloader, val_dataloader, model, criterion, optimizer, num_epochs, device)
