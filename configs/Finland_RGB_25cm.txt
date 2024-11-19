@@ -1,0 +1,11 @@
+# configurations for dataset creation for DRYTREE_Annotations for Finland
+
+data-folder = /scratch/project_2008436/heinaroe/swiss_validation/all_annotations/Finland
+
+hdf5-file = Finland_RGB_25cm.h5
+
+window-size = 256
+stride = 128
+nir-rgb-order = [0, 1, 2]
+
+normalize-channelwise

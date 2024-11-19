@@ -1,6 +1,6 @@
 # configurations for dataset creation for DRYTREE_Annotations for Switzerland
 
-data-folder = /scratch/project_2008436/rahmanan/dead_trees/Switzerland/RGB/10cm
+data-folder = /scratch/project_2008436/heinaroe/swiss_validation/all_annotations/Switzerland
 
 hdf5-file = Switzerland_RGB_10cm.h5
 
