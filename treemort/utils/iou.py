@@ -92,7 +92,7 @@ class IOUCallback:
         y_true_binary = np.squeeze(y_true > self.threshold)
 
         if np.sum(y_pred_binary) == 0 and np.sum(y_true_binary) == 0:
-            return 0.0
+            return np.nan
 
         intersection = (y_pred_binary * y_true_binary).sum()
         union = y_pred_binary.sum() + y_true_binary.sum() - intersection

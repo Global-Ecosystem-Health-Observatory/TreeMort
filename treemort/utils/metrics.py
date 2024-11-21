@@ -9,7 +9,7 @@ def iou_score(pred_probs, target, threshold=0.5):
     union = pred_binary.sum() + target_binary.sum() - intersection
 
     if union == 0:
-        return torch.tensor(0.0)
+        return torch.tensor([float('nan')])
 
     iou = (intersection + 1e-6) / (union + 1e-6)
     return iou
