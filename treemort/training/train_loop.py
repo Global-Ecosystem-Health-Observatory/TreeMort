@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 
 from tqdm import tqdm
@@ -9,6 +10,7 @@ def train_one_epoch(model, optimizer, criterion, metrics, train_loader, conf, de
     model.train()
     train_loss = 0.0
     train_metrics = {}
+    notna_batch_counts = {}
 
     class_weights = torch.tensor(conf.class_weights, dtype=torch.float32).to(device)
     
@@ -34,12 +36,15 @@ def train_one_epoch(model, optimizer, criterion, metrics, train_loader, conf, de
         for key, value in batch_metrics.items():
             if key not in train_metrics:
                 train_metrics[key] = 0.0
-            train_metrics[key] += value.item()
+                notna_batch_counts[key] = 0
+            if not value.isnan():
+                train_metrics[key] += value.item()
+                notna_batch_counts[key] += 1
 
         train_progress_bar.set_postfix({"Train Loss": train_loss / (batch_idx + 1)})
 
     train_loss /= len(train_loader)
     for key in train_metrics:
-        train_metrics[key] /= len(train_loader)
+        train_metrics[key] /= notna_batch_counts[key] if notna_batch_counts[key] != 0 else np.nan
 
     return train_loss, train_metrics

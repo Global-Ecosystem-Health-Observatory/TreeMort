@@ -242,13 +242,13 @@ class IOUCallback:
         adjusted_dice_scores,
         mcc_scores,
     ):
-        mean_iou_pixels = np.mean(pixel_ious)
-        mean_iou_trees = np.mean(tree_ious)
-        mean_iou = np.mean(mean_ious)
-        mean_balanced_iou = np.mean(balanced_ious)
-        mean_dice_score = np.mean(dice_scores)
-        mean_adjusted_dice_score = np.mean(adjusted_dice_scores)
-        mean_mcc = np.mean(mcc_scores)
+        mean_iou_pixels = np.nanmean(pixel_ious)
+        mean_iou_trees = np.nanmean(tree_ious)
+        mean_iou = np.nanmean(mean_ious)
+        mean_balanced_iou = np.nanmean(balanced_ious)
+        mean_dice_score = np.nanmean(dice_scores)
+        mean_adjusted_dice_score = np.nanmean(adjusted_dice_scores)
+        mean_mcc = np.nanmean(mcc_scores)
 
         return {
             "mean_iou_pixels": mean_iou_pixels,
