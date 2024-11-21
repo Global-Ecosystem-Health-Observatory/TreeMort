@@ -28,7 +28,7 @@ def run(conf, eval_only):
 
     logger.info("Preparing datasets...")
     train_dataset, val_dataset, test_dataset = prepare_datasets(conf)
-    logger.info(f"Datasets prepared: Train({len(train_dataset)}), Val({len(val_dataset)}), Test({len(test_dataset)})")
+    logger.info(f"Datasets prepared. Number of batches: Train({len(train_dataset)}), Val({len(val_dataset)}), Test({len(test_dataset)})")
 
     logger.info("Loading or resuming model...")
     model, optimizer, criterion, metrics, callbacks = resume_or_load(conf, id2label, len(train_dataset), device)
