@@ -34,6 +34,6 @@ activation = sigmoid # available options [tanh, sigmoid]
 loss = hybrid # available options [mse, hybrid]
 
 val-size = 0.2
-test-size = 0.1
+test-size = 0.0
 
 resume
