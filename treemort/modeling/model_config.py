@@ -101,8 +101,8 @@ def configure_beit(conf, id2label):
 
 
 def configure_flair_unet(conf):
-    repo_id = "IGNF/FLAIR-INC_rgbi_15cl_resnet34-unet"
-    filename = "FLAIR-INC_rgbi_15cl_resnet34-unet_weights.pth"
+    repo_id = "IGNF/FLAIR-INC_rgb_15cl_resnet34-unet"
+    filename = "FLAIR-INC_rgb_15cl_resnet34-unet_weights.pth"
 
     pretrained_model = PretrainedUNetModel(
         repo_id=repo_id,
