@@ -1,0 +1,11 @@
+# configurations for inference creation
+
+window-size = 256
+stride = 128
+nir-rgb-order = [0,1,2]
+
+best-model = /projappl/project_2004205/heinaroe/TreeMort/output/flair_rgb_Switzerland_10cm/best.weights.pth
+
+model-config = /projappl/project_2004205/heinaroe/TreeMort/configs/switzerland/train_flair_rgb_Switzerland_10cm.txt
+
+threshold=0.5
