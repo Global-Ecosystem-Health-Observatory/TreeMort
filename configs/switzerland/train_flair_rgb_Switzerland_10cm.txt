@@ -1,0 +1,39 @@
+# settings for self attention unet with flair backbone
+
+data-folder = /scratch/project_2008436/heinaroe/swiss_validation/all_annotations/Switzerland # The hdf5 file is fetched from the parent of this folder
+
+hdf5-file = Switzerland_RGB_10cm.h5
+
+model = flair_unet
+
+output-dir = output/flair_rgb_Switzerland_10cm
+
+train-crop-size = 256
+val-crop-size = 256
+test-crop-size = 256
+
+input-channels = 3
+output-channels = 1
+
+train-batch-size = 8
+val-batch-size = 8
+test-batch-size = 8
+
+epochs = 100
+
+class-weights = [0.1, 0.9]
+
+model-weights = best # available options [best, latest]
+
+learning-rate = 1e-4
+
+threshold = 0.5
+
+activation = sigmoid # available options [tanh, sigmoid]
+
+loss = hybrid # available options [mse, hybrid]
+
+val-size = 0.2
+test-size = 0.0
+
+resume
