@@ -28,7 +28,11 @@ class IOUCallback:
     def evaluate(self):
         self.model.eval()
 
-        (pixel_ious, tree_ious, mean_ious, balanced_ious, dice_scores, adjusted_dice_scores, mcc_scores,) = ([], [], [], [], [], [], [])
+        (tree_ious, mean_ious, balanced_ious, mcc_scores,) = ([], [], [], [])
+
+        tp_pixels = 0
+        fp_pixels = 0
+        fn_pixels = 0
 
         with tqdm(total=self.num_samples, desc="Evaluating") as pbar:
             with torch.no_grad():
@@ -40,26 +44,46 @@ class IOUCallback:
                     for i in range(len(predictions)):
                         y_pred, y_true = predictions[i], labels[i]
 
-                        pixel_ious.append(self._calculate_pixel_iou(y_pred, y_true))
+                        y_pred_binary = np.squeeze(y_pred > self.threshold)
+                        y_true_binary = np.squeeze(y_true > self.threshold)
+
+                        tp_pixels += np.sum(np.logical_and(y_pred_binary, y_true_binary))
+                        fp_pixels += np.sum(np.logical_and(y_pred_binary, np.logical_not(y_true_binary)))
+                        fn_pixels += np.sum(np.logical_and(np.logical_not(y_pred_binary), y_true_binary))
+
                         tree_ious.append(self._calculate_tree_iou(y_pred, y_true))
                         mean_ious.append(self._calculate_mean_iou(y_pred, y_true))
                         balanced_ious.append(self._calculate_balanced_iou(y_pred, y_true))
-                        dice_scores.append(self._calculate_dice_coefficient(y_pred, y_true))
-                        adjusted_dice_scores.append(self._calculate_adjusted_dice_coefficient(y_pred, y_true))
                         mcc_scores.append(self._calculate_mcc(y_pred, y_true))
 
                     pbar.update(1)
                     pbar.set_postfix(iterations_left=self.num_samples - pbar.n)
 
-        return self._compute_mean_ious(
-            pixel_ious,
-            tree_ious,
-            mean_ious,
-            balanced_ious,
-            dice_scores,
-            adjusted_dice_scores,
-            mcc_scores,
-        )
+        denominator = 2 * tp_pixels + fp_pixels + fn_pixels
+        dice_score = (2 * tp_pixels) / denominator
+
+        precision = tp_pixels / (tp_pixels + fp_pixels)
+        recall = tp_pixels / (tp_pixels + fn_pixels)
+        f2_score = 5*(precision*recall)/((4*precision) + recall)
+
+        mean_iou_pixels = tp_pixels/(tp_pixels + fp_pixels + fn_pixels)
+        
+        mean_iou_trees = np.mean(tree_ious)
+        mean_iou = np.mean(mean_ious)
+        mean_balanced_iou = np.mean(balanced_ious)
+        mean_mcc = np.mean(mcc_scores)
+        
+        return {
+            "mean_dice_score": dice_score,
+            "mean_precision": precision,
+            "mean_recall": recall,
+            "mean_f2_score": f2_score,
+            "mean_iou_pixels": mean_iou_pixels,
+            "mean_iou_trees": mean_iou_trees,
+            "mean_iou": mean_iou,
+            "mean_balanced_iou": mean_balanced_iou,
+            "mean_mcc": mean_mcc,
+        }
 
     def _get_predictions(self, images, labels):
         outputs = self.model(images)
