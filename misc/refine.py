@@ -12,6 +12,12 @@ from torch.utils.data import Dataset, DataLoader, random_split
 from sklearn.metrics import jaccard_score
 from rasterio.features import rasterize
 
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
+import cv2
+import numpy as np
 
 def find_predictions_and_geojsons_debug(parent_folder):
     predictions_paths = []
@@ -91,7 +97,7 @@ def find_file_pairs(
     return file_pairs
 
 
-def split_image_into_patches(mask, patch_size=(256, 256), stride=(256, 256)):
+def split_image_into_patches(mask, patch_size=(256, 256), stride=(128, 128)):
     mask_patches = []
     h, w = mask.shape
 
@@ -109,13 +115,73 @@ def add_unique_ids(gdf, id_column="id"):
     return gdf
 
 
+class DiceLoss(nn.Module):
+    def forward(self, outputs, targets):
+        smooth = 1.0  # To prevent division by zero
+        outputs_flat = outputs.view(-1)
+        targets_flat = targets.view(-1)
+        intersection = (outputs_flat * targets_flat).sum()
+        dice = (2.0 * intersection + smooth) / (outputs_flat.sum() + targets_flat.sum() + smooth)
+        return 1 - dice
+    
+
+class BCEDiceLoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.bce = nn.BCELoss()
+        self.dice = DiceLoss()
+
+    def forward(self, outputs, targets):
+        bce_loss = self.bce(outputs, targets)
+        dice_loss = self.dice(outputs, targets)
+        return bce_loss + dice_loss
+    
+
+class FocalLoss(nn.Module):
+    def __init__(self, alpha=0.25, gamma=2):
+        super().__init__()
+        self.alpha = alpha
+        self.gamma = gamma
+
+    def forward(self, outputs, targets):
+        outputs = outputs.view(-1)
+        targets = targets.view(-1)
+        bce = F.binary_cross_entropy(outputs, targets, reduction='none')
+        pt = torch.exp(-bce)
+        focal_loss = self.alpha * (1 - pt) ** self.gamma * bce
+        return focal_loss.mean()
+    
+
+class TverskyLoss(nn.Module):
+    def __init__(self, alpha=0.7, beta=0.3):
+        super().__init__()
+        self.alpha = alpha
+        self.beta = beta
+
+    def forward(self, outputs, targets):
+        smooth = 1.0
+        outputs_flat = outputs.view(-1)
+        targets_flat = targets.view(-1)
+
+        true_pos = (outputs_flat * targets_flat).sum()
+        false_neg = ((1 - outputs_flat) * targets_flat).sum()
+        false_pos = (outputs_flat * (1 - targets_flat)).sum()
+
+        tversky_index = (true_pos + smooth) / (
+            true_pos + self.alpha * false_neg + self.beta * false_pos + smooth
+        )
+        return 1 - tversky_index
+    
+
 class SegmentationRefinementDataset(Dataset):
-    def __init__(self, parent_folder, transform=None, patch_size=(256, 256), stride=(256, 256)):
+    def __init__(self, parent_folder, transform=None, patch_size=(256, 256), stride=(256, 256), augment=False):
         self.file_pairs = find_file_pairs(parent_folder)
         self.transform = transform
         self.patch_size = patch_size
         self.stride = stride
         self.patches = []
+        self.augment = augment  # Enable or disable augmentations
+        self.augmentations = self.get_augmentations() if augment else None
         self.prepare_patches()
 
     def prepare_patches(self):
@@ -132,11 +198,24 @@ class SegmentationRefinementDataset(Dataset):
                 pred_patch_tensor = torch.from_numpy(pred_patch).float().unsqueeze(0)
                 gt_patch_tensor = torch.from_numpy(gt_patch).float().unsqueeze(0)
 
-                if self.transform:
-                    pred_patch_tensor = self.transform(pred_patch_tensor)
-                    gt_patch_tensor = self.transform(gt_patch_tensor)
+                # Apply augmentations if enabled
+                if self.augment and self.augmentations:
+                    pred_patch, gt_patch = self.apply_augmentations(pred_patch, gt_patch)
 
                 self.patches.append((pred_patch_tensor, gt_patch_tensor))
+
+    def apply_augmentations(self, pred_patch, gt_patch):
+        augmented = self.augmentations(image=pred_patch, mask=gt_patch)
+        return augmented["image"], augmented["mask"]
+
+    def get_augmentations(self):
+        return A.Compose([
+            A.HorizontalFlip(p=0.5),
+            A.VerticalFlip(p=0.5),
+            A.RandomRotate90(p=0.5),
+            A.ShiftScaleRotate(shift_limit=0.0625, scale_limit=0.1, rotate_limit=15, p=0.5),
+            ToTensorV2(),
+        ])
 
     def __len__(self):
         return len(self.patches)
@@ -160,7 +239,19 @@ class SegmentationRefinementDataset(Dataset):
         shapes = [(geom, 1) for geom in gdf.geometry]
 
         mask = rasterize(shapes, out_shape=image_shape, transform=transform, fill=0, all_touched=True)
+
+        # Add random erosion/dilation for boundary noise
+        mask = random_erode_dilate(mask)
+
         return mask
+    
+
+def random_erode_dilate(mask, iterations=1):
+    kernel = np.ones((3, 3), np.uint8)
+    if np.random.rand() > 0.5:
+        return cv2.dilate(mask, kernel, iterations=iterations)
+    else:
+        return cv2.erode(mask, kernel, iterations=iterations)
 
 
 def pad_to_max_size(tensor, max_height, max_width):
@@ -307,6 +398,8 @@ def train_refinement_model(train_dataloader, val_dataloader, model, criterion, o
             torch.save(model.state_dict(), model_save_path)
             print(f"New best model saved with Validation Loss: {best_val_loss:.4f}")
 
+        scheduler.step(avg_val_loss)
+
 
 def test_refinement_model(
     test_dataloader,
@@ -350,13 +443,17 @@ if __name__ == "__main__":
     if not data_folder:
         raise ValueError("DATA_PATH environment variable is not set. Please set it before running the script.")
     
-    full_dataset = SegmentationRefinementDataset(data_folder)
+    #full_dataset = SegmentationRefinementDataset(data_folder)
 
-    train_size = int(0.7 * len(full_dataset))
-    val_size = int(0.15 * len(full_dataset))
-    test_size = len(full_dataset) - train_size - val_size
+    #train_size = int(0.7 * len(full_dataset))
+    #val_size = int(0.15 * len(full_dataset))
+    #test_size = len(full_dataset) - train_size - val_size
 
-    train_dataset, val_dataset, test_dataset = random_split(full_dataset, [train_size, val_size, test_size])
+    # train_dataset, val_dataset, test_dataset = random_split(full_dataset, [train_size, val_size, test_size])
+
+    train_dataset = SegmentationRefinementDataset(data_folder, augment=True)
+    val_dataset = SegmentationRefinementDataset(data_folder, augment=False)
+    test_dataset = SegmentationRefinementDataset(data_folder, augment=False)
 
     train_dataloader = DataLoader(train_dataset, batch_size=4, shuffle=True, num_workers=2)
     val_dataloader = DataLoader(val_dataset, batch_size=4, shuffle=False, num_workers=2)
@@ -370,8 +467,10 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
-    criterion = nn.BCELoss()
-    optimizer = Adam(model.parameters(), lr=0.001)
+    criterion = TverskyLoss(alpha=0.7, beta=0.3)
+    optimizer = Adam(model.parameters(), lr=0.0005)
+    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3, verbose=True)    
+
     num_epochs = 10
     model_save_path = "output/refine/best_model.pth"
 

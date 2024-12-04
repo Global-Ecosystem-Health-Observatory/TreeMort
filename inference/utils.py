@@ -103,14 +103,21 @@ def save_geojson(geojson_data, output_path):
         geojson.dump(geojson_data, f, indent=2, ensure_ascii=False)
 
 
-def save_labels_as_geojson(labels, transform, crs, output_path, min_area_threshold=3.0):
+def save_labels_as_geojson(
+    labels,
+    transform,
+    crs,
+    output_path,
+    min_area_threshold=3.0,
+    max_aspect_ratio=5.0,
+    min_solidity=0.8
+):
     geometries = []
     for label_value in np.unique(labels):
         if label_value == 0:
             continue  # Skip the background
 
         mask = (labels == label_value)
-
         shapes_gen = rasterio.features.shapes(mask.astype(np.int32), transform=transform)
 
         for shape_geom, shape_value in shapes_gen:
@@ -131,18 +138,34 @@ def save_labels_as_geojson(labels, transform, crs, output_path, min_area_thresho
 
     gdf = gpd.GeoDataFrame.from_features(geometries, crs=crs)
 
+    # Reproject to a projected CRS if the input CRS is geographic
     if gdf.crs.is_geographic:
         projected_crs = gdf.estimate_utm_crs()
         logger.info(f"Reprojecting to {projected_crs} for accurate area calculations...")
         gdf = gdf.to_crs(projected_crs)
 
-    gdf = gdf[gdf['geometry'].area >= min_area_threshold]
-    
-    if gdf.empty:
+    # Filter by area, aspect ratio, and solidity
+    filtered_geometries = []
+    for _, row in gdf.iterrows():
+        geometry = row.geometry
+        area = geometry.area
+        convex_hull = geometry.convex_hull
+        aspect_ratio = convex_hull.length / (4 * np.sqrt(area)) if area > 0 else float('inf')
+        solidity = area / convex_hull.area if convex_hull.area > 0 else 0
+
+        if area >= min_area_threshold and aspect_ratio <= max_aspect_ratio and solidity >= min_solidity:
+            filtered_geometries.append({'geometry': geometry, 'properties': row.to_dict()})
+        else:
+            logger.info(
+                f"Geometry filtered out: area={area:.2f}, aspect_ratio={aspect_ratio:.2f}, solidity={solidity:.2f}"
+            )
+
+    if not filtered_geometries:
         logger.info("No valid geometries meet the area threshold. GeoJSON will be empty.")
         return
 
-    gdf.to_file(output_path, driver="GeoJSON")
+    filtered_gdf = gpd.GeoDataFrame.from_features(filtered_geometries, crs=gdf.crs)
+    filtered_gdf.to_file(output_path, driver="GeoJSON")
     logger.info(f"GeoJSON saved to {output_path}")
 
 
