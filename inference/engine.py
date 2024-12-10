@@ -8,6 +8,7 @@ import configargparse
 import numpy as np
 
 from pathlib import Path
+from multiprocessing import Pool, cpu_count
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from memory_profiler import profile
 
@@ -123,53 +124,54 @@ def load_model(config_path, best_model, id2label):
     return model
 
 
-def process_image(
-    model,
-    image_path,
-    geojson_path,
-    conf,
-    post_process=False
-):
-    logger.info(f"Starting process for image: {image_path}")
+def process_image(model, image_path, geojson_path, conf, post_process):
+    try:
+        logger.info(f"Starting process for image: {image_path}")
 
-    image, transform, crs = load_and_preprocess_image(image_path, conf.nir_rgb_order)
-    logger.info(f"Image loaded and preprocessed. Shape: {image.shape}")
+        image, transform, crs = load_and_preprocess_image(image_path, conf.nir_rgb_order)
+        logger.info(f"Image loaded and preprocessed. Shape: {image.shape}")
 
-    prediction_map = sliding_window_inference(model, image, window_size=conf.window_size, stride=conf.stride, threshold=conf.threshold)
-    logger.info(f"Prediction map generated with shape: {prediction_map.shape}")
+        prediction_map = sliding_window_inference(model, image, window_size=conf.window_size, stride=conf.stride, threshold=conf.threshold)
+        logger.info(f"Prediction map generated with shape: {prediction_map.shape}")
 
-    predicted_mask = threshold_prediction_map(prediction_map, conf.threshold)
-    logger.info(f"Mask created with shape: {predicted_mask.shape} and coverage: {np.sum(predicted_mask)} pixels")
+        predicted_mask = threshold_prediction_map(prediction_map, conf.threshold)
+        logger.info(f"Mask created with shape: {predicted_mask.shape}")
 
-    if post_process:
-        partitioned_labels = perform_graph_partitioning(image, predicted_mask)
-        logger.info(f"Partition graph segmentation completed with max label: {np.max(partitioned_labels)}")
-        
-        refined_labels = generate_watershed_labels(prediction_map, partitioned_labels, conf.min_distance, conf.blur_sigma, conf.dilation_radius)
-        logger.info(f"Watershed segmentation completed with max label: {np.max(refined_labels)}")
+        if post_process:    
+            partitioned_labels = perform_graph_partitioning(image, predicted_mask)
+            logger.info(f"Partition graph segmentation completed with max label: {np.max(partitioned_labels)}")
+            
+            refined_labels = generate_watershed_labels(prediction_map, partitioned_labels, conf.min_distance, conf.blur_sigma, conf.dilation_radius)
+            logger.info(f"Watershed segmentation completed with max label: {np.max(refined_labels)}")
 
-        if refined_labels is not None:
-            save_labels_as_geojson(
-                refined_labels,
-                transform,
-                crs,
-                geojson_path,
-                min_area_threshold=conf.min_area_threshold,
-                max_aspect_ratio=conf.max_aspect_ratio,
-                min_solidity=conf.min_solidity
-            )
+            if refined_labels is not None:
+                save_labels_as_geojson(
+                    refined_labels,
+                    transform,
+                    crs,
+                    geojson_path,
+                    min_area_threshold=conf.min_area_threshold,
+                    max_aspect_ratio=conf.max_aspect_ratio,
+                    min_solidity=conf.min_solidity
+                )
+                logger.info(f"GeoJSON saved to {geojson_path}")
+
+        else:
+            contours = extract_contours(predicted_mask)
+            logger.info(f"{len(contours)} contours extracted from binary mask")
+
+            geojson_data = contours_to_geojson(contours, transform, crs, os.path.splitext(os.path.basename(image_path))[0])
+            logger.info("Contours converted to GeoJSON format")
+
+            save_geojson(geojson_data, geojson_path)
             logger.info(f"GeoJSON saved to {geojson_path}")
-
-    else:
-        contours = extract_contours(predicted_mask)
-        logger.info(f"{len(contours)} contours extracted from binary mask")
-
-        geojson_data = contours_to_geojson(contours, transform, crs, os.path.splitext(os.path.basename(image_path))[0])
-        logger.info("Contours converted to GeoJSON format")
-
-        save_geojson(geojson_data, geojson_path)
-        logger.info(f"GeoJSON saved to {geojson_path}")
-
+        
+        del prediction_map, predicted_mask
+        gc.collect()
+    except Exception as e:
+        logger.error(f"Error processing image: {image_path}. Error: {e}")
+        raise
+    
 
 def parse_config(config_file_path):
     parser = configargparse.ArgParser(default_config_files=[config_file_path])
@@ -192,8 +194,10 @@ def parse_config(config_file_path):
     return conf
 
 
-def process_single_image(image_path, model, conf, output_dir):
+def process_single_image(image_path, conf, output_dir, id2label, post_process):
     try:
+        model = load_model(conf.model_config, conf.best_model, id2label)
+
         if output_dir:
             geojson_path = os.path.join(output_dir, os.path.basename(os.path.splitext(image_path)[0] + ".geojson"))
         else:
@@ -204,18 +208,17 @@ def process_single_image(image_path, model, conf, output_dir):
         if not os.path.exists(directory):
             os.makedirs(directory, exist_ok=True)
         
-        process_image(model, image_path, geojson_path, conf)
+        process_image(model, image_path, geojson_path, conf, post_process)
+
         logger.info(f"Processed image saved to: {geojson_path}")
     except Exception as e:
         logger.error(f"Failed to process image: {image_path}. Error: {e}")
 
-def run_inference(data_path, config_file_path, output_dir):
+
+def run_inference(data_path, config_file_path, output_dir, post_process):
     id2label = {0: "alive", 1: "dead"}
     conf = parse_config(config_file_path)
-    
-    def initialize_model():
-        return load_model(conf.model_config, conf.best_model, id2label)
-    
+
     data_path = Path(data_path)
 
     if data_path.is_dir():
@@ -225,80 +228,15 @@ def run_inference(data_path, config_file_path, output_dir):
     else:
         logger.error(f"Invalid input path: {data_path}")
         return
-    
-    with ThreadPoolExecutor(max_workers=1) as executor:
-        futures = [
-            executor.submit(
-                process_single_image,
-                image_path,
-                initialize_model(),  # Create a new model instance for the thread
-                conf,
-                output_dir
-            ) for image_path in image_paths
-        ]
 
-        for future in as_completed(futures):
-            try:
-                future.result()
-            except Exception as e:
-                logger.error(f"Thread failed: {e}")
+    tasks = [(image_path, conf, output_dir, id2label, post_process) for image_path in image_paths]
 
+    logger.info(f"Found {len(image_paths)} images to process.")
 
-'''
-def run_inference(data_path, config_file_path, output_dir):
-    id2label = {0: "alive", 1: "dead"}
-    conf = parse_config(config_file_path)
-    model = load_model(conf.model_config, conf.best_model, id2label)
+    num_processes = min(4, cpu_count())  # Use up to 4 processes or as many as available
+    with Pool(processes=num_processes) as pool:
+        pool.starmap(process_single_image, tasks)
 
-    data_path = Path(data_path)
-
-    if data_path.is_dir():
-        logger.info(f"Processing all images in folder: {data_path}")
-        image_paths = list(data_path.rglob("*.tiff")) + list(data_path.rglob("*.tif")) + list(data_path.rglob("*.jp2"))
-        if not image_paths:
-            logger.error(f"No images found in directory or its subdirectories: {data_path}")
-            return
-        logger.info(f"Found {len(image_paths)} images.")
-
-    elif data_path.is_file():
-        logger.info(f"Processing single file: {data_path}")
-        if data_path.suffix.lower() in [".tiff", ".tif", ".jp2"]:
-            image_paths = [data_path]
-        else:
-            with open(data_path, "r") as file:
-                image_paths = [Path(line.strip()) for line in file.readlines() if line.strip()]
-            if not image_paths:
-                logger.error(f"No valid image paths found in file: {data_path}")
-                return
-    else:
-        logger.error(f"Invalid input path: {data_path}")
-        return
-
-    for image_path in image_paths:
-        try:
-            if output_dir:
-                geojson_path = os.path.join(output_dir, os.path.basename(os.path.splitext(image_path)[0] + ".geojson"))
-            else:
-                geojson_path = str(image_path).replace("/Images/", "/Predictions/")
-                geojson_path = os.path.splitext(geojson_path)[0] + ".geojson"
-
-            directory = os.path.dirname(geojson_path)
-            if not os.path.exists(directory):
-                os.makedirs(directory, exist_ok=True)
-                logger.info(f"Created predictions directory: {directory}")
-            
-            #if not os.path.exists(geojson_path):
-            #    process_image(model, image_path, geojson_path, window_size=conf.window_size, stride=conf.stride, threshold=conf.threshold, nir_rgb_order=conf.nir_rgb_order)
-            #    logger.info(f"Processed image saved to: {geojson_path}")
-            #else:
-            #    logger.info(f"Skipping {image_path} as it has already been processed and saved at {geojson_path}")
-            process_image(model, image_path, geojson_path, conf)
-
-            logger.info(f"Processed image saved to: {geojson_path}")
-
-        except Exception as e:
-            logger.error(f"Failed to process image: {image_path}. Error: {e}")
-'''
 
 def main():
     parser = argparse.ArgumentParser(description="Inference Engine")
@@ -306,6 +244,7 @@ def main():
     parser.add_argument('data_path', type=str, help="Path to the input image file or directory containing images")
     parser.add_argument('--config',  type=str, required=True, help="Path to the inference configuration file")
     parser.add_argument('--outdir',  type=str, help="Directory to save GeoJSON predictions (default: same as input)")
+    parser.add_argument('--post-process', type=bool, default=True, help="Enable or disable post-processing")
 
     args = parser.parse_args()
 
@@ -313,7 +252,7 @@ def main():
         if not os.path.exists(args.outdir):
             os.makedirs(args.outdir)
 
-    run_inference(args.data_path, args.config, args.outdir)
+    run_inference(args.data_path, args.config, args.outdir, args.post_process)
 
 
 if __name__ == "__main__":
@@ -355,7 +294,8 @@ python -m inference.engine \
 python -m inference.engine \
     /Users/anisr/Documents/dead_trees/Finland/RGBNIR/25cm \
     --config ./configs/Finland_RGBNIR_25cm_inference.txt \
-    --outdir /Users/anisr/Documents/dead_trees/Finland/Predictions
+    --outdir /Users/anisr/Documents/dead_trees/Finland/Predictions \
+    --post-process True
 
 - Run viewer api service
 

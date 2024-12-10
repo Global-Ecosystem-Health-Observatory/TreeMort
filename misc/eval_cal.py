@@ -40,21 +40,26 @@ def load_geodata_with_unique_ids(file_path: str) -> gpd.GeoDataFrame:
 def calculate_iou_metrics(prediction_gdf: gpd.GeoDataFrame, ground_truth_gdf: gpd.GeoDataFrame) -> Tuple[float, float]:
 
     def calculate_pixel_iou():
-        intersection = gpd.overlay(prediction_gdf, ground_truth_gdf, how="intersection")
+        # Reproject to a projected CRS for area calculation
+        crs_proj = "EPSG:3857"  # Use a suitable projected CRS (e.g., Web Mercator)
+        pred_projected = prediction_gdf.to_crs(crs_proj)
+        gt_projected = ground_truth_gdf.to_crs(crs_proj)
+
+        intersection = gpd.overlay(pred_projected, gt_projected, how="intersection")
         if intersection.empty:
             return 0.0
         intersection["iou"] = intersection["geometry"].apply(
             lambda geom: geom.area
             / (
-                prediction_gdf.loc[prediction_gdf.intersects(geom), "geometry"].area.values[0]
-                + ground_truth_gdf.loc[ground_truth_gdf.intersects(geom), "geometry"].area.values[0]
+                pred_projected.loc[pred_projected.intersects(geom), "geometry"].area.values[0]
+                + gt_projected.loc[gt_projected.intersects(geom), "geometry"].area.values[0]
                 - geom.area
             )
         )
         return intersection["iou"].mean()
 
     def calculate_tree_iou():
-        prediction_union = prediction_gdf.geometry.unary_union
+        prediction_union = prediction_gdf.geometry.union_all()
         filtered_gt = ground_truth_gdf[ground_truth_gdf.intersects(prediction_union)]
         tp, fp, fn = 0, 0, 0
 
@@ -81,13 +86,18 @@ def calculate_centroid_association_metrics(
         fn = len(ground_truth_gdf) if not ground_truth_gdf.empty else 0
         return tp, fp, fn
 
-    prediction_gdf["centroid"] = prediction_gdf["geometry"].centroid
-    ground_truth_gdf["centroid"] = ground_truth_gdf["geometry"].centroid
+    # Reproject to a suitable projected CRS (e.g., EPSG:3857 or UTM)
+    crs_proj = "EPSG:3857"  # Replace with the appropriate CRS for your area if necessary
+    pred_projected = prediction_gdf.to_crs(crs_proj)
+    gt_projected = ground_truth_gdf.to_crs(crs_proj)
+
+    pred_projected["centroid"] = pred_projected["geometry"].centroid
+    gt_projected["centroid"] = gt_projected["geometry"].centroid
 
     matched_preds, matched_gts = set(), set()
 
-    for gt_idx, gt_row in ground_truth_gdf.iterrows():
-        distances = prediction_gdf["centroid"].distance(gt_row["centroid"])
+    for gt_idx, gt_row in gt_projected.iterrows():
+        distances = pred_projected["centroid"].distance(gt_row["centroid"])
         if distances.empty:
             continue  # Skip if there are no predictions to match
         nearest_idx = distances.idxmin()
@@ -96,46 +106,44 @@ def calculate_centroid_association_metrics(
             matched_gts.add(gt_idx)
 
     tp = len(matched_gts)
-    fp = len(prediction_gdf) - len(matched_preds)
-    fn = len(ground_truth_gdf) - len(matched_gts)
+    fp = len(pred_projected) - len(matched_preds)
+    fn = len(gt_projected) - len(matched_gts)
     return tp, fp, fn
 
-
-def process_prediction_file(
-    prediction_path: str, ground_truth_gdf: gpd.GeoDataFrame
-) -> Tuple[float, float, int, int, int]:
-    try:
-        prediction_gdf = load_geodata_with_unique_ids(prediction_path)
-
-        filtered_ground_truth_gdf = ground_truth_gdf[ground_truth_gdf.intersects(prediction_gdf.geometry.union_all())]
-        if prediction_gdf.crs != filtered_ground_truth_gdf.crs:
-            filtered_ground_truth_gdf = filtered_ground_truth_gdf.to_crs(prediction_gdf.crs)
-
-        pixel_iou, tree_iou = calculate_iou_metrics(prediction_gdf, filtered_ground_truth_gdf)
-        tp_centroid, fp_centroid, fn_centroid = calculate_centroid_association_metrics(
-            prediction_gdf, filtered_ground_truth_gdf
-        )
-
-        return pixel_iou, tree_iou, tp_centroid, fp_centroid, fn_centroid
-
-    except Exception as e:
-        print(f"Error processing files: {prediction_path} or {ground_truth_path}. Error: {e}")
-        return 0, 0, 0, 0, 0
-
-
 def calculate_mean_ious(pred_dir: str, gt_path: str) -> Dict[str, float]:
-    pred_paths = [
-        os.path.join(pred_dir, filename) for filename in os.listdir(pred_dir) if filename.endswith('.geojson')
-    ]
+    pred_paths = [os.path.join(pred_dir, filename) for filename in os.listdir(pred_dir) if filename.endswith('.geojson')]
 
     ground_truth_gdf = load_geodata_with_unique_ids(gt_path)
 
+    with fiona.open(pred_paths[0]) as src:
+        prediction_crs = src.crs
+
+    if ground_truth_gdf.crs != prediction_crs:
+        ground_truth_gdf = ground_truth_gdf.to_crs(prediction_crs)
+
     metrics = {"pixel_iou": [], "tree_iou": [], "tp": 0, "fp": 0, "fn": 0}
 
+    def process_prediction_file(prediction_path: str) -> Tuple[float, float, int, int, int]:
+        try:
+            prediction_gdf = load_geodata_with_unique_ids(prediction_path)
+
+            filtered_ground_truth_gdf = ground_truth_gdf[
+                ground_truth_gdf.intersects(prediction_gdf.geometry.union_all())
+            ]
+
+            pixel_iou, tree_iou = calculate_iou_metrics(prediction_gdf, filtered_ground_truth_gdf)
+            tp_centroid, fp_centroid, fn_centroid = calculate_centroid_association_metrics(
+                prediction_gdf, filtered_ground_truth_gdf
+            )
+
+            return pixel_iou, tree_iou, tp_centroid, fp_centroid, fn_centroid
+
+        except Exception as e:
+            print(f"Error processing files: {prediction_path}. Error: {e}")
+            return 0, 0, 0, 0, 0
+
     with ThreadPoolExecutor() as executor:
-        futures = {
-            executor.submit(process_prediction_file, pred_path, ground_truth_gdf): pred_path for pred_path in pred_paths
-        }
+        futures = {executor.submit(process_prediction_file, pred_path): pred_path for pred_path in pred_paths}
 
         for future in tqdm(as_completed(futures), total=len(futures), desc="Processing Files"):
             try:
@@ -158,7 +166,7 @@ def calculate_mean_ious(pred_dir: str, gt_path: str) -> Dict[str, float]:
 
 
 if __name__ == "__main__":
-    predictions_dir = "/Users/anisr/Documents/copenhagen_data/Predictions"
+    predictions_dir = "/Users/anisr/Documents/copenhagen_data/Predictions_filtered"
     ground_truth_path = "/Users/anisr/Documents/copenhagen_data/labels/target_features_20241031.gpkg"
 
     results = calculate_mean_ious(predictions_dir, ground_truth_path)
