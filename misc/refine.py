@@ -536,3 +536,16 @@ if __name__ == "__main__":
     train_refinement_model(train_dataloader, val_dataloader, model, criterion, optimizer, num_epochs, device)
 
     test_refinement_model(test_dataloader, model)
+
+
+''' Usage:
+
+- For Puhti
+
+export TREEMORT_VENV_PATH="/projappl/project_2004205/rahmanan/venv"
+export TREEMORT_REPO_PATH="/users/rahmanan/TreeMort"
+export TREEMORT_DATA_PATH="/scratch/project_2008436/rahmanan/dead_trees"
+
+sbatch --export=ALL,DATA_PATH="$TREEMORT_DATA_PATH/Finland" $TREEMORT_REPO_PATH/scripts/run_refine.sh
+
+'''

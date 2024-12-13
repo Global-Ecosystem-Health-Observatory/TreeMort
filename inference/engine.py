@@ -1,7 +1,6 @@
 import os
 import gc
 import torch
-import psutil
 import argparse
 import configargparse
 
@@ -9,8 +8,6 @@ import numpy as np
 
 from pathlib import Path
 from multiprocessing import Pool, cpu_count
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from memory_profiler import profile
 
 from treemort.utils.config import setup
 from treemort.utils.logger import get_logger
@@ -26,18 +23,9 @@ from inference.utils import (
     contours_to_geojson,
     save_geojson
 )
-from misc.graph_partition import perform_graph_partitioning
+from inference.graph_partition import perform_graph_partitioning
 
 logger = get_logger(__name__)
-
-
-def log_resource_usage(stage):
-    mem = psutil.virtual_memory()
-    logger.info(f"[{stage}] CPU Usage: {psutil.cpu_percent()}%, Memory Usage: {mem.percent}%")
-    logger.info(f"[{stage}] Available Memory: {mem.available / (1024**3):.2f} GB")
-    
-    swap = psutil.swap_memory()
-    logger.info(f"[{stage}] Swap Usage: {swap.used / (1024**3):.2f} GB")
 
 
 def sliding_window_inference(model, image, window_size=256, stride=128, batch_size=1, threshold=0.5):
@@ -252,7 +240,7 @@ def main():
         if not os.path.exists(args.outdir):
             os.makedirs(args.outdir)
     
-    print(args)
+    logger.info(args)
     
     run_inference(args.data_path, args.config, args.outdir, args.post_process)
 

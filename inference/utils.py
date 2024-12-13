@@ -77,7 +77,7 @@ def contours_to_geojson(contours, transform, crs, name):
     }
 
     for contour in contours:
-        if len(contour) >= 3:  # Ensure valid contour (at least 3 points)
+        if len(contour) >= 3:
             contour = contour.reshape(-1, 2)
             contour = apply_transform(contour, transform)
 
@@ -88,7 +88,7 @@ def contours_to_geojson(contours, transform, crs, name):
             polygon = Polygon(contour)
             new_feature = {
                 "type": "Feature",
-                "properties": {},  # Initialize with empty properties or add relevant properties
+                "properties": {},
                 "geometry": {"type": "Polygon", "coordinates": [contour.tolist()]},
             }
             geojson["features"].append(new_feature)
@@ -121,7 +121,7 @@ def save_labels_as_geojson(
         shapes_gen = rasterio.features.shapes(mask.astype(np.int32), transform=transform)
 
         for shape_geom, shape_value in shapes_gen:
-            if shape_value == 1:  # Ensure we only include shapes matching the label mask
+            if shape_value == 1:
                 geometry = shape(shape_geom)
                 if geometry.is_valid and not geometry.is_empty:
                     convex_hull = geometry.convex_hull
@@ -138,13 +138,11 @@ def save_labels_as_geojson(
 
     gdf = gpd.GeoDataFrame.from_features(geometries, crs=crs)
 
-    # Reproject to a projected CRS if the input CRS is geographic
     if gdf.crs.is_geographic:
         projected_crs = gdf.estimate_utm_crs()
         logger.info(f"Reprojecting to {projected_crs} for accurate area calculations...")
         gdf = gdf.to_crs(projected_crs)
 
-    # Filter by area, aspect ratio, and solidity
     filtered_geometries = []
     for _, row in gdf.iterrows():
         geometry = row.geometry
@@ -156,9 +154,7 @@ def save_labels_as_geojson(
         if area >= min_area_threshold and aspect_ratio <= max_aspect_ratio and solidity >= min_solidity:
             filtered_geometries.append({'geometry': geometry, 'properties': row.to_dict()})
         else:
-            logger.info(
-                f"Geometry filtered out: area={area:.2f}, aspect_ratio={aspect_ratio:.2f}, solidity={solidity:.2f}"
-            )
+            logger.info(f"Geometry filtered out: area={area:.2f}, aspect_ratio={aspect_ratio:.2f}, solidity={solidity:.2f}")
 
     if not filtered_geometries:
         logger.info("No valid geometries meet the area threshold. GeoJSON will be empty.")
@@ -198,8 +194,6 @@ def calculate_iou(geojson_path, predictions_path):
     true_gdf = gpd.read_file(geojson_path)
     pred_gdf = gpd.read_file(predictions_path)
 
-    # TODO. find the root cause
-    # Fix invalid geometries
     true_gdf["geometry"] = true_gdf["geometry"].apply(lambda geom: geom.buffer(0) if not geom.is_valid else geom)
     pred_gdf["geometry"] = pred_gdf["geometry"].apply(lambda geom: geom.buffer(0) if not geom.is_valid else geom)
 
