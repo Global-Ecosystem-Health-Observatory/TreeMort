@@ -1,23 +1,27 @@
 import os
-import rasterio
-import numpy as np
-import geopandas as gpd
-
+import cv2
+import fiona
 import torch
+import rasterio
+
+import numpy as np
 import torch.nn as nn
+import geopandas as gpd
+import albumentations as A
 
 from tqdm import tqdm
+from typing import Tuple, List, Dict
+
 from torch.optim import Adam
 from torch.utils.data import Dataset, DataLoader, random_split
-from sklearn.metrics import jaccard_score
-from rasterio.features import rasterize
-
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-
-import albumentations as A
+from sklearn.metrics import jaccard_score
+from shapely.geometry import shape
+from rasterio.features import rasterize
 from albumentations.pytorch import ToTensorV2
-import cv2
-import numpy as np
+
+import warnings; warnings.filterwarnings('ignore', 'GeoSeries.notna', UserWarning)
+
 
 def find_predictions_and_geojsons_debug(parent_folder):
     predictions_paths = []
@@ -46,55 +50,38 @@ def find_predictions_and_geojsons_debug(parent_folder):
 
 
 def find_file_pairs(
-    parent_folder,
-    image_subdir="Images",
-    predictions_subdir="Predictions",
-    geojsons_subdir="Geojsons",
-    file_ext=".geojson",
-):
-    file_pairs = []
-
-    for root, dirs, files in os.walk(parent_folder):
-        if (
-            image_subdir in dirs
-            and predictions_subdir in dirs
-            and geojsons_subdir in dirs
-        ):
-            img_dir = os.path.join(root, image_subdir)
-            pred_dir = os.path.join(root, predictions_subdir)
-            gt_dir = os.path.join(root, geojsons_subdir)
-
-            img_files = {
-                os.path.splitext(f)[0]: os.path.join(img_dir, f)
-                for f in os.listdir(img_dir)
-                if f.endswith((".tif", ".tiff", ".jp2"))
-            }
-            pred_files = {
-                os.path.splitext(f)[0]: os.path.join(pred_dir, f)
-                for f in os.listdir(pred_dir)
-                if f.endswith(file_ext)
+    data_folder: str,
+    predictions_folder: str = None,
+    image_dir_name: str = "Images",
+    geojsons_dir_name: str = "Geojsons",
+    predictions_dir_name: str = "Predictions",
+    file_ext: str = ".geojson",
+) -> List[Tuple[str, str, str]]:
+    pairs = []
+    pred_folder = predictions_folder if predictions_folder else os.path.join(data_folder, predictions_dir_name)
+    
+    for root, dirs, _ in os.walk(data_folder):
+        if {image_dir_name, geojsons_dir_name}.issubset(dirs):
+            image_files = {
+                os.path.splitext(f)[0]: os.path.join(root, image_dir_name, f)
+                for f in os.listdir(os.path.join(root, image_dir_name))
+                if f.endswith(".tiff") or f.endswith(".tif")  # Assuming images are in TIFF format
             }
             gt_files = {
-                os.path.splitext(f)[0]: os.path.join(gt_dir, f)
-                for f in os.listdir(gt_dir)
+                os.path.splitext(f)[0]: os.path.join(root, geojsons_dir_name, f)
+                for f in os.listdir(os.path.join(root, geojsons_dir_name))
                 if f.endswith(file_ext)
             }
-
-            common_files = img_files.keys() & pred_files.keys() & gt_files.keys()
+            pred_files = {
+                os.path.splitext(f)[0]: os.path.join(pred_folder, f)
+                for f in os.listdir(pred_folder)
+                if f.endswith(file_ext)
+            }
+            # Match files by name
+            common_files = image_files.keys() & gt_files.keys() & pred_files.keys()
             for fname in common_files:
-                img_path = img_files[fname]
-                pred_path = pred_files[fname]
-                gt_path = gt_files[fname]
-
-                with rasterio.open(img_path) as src:
-                    image_shape = (src.height, src.width)
-                    transform = src.transform
-
-                file_pairs.append(
-                    (img_path, pred_path, gt_path, image_shape, transform)
-                )
-
-    return file_pairs
+                pairs.append((image_files[fname], gt_files[fname], pred_files[fname]))
+    return pairs
 
 
 def split_image_into_patches(mask, patch_size=(256, 256), stride=(128, 128)):
@@ -114,6 +101,61 @@ def add_unique_ids(gdf, id_column="id"):
     gdf[id_column] = range(1, len(gdf) + 1)
     return gdf
 
+
+def ensure_unique_ids(gdf, id_column="id"):
+    if id_column in gdf.columns:
+        gdf[id_column] = range(1, len(gdf) + 1)  # Assign unique IDs
+    else:
+        gdf.insert(0, id_column, range(1, len(gdf) + 1))
+    return gdf
+
+
+def get_shape_transform(img_path):
+    with rasterio.open(img_path) as src:
+        image_shape = (src.height, src.width)
+        transform = src.transform
+    return image_shape, transform
+
+    
+def validate_geometry(geom):
+    try:
+        if not geom.is_valid:
+            geom = geom.buffer(0)
+        if geom.geom_type not in ["Polygon", "MultiPolygon"]:
+            return None
+        return geom
+    except Exception as e:
+        print(f"Error validating geometry: {e}")
+        return None
+
+
+def validate_and_filter_geometries(gdf):
+    # Apply validation
+    gdf["geometry"] = gdf["geometry"].apply(validate_geometry)
+
+    # Filter out empty or invalid geometries
+    filtered_gdf = gdf[gdf["geometry"].notnull() & ~gdf["geometry"].is_empty]
+
+    #if filtered_gdf.empty:
+    #    print("Warning: No valid geometries after filtering.")
+    return filtered_gdf
+
+
+def load_geodata_with_unique_ids(file_path: str) -> gpd.GeoDataFrame:
+    with fiona.open(file_path) as src:
+        features = [
+            {
+                **feature,
+                "id": str(idx),  # Ensure unique IDs
+                "geometry": shape(feature["geometry"]) if feature["geometry"] else None,
+            }
+            for idx, feature in enumerate(src)
+        ]
+        geometries = [feature["geometry"] for feature in features]
+        gdf = gpd.GeoDataFrame(features, geometry=geometries, crs=src.crs)
+        gdf["geometry"] = gdf["geometry"].apply(validate_geometry)
+        return gdf[gdf["geometry"].notnull()]
+    
 
 class DiceLoss(nn.Module):
     def forward(self, outputs, targets):
@@ -174,8 +216,8 @@ class TverskyLoss(nn.Module):
     
 
 class SegmentationRefinementDataset(Dataset):
-    def __init__(self, parent_folder, transform=None, patch_size=(256, 256), stride=(256, 256), augment=False):
-        self.file_pairs = find_file_pairs(parent_folder)
+    def __init__(self, parent_folder, predictions_folder, transform=None, patch_size=(256, 256), stride=(256, 256), augment=False):
+        self.file_pairs = find_file_pairs(parent_folder, predictions_folder)
         self.transform = transform
         self.patch_size = patch_size
         self.stride = stride
@@ -186,8 +228,10 @@ class SegmentationRefinementDataset(Dataset):
 
     def prepare_patches(self):
         for idx in range(len(self.file_pairs)):
-            img_path, pred_path, gt_path, image_shape, transform = self.file_pairs[idx]
+            img_path, pred_path, gt_path = self.file_pairs[idx]
 
+            image_shape, transform = get_shape_transform(img_path)
+            
             pred_mask = self.load_geojsons_to_mask(pred_path, image_shape, transform)
             gt_mask = self.load_geojsons_to_mask(gt_path, image_shape, transform)
 
@@ -198,13 +242,25 @@ class SegmentationRefinementDataset(Dataset):
                 pred_patch_tensor = torch.from_numpy(pred_patch).float().unsqueeze(0)
                 gt_patch_tensor = torch.from_numpy(gt_patch).float().unsqueeze(0)
 
-                # Apply augmentations if enabled
                 if self.augment and self.augmentations:
                     pred_patch, gt_patch = self.apply_augmentations(pred_patch, gt_patch)
 
                 self.patches.append((pred_patch_tensor, gt_patch_tensor))
 
     def apply_augmentations(self, pred_patch, gt_patch):
+        if isinstance(pred_patch, torch.Tensor):
+            pred_patch = pred_patch.numpy()
+        if isinstance(gt_patch, torch.Tensor):
+            gt_patch = gt_patch.numpy()
+        
+        if pred_patch.ndim == 3 and pred_patch.shape[0] == 1:  # Handle single-channel images
+            pred_patch = pred_patch.squeeze(0)
+        if gt_patch.ndim == 3 and gt_patch.shape[0] == 1:  # Handle single-channel masks
+            gt_patch = gt_patch.squeeze(0)
+        
+        pred_patch = pred_patch.astype(np.uint8)
+        gt_patch = gt_patch.astype(np.uint8)
+        
         augmented = self.augmentations(image=pred_patch, mask=gt_patch)
         return augmented["image"], augmented["mask"]
 
@@ -225,29 +281,28 @@ class SegmentationRefinementDataset(Dataset):
 
     @staticmethod
     def load_geojsons_to_mask(geojson_path, image_shape, transform):
-        gdf = gpd.read_file(geojson_path)
+        gdf = load_geodata_with_unique_ids(geojson_path)
 
-        gdf['geometry'] = gdf['geometry'].apply(lambda geom: geom if geom.is_valid else geom.buffer(0))
-        
-        gdf = gdf[(~gdf['geometry'].is_empty) & (~gdf['geometry'].isna()) & gdf['geometry'].is_valid]
+        gdf = validate_and_filter_geometries(gdf)
 
         if gdf.empty:
+            # print(f"Warning: GeoJSON file {geojson_path} has no valid geometries. Returning an empty mask.")
             return np.zeros(image_shape, dtype=np.uint8)
-
-        gdf = add_unique_ids(gdf)
 
         shapes = [(geom, 1) for geom in gdf.geometry]
 
         mask = rasterize(shapes, out_shape=image_shape, transform=transform, fill=0, all_touched=True)
 
-        # Add random erosion/dilation for boundary noise
-        mask = random_erode_dilate(mask)
-
         return mask
     
 
 def random_erode_dilate(mask, iterations=1):
+    if mask is None or mask.size == 0:
+        raise ValueError("Input mask is empty.")
+    
+    mask = mask.astype(np.uint8)
     kernel = np.ones((3, 3), np.uint8)
+    
     if np.random.rand() > 0.5:
         return cv2.dilate(mask, kernel, iterations=iterations)
     else:
@@ -399,6 +454,7 @@ def train_refinement_model(train_dataloader, val_dataloader, model, criterion, o
             print(f"New best model saved with Validation Loss: {best_val_loss:.4f}")
 
         scheduler.step(avg_val_loss)
+        print(f"Learning Rate: {scheduler.get_last_lr()[0]:.6f}")
 
 
 def test_refinement_model(
@@ -442,6 +498,9 @@ if __name__ == "__main__":
     data_folder = os.getenv("DATA_PATH")
     if not data_folder:
         raise ValueError("DATA_PATH environment variable is not set. Please set it before running the script.")
+    #data_folder = "/Users/anisr/Documents/dead_trees/Finland"
+    #predictions_folder = "/Users/anisr/Documents/dead_trees/Finland/Predictions"
+    predictions_folder = os.path.join(data_folder, "Predictions")
     
     #full_dataset = SegmentationRefinementDataset(data_folder)
 
@@ -451,9 +510,9 @@ if __name__ == "__main__":
 
     # train_dataset, val_dataset, test_dataset = random_split(full_dataset, [train_size, val_size, test_size])
 
-    train_dataset = SegmentationRefinementDataset(data_folder, augment=True)
-    val_dataset = SegmentationRefinementDataset(data_folder, augment=False)
-    test_dataset = SegmentationRefinementDataset(data_folder, augment=False)
+    train_dataset = SegmentationRefinementDataset(data_folder, predictions_folder, augment=True)
+    val_dataset = SegmentationRefinementDataset(data_folder, predictions_folder, augment=False)
+    test_dataset = SegmentationRefinementDataset(data_folder, predictions_folder, augment=False)
 
     train_dataloader = DataLoader(train_dataset, batch_size=4, shuffle=True, num_workers=2)
     val_dataloader = DataLoader(val_dataset, batch_size=4, shuffle=False, num_workers=2)
@@ -469,10 +528,10 @@ if __name__ == "__main__":
 
     criterion = TverskyLoss(alpha=0.7, beta=0.3)
     optimizer = Adam(model.parameters(), lr=0.0005)
-    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3, verbose=True)    
+    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3)
 
     num_epochs = 10
-    model_save_path = "output/refine/best_model.pth"
+    model_save_path = "./output/refine/best_model.pth"
 
     train_refinement_model(train_dataloader, val_dataloader, model, criterion, optimizer, num_epochs, device)
 

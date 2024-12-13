@@ -244,14 +244,16 @@ def main():
     parser.add_argument('data_path', type=str, help="Path to the input image file or directory containing images")
     parser.add_argument('--config',  type=str, required=True, help="Path to the inference configuration file")
     parser.add_argument('--outdir',  type=str, help="Directory to save GeoJSON predictions (default: same as input)")
-    parser.add_argument('--post-process', type=bool, default=True, help="Enable or disable post-processing")
+    parser.add_argument('--post-process', action="store_true", help="Enable or disable post-processing")
 
     args = parser.parse_args()
 
     if args.outdir:
         if not os.path.exists(args.outdir):
             os.makedirs(args.outdir)
-
+    
+    print(args)
+    
     run_inference(args.data_path, args.config, args.outdir, args.post_process)
 
 
@@ -280,6 +282,7 @@ python -m inference.engine \
     /Users/anisr/Documents/dead_trees/Finland/RGBNIR/25cm/2011/Images/M3442B_2011_1.tiff \
     --config ./configs/Finland_RGBNIR_25cm_inference.txt \
     --outdir /Users/anisr/Documents/dead_trees/Finland/RGBNIR/25cm/2011/Predictions
+    --post-process
 
 - For entire folder
 
@@ -295,7 +298,12 @@ python -m inference.engine \
     /Users/anisr/Documents/dead_trees/Finland/RGBNIR/25cm \
     --config ./configs/Finland_RGBNIR_25cm_inference.txt \
     --outdir /Users/anisr/Documents/dead_trees/Finland/Predictions \
-    --post-process True
+    --post-process
+
+/Users/anisr/Documents/USA \
+    --config ./configs/USA_RGBNIR_60cm_inference.txt \
+    --outdir /Users/anisr/Documents/USA/Predictions \
+    --post-process
 
 - Run viewer api service
 
