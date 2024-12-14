@@ -20,7 +20,7 @@ def validate_one_epoch(model, criterion, metrics, val_loader, conf, device):
 
             logits = process_model_output(model, images, conf)
             
-            loss = criterion(logits, labels, class_weights=class_weights)
+            loss = criterion(logits, labels)
 
             val_loss += loss.item()
 

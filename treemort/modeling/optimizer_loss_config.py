@@ -15,34 +15,61 @@ def configure_optimizer(model, learning_rate):
     return optimizer
 
 
-def configure_loss_and_metrics(conf):
+def configure_loss_and_metrics(conf, class_weights=None):
     assert conf.loss in [
         "mse",
         "hybrid",
         "weighted_dice_loss",
     ], f"[ERROR] Invalid loss function: {conf.loss}."
 
-    if conf.loss == "hybrid": # TODO. plateau-ed in local minima
-        criterion = hybrid_loss
-        metrics = lambda pred, target: {
-            "iou_score": iou_score(pred, target, conf.threshold),
-            "f_score": f_score(pred, target, conf.threshold),
-        }
-        logger.info("Hybrid loss and metrics (IOU, F-Score) configured.")
+    if conf.loss == "hybrid":
+        def criterion(pred, target):
+            seg_loss = hybrid_loss(pred[:, 0, :, :], target[:, 0, :, :], dice_weight=0.5, class_weights=class_weights)
+            point_loss = hybrid_loss(pred[:, 1, :, :], target[:, 1, :, :], dice_weight=0.0, class_weights=class_weights, use_dice=False)
+            return seg_loss + point_loss
+
+        def metrics(pred, target):
+            return {
+                "iou_segments": iou_score(pred[:, 0, :, :], target[:, 0, :, :], conf.threshold),
+                "f_score_segments": f_score(pred[:, 0, :, :], target[:, 0, :, :], conf.threshold),
+                "iou_points": iou_score(pred[:, 1, :, :], target[:, 1, :, :], conf.threshold),
+                "f_score_points": f_score(pred[:, 1, :, :], target[:, 1, :, :], conf.threshold),
+            }
+
+        logger.info("Hybrid loss and metrics for segmentation and point maps configured.")
+
     elif conf.loss == "mse":
-        criterion = mse_loss
-        metrics = lambda pred, target: {
-            "mse": mse_loss(pred, target),
-            "mae": nn.functional.l1_loss(pred, target),
-            "rmse": torch.sqrt(mse_loss(pred, target)),
-        }
-        logger.info("MSE loss and metrics (MSE, MAE, RMSE) configured.")
+        def criterion(pred, target):
+            seg_loss = mse_loss(pred[:, 0, :, :], target[:, 0, :, :])
+            point_loss = mse_loss(pred[:, 1, :, :], target[:, 1, :, :])
+            return seg_loss + point_loss
+
+        def metrics(pred, target):
+            return {
+                "mse_segments": mse_loss(pred[:, 0, :, :], target[:, 0, :, :]),
+                "mae_segments": nn.functional.l1_loss(pred[:, 0, :, :], target[:, 0, :, :]),
+                "rmse_segments": torch.sqrt(mse_loss(pred[:, 0, :, :])),
+                "mse_points": mse_loss(pred[:, 1, :, :], target[:, 1, :, :]),
+                "mae_points": nn.functional.l1_loss(pred[:, 1, :, :], target[:, 1, :, :]),
+                "rmse_points": torch.sqrt(mse_loss(pred[:, 1, :, :])),
+            }
+
+        logger.info("MSE loss and metrics for multi-channel outputs configured.")
+
     elif conf.loss == "weighted_dice_loss":
-        criterion = weighted_dice_loss
-        metrics = lambda pred, target: {
-            "iou_score": iou_score(pred, target, conf.threshold),
-            "f_score": f_score(pred, target, conf.threshold),
-        }
-        logger.info("Weighted Dice loss and metrics (IOU, F-Score) configured.")
+        def criterion(pred, target):
+            seg_loss = weighted_dice_loss(pred[:, 0, :, :], target[:, 0, :, :])
+            point_loss = weighted_dice_loss(pred[:, 1, :, :], target[:, 1, :, :])
+            return seg_loss + point_loss
+
+        def metrics(pred, target):
+            return {
+                "iou_segments": iou_score(pred[:, 0, :, :], target[:, 0, :, :], conf.threshold),
+                "f_score_segments": f_score(pred[:, 0, :, :], target[:, 0, :, :], conf.threshold),
+                "iou_points": iou_score(pred[:, 1, :, :], target[:, 1, :, :], conf.threshold),
+                "f_score_points": f_score(pred[:, 1, :, :], target[:, 1, :, :], conf.threshold),
+            }
+
+        logger.info("Weighted Dice loss and metrics for multi-channel outputs configured.")
 
     return criterion, metrics

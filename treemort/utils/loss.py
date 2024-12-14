@@ -45,7 +45,7 @@ def focal_loss(logits, target, alpha=0.25, gamma=2):
     return focal_loss.mean()
 
 
-def hybrid_loss(logits, target, dice_weight=0.5, alpha=0.25, gamma=2, class_weights=None):
+def hybrid_loss(logits, target, dice_weight=0.5, alpha=0.25, gamma=2, class_weights=None, use_dice=True):
     if class_weights is not None:
         weight = torch.ones_like(target) * class_weights[1]
         weight[target == 0] = class_weights[0]
@@ -53,14 +53,21 @@ def hybrid_loss(logits, target, dice_weight=0.5, alpha=0.25, gamma=2, class_weig
     else:
         bce_loss = F.binary_cross_entropy_with_logits(logits, target.float())
 
-    if class_weights is not None:
-        dice = weighted_dice_loss(logits, target, class_weights)
+    if use_dice:
+        if class_weights is not None:
+            dice = weighted_dice_loss(logits, target, class_weights)
+        else:
+            dice = dice_loss(logits, target)
     else:
-        dice = dice_loss(logits, target)
+        dice = 0.0  # Skip Dice Loss for sparse maps
 
     fl = focal_loss(logits, target, alpha=alpha, gamma=gamma)
 
-    total_loss = dice_weight * dice + (1 - dice_weight) * fl + bce_loss
+    if use_dice:
+        total_loss = dice_weight * dice + (1 - dice_weight) * fl + bce_loss
+    else:
+        total_loss = fl + bce_loss
+
     return total_loss
 
 

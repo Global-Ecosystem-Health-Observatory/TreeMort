@@ -21,7 +21,7 @@ def train_one_epoch(model, optimizer, criterion, metrics, train_loader, conf, de
 
         logits = process_model_output(model, images, conf)
         
-        loss = criterion(logits, labels, class_weights=class_weights)
+        loss = criterion(logits, labels)
 
         loss.backward()
         optimizer.step()
