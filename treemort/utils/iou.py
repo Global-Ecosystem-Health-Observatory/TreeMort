@@ -5,7 +5,7 @@ import numpy as np
 
 from tqdm import tqdm
 from scipy import ndimage
-
+from sklearn.metrics import precision_score, recall_score, f1_score
 
 class IOUCallback:
     def __init__(
@@ -28,38 +28,59 @@ class IOUCallback:
     def evaluate(self):
         self.model.eval()
 
-        (pixel_ious, tree_ious, mean_ious, balanced_ious, dice_scores, adjusted_dice_scores, mcc_scores,) = ([], [], [], [], [], [], [])
+        # Initialize metric lists for segmentation and centroids
+        (pixel_ious, tree_ious, mean_ious, balanced_ious, dice_scores, adjusted_dice_scores, mcc_scores) = ([], [], [], [], [], [], [])
+        (centroid_precisions, centroid_recalls, centroid_f1s) = ([], [], [])
 
         with tqdm(total=self.num_samples, desc="Evaluating") as pbar:
             with torch.no_grad():
                 for images, labels in self.dataset:
                     images, labels = images.to(self.device), labels.to(self.device)
-                    predictions = self._get_predictions(images, labels)
-                    predictions, labels = (predictions.cpu().numpy(), labels.cpu().numpy(),)
 
-                    for i in range(len(predictions)):
-                        y_pred, y_true = predictions[i], labels[i]
+                    # Get predictions for segmentation and centroids
+                    pred_segmentation, pred_centroids = self._get_predictions(images, labels)
 
-                        pixel_ious.append(self._calculate_pixel_iou(y_pred, y_true))
-                        tree_ious.append(self._calculate_tree_iou(y_pred, y_true))
-                        mean_ious.append(self._calculate_mean_iou(y_pred, y_true))
-                        balanced_ious.append(self._calculate_balanced_iou(y_pred, y_true))
-                        dice_scores.append(self._calculate_dice_coefficient(y_pred, y_true))
-                        adjusted_dice_scores.append(self._calculate_adjusted_dice_coefficient(y_pred, y_true))
-                        mcc_scores.append(self._calculate_mcc(y_pred, y_true))
+                    # Separate ground truth labels for segmentation and centroids
+                    true_segmentation = labels[:, 0, :, :]
+                    true_centroids = labels[:, 1, :, :]
+
+                    # Evaluate segmentation metrics
+                    for i in range(len(pred_segmentation)):
+                        y_pred_seg = pred_segmentation[i].cpu().numpy()
+                        y_true_seg = true_segmentation[i].cpu().numpy()
+
+                        pixel_ious.append(self._calculate_pixel_iou(y_pred_seg, y_true_seg))
+                        tree_ious.append(self._calculate_tree_iou(y_pred_seg, y_true_seg))
+                        mean_ious.append(self._calculate_mean_iou(y_pred_seg, y_true_seg))
+                        balanced_ious.append(self._calculate_balanced_iou(y_pred_seg, y_true_seg))
+                        dice_scores.append(self._calculate_dice_coefficient(y_pred_seg, y_true_seg))
+                        adjusted_dice_scores.append(self._calculate_adjusted_dice_coefficient(y_pred_seg, y_true_seg))
+                        mcc_scores.append(self._calculate_mcc(y_pred_seg, y_true_seg))
+
+                    # Evaluate centroid metrics
+                    for i in range(len(pred_centroids)):
+                        y_pred_cent = (pred_centroids[i] > self.threshold).cpu().numpy()
+                        y_true_cent = (true_centroids[i] > self.threshold).cpu().numpy()
+
+                        precision, recall, f1 = self._calculate_centroid_metrics(y_pred_cent, y_true_cent)
+                        centroid_precisions.append(precision)
+                        centroid_recalls.append(recall)
+                        centroid_f1s.append(f1)
 
                     pbar.update(1)
                     pbar.set_postfix(iterations_left=self.num_samples - pbar.n)
 
-        return self._compute_mean_ious(
-            pixel_ious,
-            tree_ious,
-            mean_ious,
-            balanced_ious,
-            dice_scores,
-            adjusted_dice_scores,
-            mcc_scores,
+        # Return aggregated metrics for both tasks
+        segmentation_metrics = self._compute_mean_ious(
+            pixel_ious, tree_ious, mean_ious, balanced_ious, dice_scores, adjusted_dice_scores, mcc_scores
         )
+        centroid_metrics = {
+            "precision": np.mean(centroid_precisions),
+            "recall": np.mean(centroid_recalls),
+            "f1_score": np.mean(centroid_f1s),
+        }
+
+        return segmentation_metrics, centroid_metrics
 
     def _get_predictions(self, images, labels):
         outputs = self.model(images)
@@ -83,9 +104,10 @@ class IOUCallback:
             predictions = torch.sigmoid(logits)
 
         else:
-            predictions = torch.sigmoid(outputs)
+            segmentation_predictions = torch.sigmoid(outputs[:, 0:1, :, :])
+            centroid_predictions = torch.sigmoid(outputs[:, 1:2, :, :])
 
-        return predictions
+        return segmentation_predictions, centroid_predictions
 
     def _calculate_pixel_iou(self, y_pred, y_true):
         y_pred_binary = np.squeeze(y_pred > self.threshold)
@@ -259,3 +281,13 @@ class IOUCallback:
             "mean_adjusted_dice_score": mean_adjusted_dice_score,
             "mean_mcc": mean_mcc,
         }
+
+    def _calculate_centroid_metrics(self, y_pred_centroids, y_true_centroids):
+        y_pred_flat = y_pred_centroids.flatten()
+        y_true_flat = y_true_centroids.flatten()
+
+        precision = precision_score(y_true_flat, y_pred_flat, zero_division=0)
+        recall = recall_score(y_true_flat, y_pred_flat, zero_division=0)
+        f1 = f1_score(y_true_flat, y_pred_flat, zero_division=0)
+
+        return precision, recall, f1
