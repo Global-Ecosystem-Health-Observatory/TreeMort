@@ -6,7 +6,7 @@ hdf5-file = Finland_RGBNIR_25cm_dual.h5
 
 model = flair_unet
 
-output-dir = output/flair_unet
+output-dir = output/flair_unet_dual
 
 train-crop-size = 256
 val-crop-size = 256
