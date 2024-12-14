@@ -14,12 +14,12 @@ def evaluator(model, dataset, num_samples, batch_size, threshold, model_name):
         model_name=model_name,
     )
 
-    iou_results = iou_callback.evaluate()
+    segmentation_metrics, centroid_metrics = iou_callback.evaluate()
 
-    logger.info(f"Mean IOU Pixels: {iou_results['mean_iou_pixels']:.3f}")
-    logger.info(f"Mean IOU Trees: {iou_results['mean_iou_trees']:.3f}")
-    logger.info(f"Mean IOU: {iou_results['mean_iou']:.3f}")
-    logger.info(f"Mean Balanced IOU: {iou_results['mean_balanced_iou']:.3f}")
-    logger.info(f"Mean Dice Score: {iou_results['mean_dice_score']:.3f}")
-    logger.info(f"Mean Adjusted Dice Score: {iou_results['mean_adjusted_dice_score']:.3f}")
-    logger.info(f"Mean MCC: {iou_results['mean_mcc']:.3f}")
+    print("Segmentation Metrics:")
+    for key, value in segmentation_metrics.items():
+        print(f"{key}: {value:.3f}")
+
+    print("\nCentroid Metrics:")
+    for key, value in centroid_metrics.items():
+        print(f"{key}: {value:.3f}")
