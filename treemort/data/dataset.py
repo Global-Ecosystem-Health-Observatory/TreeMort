@@ -51,7 +51,11 @@ class DeadTreeDataset(Dataset):
         image = image / 255.0
 
         image = image.permute(2, 0, 1)  # Convert to (C, H, W) format
-        label = label.unsqueeze(0)  # Convert to (1, H, W) format
+
+        if label.ndim == 2:  # Single-channel label to (1, H, W) format
+            label = label.unsqueeze(0)
+        elif label.ndim == 3:  # Multi-channel label to (C, H, W) format
+            label = label.permute(2, 0, 1)
 
         image, label = self._center_crop_or_pad(image, label, self.crop_size)
 

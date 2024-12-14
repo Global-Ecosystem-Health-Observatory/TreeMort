@@ -10,7 +10,7 @@ from pathlib import Path
 
 from dataset.preprocessutils import (
     get_image_and_polygons,
-    create_label_mask,
+    create_label_mask_with_centroids,
 )
 
 
@@ -23,15 +23,20 @@ def pad_image(image, window_size):
 
 def pad_label(label, window_size):
     h, w = label.shape[:2]
+    channels = 1 if label.ndim == 2 else label.shape[2]
     pad_h = max(0, window_size - h)
     pad_w = max(0, window_size - w)
-    return np.pad(label, ((0, pad_h), (0, pad_w)), mode="constant")
+
+    return np.pad(
+        label,
+        ((0, pad_h), (0, pad_w), (0, 0)) if label.ndim == 3 else ((0, pad_h), (0, pad_w)),
+        mode="constant",
+    )
 
 
 def extract_patches(image, label, window_size, stride):
     image = pad_image(image, window_size)
     label = pad_label(label, window_size)
-
     h, w = image.shape[:2]
 
     patches = []
@@ -40,7 +45,8 @@ def extract_patches(image, label, window_size, stride):
             image_patch = image[y : y + window_size, x : x + window_size]
             
             label_patch = label[y : y + window_size, x : x + window_size]
-            label_patch = (label_patch > 0).astype(np.float32)
+            label_patch[:, :, 0] = (label_patch[:, :, 0] > 0).astype(np.float32)
+            label_patch[:, :, 1] = (label_patch[:, :, 1] > 0).astype(np.float32)
 
             patches.append((image_patch, label_patch))
     return patches
@@ -62,17 +68,19 @@ def process_image(
                 conf.normalize_imagewise,
             )
 
-        label_mask = create_label_mask(img_arr, polygons)
-        
-        patches = extract_patches(img_arr, label_mask, conf.window_size, conf.stride)
-
-        labeled_patches = [(patch[0], patch[1], int(np.any(patch[1])), image_name) for patch in patches]
+        label_mask, centroid_mask = create_label_mask_with_centroids(img_arr, polygons)
+        combined_mask = np.stack([label_mask, centroid_mask], axis=-1)
+        patches = extract_patches(img_arr, combined_mask, conf.window_size, conf.stride)
+        labeled_patches = [
+            (patch[0], patch[1], int(np.any(patch[1][:, :, 0])), image_name)
+            for patch in patches
+        ]
         return image_name, labeled_patches
-    
+
     except Exception as e:
         print(f"[ERROR] Failed to process {image_path}: {e}")
         return image_name, []
-
+    
 
 def write_to_hdf5(hdf5_file, data):
     with h5py.File(hdf5_file, "a") as hf:  # Open in append mode
@@ -183,6 +191,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     conf = parse_config(args.config)
+
+    # conf.data_folder = "/Users/anisr/Documents/dead_trees/Finland/RGBNIR/25cm"
 
     convert_to_hdf5(
         conf,

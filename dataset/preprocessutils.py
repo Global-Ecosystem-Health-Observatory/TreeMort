@@ -17,6 +17,25 @@ def create_label_mask(img_arr: np.ndarray, polys: list[np.ndarray]):
     return label_mask
 
 
+def create_label_mask_with_centroids(img_arr: np.ndarray, polys: list[np.ndarray]):
+    image_h, image_w = img_arr.shape[:2]
+
+    label_mask = np.zeros((image_h, image_w), dtype=np.float32)
+    centroid_mask = np.zeros((image_h, image_w), dtype=np.float32)
+
+    for poly in tqdm(polys, desc="Creating label masks and centroids"):
+        cv2.fillPoly(label_mask, pts=[poly], color=1)
+
+        moments = cv2.moments(poly)
+        if moments["m00"] != 0:  # Avoid division by zero
+            centroid_x = int(moments["m10"] / moments["m00"])
+            centroid_y = int(moments["m01"] / moments["m00"])
+
+            centroid_mask[centroid_y, centroid_x] = 1
+
+    return label_mask, centroid_mask
+
+
 def segmap_to_topo(img_arr: np.ndarray, contours: list) -> np.ndarray:
     image_h, image_w = img_arr.shape[:2]
     topolabel = np.zeros((image_h, image_w), dtype=np.float32)

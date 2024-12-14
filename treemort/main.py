@@ -70,6 +70,8 @@ if __name__ == "__main__":
 
     conf = setup(args.config)
 
+    conf.data_folder = "/Users/anisr/Documents/dead_trees/Finland/RGBNIR/25cm"
+    
     run(conf, args.eval_only)
 
 
