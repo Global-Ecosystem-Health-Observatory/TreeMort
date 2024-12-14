@@ -4,7 +4,7 @@ import torch.optim as optim
 
 from treemort.utils.loss import hybrid_loss, mse_loss, weighted_dice_loss
 from treemort.utils.logger import get_logger
-from treemort.utils.metrics import iou_score, f_score
+from treemort.utils.metrics import iou_score, f_score, proximity_metrics
 
 logger = get_logger(__name__)
 
@@ -24,19 +24,40 @@ def configure_loss_and_metrics(conf, class_weights=None):
 
     if conf.loss == "hybrid":
         def criterion(pred, target):
-            seg_loss = hybrid_loss(pred[:, 0, :, :], target[:, 0, :, :], dice_weight=0.5, class_weights=class_weights)
-            point_loss = hybrid_loss(pred[:, 1, :, :], target[:, 1, :, :], dice_weight=0.0, class_weights=class_weights, use_dice=False)
+            seg_loss = hybrid_loss(
+                pred[:, 0, :, :], 
+                target[:, 0, :, :], 
+                dice_weight=0.5, 
+                class_weights=class_weights
+            )
+
+            point_loss = hybrid_loss(
+                pred[:, 1, :, :], 
+                target[:, 1, :, :], 
+                dice_weight=0.0,
+                class_weights=None,
+                use_dice=False
+            )
+
             return seg_loss + point_loss
 
         def metrics(pred, target):
-            return {
+            seg_metrics = {
                 "iou_segments": iou_score(pred[:, 0, :, :], target[:, 0, :, :], conf.threshold),
                 "f_score_segments": f_score(pred[:, 0, :, :], target[:, 0, :, :], conf.threshold),
-                "iou_points": iou_score(pred[:, 1, :, :], target[:, 1, :, :], conf.threshold),
-                "f_score_points": f_score(pred[:, 1, :, :], target[:, 1, :, :], conf.threshold),
             }
+            
+            centroid_metrics = proximity_metrics(
+                pred[:, 1, :, :],
+                target[:, 1, :, :],
+                proximity_threshold=5,
+                threshold=0.1,
+                min_distance=5
+            )
+            
+            return {**seg_metrics, **centroid_metrics}
 
-        logger.info("Hybrid loss and metrics for segmentation and point maps configured.")
+        logger.info("Hybrid loss and metrics for segmentation and Gaussian centroid maps configured.")
 
     elif conf.loss == "mse":
         def criterion(pred, target):
