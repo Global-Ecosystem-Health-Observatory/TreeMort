@@ -23,21 +23,38 @@ def trainer(
     for epoch in range(conf.epochs):
         logger.info(f"Epoch {epoch + 1}/{conf.epochs} - Training started.")
 
-        train_loss, train_metrics = train_one_epoch(model, optimizer, criterion, metrics, train_loader, conf, device)
+        train_loss, train_metrics = train_one_epoch(
+            model, optimizer, criterion, metrics, train_loader, conf, device
+        )
 
         logger.info(f"Epoch {epoch + 1} - Training completed.")
         logger.info(f"Training Loss: {train_loss:.4f}")
-        logger.info(f"Training Metrics: {train_metrics}")
 
-        val_loss, val_metrics = validate_one_epoch(model, criterion, metrics, val_loader, conf, device)
+        seg_train_metrics = {k: v for k, v in train_metrics.items() if "segments" in k}
+        logger.info(f"Training Segmentation Metrics: {seg_train_metrics}")
+
+        cent_train_metrics = {k: v for k, v in train_metrics.items() if "points" in k}
+        logger.info(f"Training Centroid Metrics: {cent_train_metrics}")
+
+        val_loss, val_metrics = validate_one_epoch(
+            model, criterion, metrics, val_loader, conf, device
+        )
 
         logger.info(f"Epoch {epoch + 1} - Validation completed.")
         logger.info(f"Validation Loss: {val_loss:.4f}")
-        logger.info(f"Validation Metrics: {val_metrics}")
+
+        seg_val_metrics = {k: v for k, v in val_metrics.items() if "segments" in k}
+        logger.info(f"Validation Segmentation Metrics: {seg_val_metrics}")
+
+        cent_val_metrics = {k: v for k, v in val_metrics.items() if "points" in k}
+        logger.info(f"Validation Centroid Metrics: {cent_val_metrics}")
 
         handle_callbacks(callbacks, epoch, model, optimizer, val_loss)
 
-        if any([isinstance(cb, EarlyStopping) and cb.stop_training for cb in callbacks]):
+        if any(
+            isinstance(cb, EarlyStopping) and cb.stop_training
+            for cb in callbacks
+        ):
             logger.info("Early stopping triggered.")
             break
 
