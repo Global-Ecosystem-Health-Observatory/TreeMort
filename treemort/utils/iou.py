@@ -5,7 +5,8 @@ import numpy as np
 
 from tqdm import tqdm
 from scipy import ndimage
-from sklearn.metrics import precision_score, recall_score, f1_score
+from scipy.spatial.distance import cdist
+
 
 class IOUCallback:
     def __init__(
@@ -23,12 +24,11 @@ class IOUCallback:
         self.batch_size = batch_size
         self.threshold = threshold
         self.model_name = model_name
-        self.device = next(model.parameters()).device  # Get the device of the model
+        self.device = next(model.parameters()).device
 
     def evaluate(self):
         self.model.eval()
 
-        # Initialize metric lists for segmentation and centroids
         (pixel_ious, tree_ious, mean_ious, balanced_ious, dice_scores, adjusted_dice_scores, mcc_scores) = ([], [], [], [], [], [], [])
         (centroid_precisions, centroid_recalls, centroid_f1s) = ([], [], [])
 
@@ -37,14 +37,11 @@ class IOUCallback:
                 for images, labels in self.dataset:
                     images, labels = images.to(self.device), labels.to(self.device)
 
-                    # Get predictions for segmentation and centroids
                     pred_segmentation, pred_centroids = self._get_predictions(images, labels)
 
-                    # Separate ground truth labels for segmentation and centroids
                     true_segmentation = labels[:, 0, :, :]
                     true_centroids = labels[:, 1, :, :]
 
-                    # Evaluate segmentation metrics
                     for i in range(len(pred_segmentation)):
                         y_pred_seg = pred_segmentation[i].cpu().numpy()
                         y_true_seg = true_segmentation[i].cpu().numpy()
@@ -57,7 +54,6 @@ class IOUCallback:
                         adjusted_dice_scores.append(self._calculate_adjusted_dice_coefficient(y_pred_seg, y_true_seg))
                         mcc_scores.append(self._calculate_mcc(y_pred_seg, y_true_seg))
 
-                    # Evaluate centroid metrics
                     for i in range(len(pred_centroids)):
                         y_pred_cent = (pred_centroids[i] > self.threshold).cpu().numpy()
                         y_true_cent = (true_centroids[i] > self.threshold).cpu().numpy()
@@ -70,7 +66,6 @@ class IOUCallback:
                     pbar.update(1)
                     pbar.set_postfix(iterations_left=self.num_samples - pbar.n)
 
-        # Return aggregated metrics for both tasks
         segmentation_metrics = self._compute_mean_ious(
             pixel_ious, tree_ious, mean_ious, balanced_ious, dice_scores, adjusted_dice_scores, mcc_scores
         )
@@ -282,12 +277,28 @@ class IOUCallback:
             "mean_mcc": mean_mcc,
         }
 
-    def _calculate_centroid_metrics(self, y_pred_centroids, y_true_centroids):
-        y_pred_flat = y_pred_centroids.flatten()
-        y_true_flat = y_true_centroids.flatten()
+    def _calculate_centroid_metrics(self, y_pred_centroids, y_true_centroids, proximity_threshold=5):
+        pred_coords = np.argwhere(y_pred_centroids > 0)
+        true_coords = np.argwhere(y_true_centroids > 0)
 
-        precision = precision_score(y_true_flat, y_pred_flat, zero_division=0)
-        recall = recall_score(y_true_flat, y_pred_flat, zero_division=0)
-        f1 = f1_score(y_true_flat, y_pred_flat, zero_division=0)
+        if len(pred_coords) == 0 and len(true_coords) == 0:
+            return 1.0, 1.0, 1.0  # Perfect match when there are no centroids
+
+        if len(pred_coords) == 0 or len(true_coords) == 0:
+            return 0.0, 0.0, 0.0  # No match if one set is empty
+
+        distances = cdist(pred_coords, true_coords)
+
+        matches = distances <= proximity_threshold
+
+        tp = np.sum(np.any(matches, axis=1))
+
+        fp = len(pred_coords) - tp
+
+        fn = len(true_coords) - np.sum(np.any(matches, axis=0))
+
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+        recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+        f1 = (2 * precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
 
         return precision, recall, f1
