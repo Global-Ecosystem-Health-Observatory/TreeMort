@@ -169,15 +169,6 @@ def process_image(model, image_path, geojson_path, conf, post_process):
     
 
 def parse_config(config_file_path):
-    """
-    Parse the configuration file and command-line arguments for inference.
-    
-    Args:
-        config_file_path (str): Path to the configuration file.
-    
-    Returns:
-        Namespace: Parsed configuration arguments.
-    """
     parser = configargparse.ArgParser(default_config_files=[config_file_path])
 
     parser.add("--model-config",       type=str, required=True, help="Path to the model configuration file (e.g., architecture, hyperparameters).")
