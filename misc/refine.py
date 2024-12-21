@@ -3,6 +3,7 @@ import cv2
 import fiona
 import torch
 import rasterio
+import multiprocessing
 
 import numpy as np
 import torch.nn as nn
@@ -14,11 +15,13 @@ from typing import Tuple, List, Dict
 
 from torch.optim import Adam
 from torch.utils.data import Dataset, DataLoader, random_split
-from torch.optim.lr_scheduler import ReduceLROnPlateau
+from torch.utils.data.sampler import WeightedRandomSampler
+from torch.optim.lr_scheduler import ReduceLROnPlateau, CyclicLR
 from sklearn.metrics import jaccard_score
 from shapely.geometry import shape
 from rasterio.features import rasterize
 from albumentations.pytorch import ToTensorV2
+# from lovasz_losses import lovasz_hinge
 
 import warnings; warnings.filterwarnings('ignore', 'GeoSeries.notna', UserWarning)
 
@@ -177,6 +180,22 @@ class BCEDiceLoss(nn.Module):
         bce_loss = self.bce(outputs, targets)
         dice_loss = self.dice(outputs, targets)
         return bce_loss + dice_loss
+
+
+class WeightedBCEDiceLoss(nn.Module):
+    def __init__(self, weight_background=0.1, weight_segment=0.9):
+        super().__init__()
+        self.bce = nn.BCELoss(reduction='none')
+        self.dice = DiceLoss()
+        self.weight_background = weight_background
+        self.weight_segment = weight_segment
+
+    def forward(self, outputs, targets):
+        bce_loss = self.bce(outputs, targets)
+        class_weights = torch.where(targets > 0, self.weight_segment, self.weight_background)
+        weighted_bce_loss = (class_weights * bce_loss).mean()
+        dice_loss = self.dice(outputs, targets)
+        return weighted_bce_loss + dice_loss
     
 
 class FocalLoss(nn.Module):
@@ -215,6 +234,10 @@ class TverskyLoss(nn.Module):
         return 1 - tversky_index
     
 
+def smooth_labels(targets, smoothing=0.1):
+    return targets * (1 - smoothing) + smoothing / 2  # Smooth toward 0.5
+
+
 class SegmentationRefinementDataset(Dataset):
     def __init__(self, parent_folder, predictions_folder, transform=None, patch_size=(256, 256), stride=(256, 256), augment=False):
         self.file_pairs = find_file_pairs(parent_folder, predictions_folder)
@@ -222,16 +245,20 @@ class SegmentationRefinementDataset(Dataset):
         self.patch_size = patch_size
         self.stride = stride
         self.patches = []
-        self.augment = augment  # Enable or disable augmentations
+        self.patch_weights = []
+        self.augment = augment
         self.augmentations = self.get_augmentations() if augment else None
         self.prepare_patches()
 
     def prepare_patches(self):
+        min_segment_threshold = 100  # Threshold for segment pixel count
+        self.patches = []  # Reset patches
+        self.patch_weights = []  # Reset weights
+
         for idx in range(len(self.file_pairs)):
             img_path, pred_path, gt_path = self.file_pairs[idx]
 
             image_shape, transform = get_shape_transform(img_path)
-            
             pred_mask = self.load_geojsons_to_mask(pred_path, image_shape, transform)
             gt_mask = self.load_geojsons_to_mask(gt_path, image_shape, transform)
 
@@ -239,45 +266,66 @@ class SegmentationRefinementDataset(Dataset):
             gt_mask_patches = split_image_into_patches(gt_mask, self.patch_size, self.stride)
 
             for pred_patch, gt_patch in zip(pred_mask_patches, gt_mask_patches):
-                pred_patch_tensor = torch.from_numpy(pred_patch).float().unsqueeze(0)
-                gt_patch_tensor = torch.from_numpy(gt_patch).float().unsqueeze(0)
+                segment_pixel_count = np.sum(gt_patch)
 
-                if self.augment and self.augmentations:
-                    pred_patch, gt_patch = self.apply_augmentations(pred_patch, gt_patch)
+                # Add only valid patches
+                if segment_pixel_count > min_segment_threshold:
+                    pred_patch_tensor = torch.from_numpy(pred_patch).float().unsqueeze(0)
+                    gt_patch_tensor = torch.from_numpy(gt_patch).float().unsqueeze(0)
 
-                self.patches.append((pred_patch_tensor, gt_patch_tensor))
+                    # Augmentation if enabled
+                    if self.augment and self.augmentations:
+                        pred_patch, gt_patch = self.apply_augmentations(pred_patch, gt_patch)
 
-    def apply_augmentations(self, pred_patch, gt_patch):
-        if isinstance(pred_patch, torch.Tensor):
-            pred_patch = pred_patch.numpy()
-        if isinstance(gt_patch, torch.Tensor):
-            gt_patch = gt_patch.numpy()
-        
-        if pred_patch.ndim == 3 and pred_patch.shape[0] == 1:  # Handle single-channel images
-            pred_patch = pred_patch.squeeze(0)
-        if gt_patch.ndim == 3 and gt_patch.shape[0] == 1:  # Handle single-channel masks
-            gt_patch = gt_patch.squeeze(0)
-        
-        pred_patch = pred_patch.astype(np.uint8)
-        gt_patch = gt_patch.astype(np.uint8)
-        
-        augmented = self.augmentations(image=pred_patch, mask=gt_patch)
-        return augmented["image"], augmented["mask"]
+                    self.patches.append((pred_patch_tensor, gt_patch_tensor))
 
-    def get_augmentations(self):
-        return A.Compose([
-            A.HorizontalFlip(p=0.5),
-            A.VerticalFlip(p=0.5),
-            A.RandomRotate90(p=0.5),
-            A.ShiftScaleRotate(shift_limit=0.0625, scale_limit=0.1, rotate_limit=15, p=0.5),
-            ToTensorV2(),
-        ])
+                    # Add corresponding weight
+                    self.patch_weights.append(1.0)  # High weight for valid patches
+                else:
+                    # Skip invalid patches
+                    continue
 
     def __len__(self):
         return len(self.patches)
 
     def __getitem__(self, idx):
-        return self.patches[idx]
+        pred_patch, gt_patch = self.patches[idx]
+
+        smoothing = 0.1
+        gt_patch_smoothed = smooth_labels(gt_patch, smoothing)
+
+        return pred_patch, gt_patch_smoothed
+
+    def get_patch_weights(self):
+        return self.patch_weights
+    
+    def apply_augmentations(self, pred_patch, gt_patch):
+        if isinstance(pred_patch, torch.Tensor):
+            pred_patch = pred_patch.numpy()
+        if isinstance(gt_patch, torch.Tensor):
+            gt_patch = gt_patch.numpy()
+
+        pred_patch = pred_patch.astype(np.uint8)
+        gt_patch = gt_patch.astype(np.uint8)
+
+        augmented = self.augmentations(image=pred_patch, mask=gt_patch)
+        return augmented["image"], augmented["mask"]
+
+    def get_augmentations(self):
+        return A.Compose([
+            A.HorizontalFlip(p=0.5),  # Horizontal flip
+            A.VerticalFlip(p=0.5),  # Vertical flip
+            A.RandomRotate90(p=0.5),  # Rotate by 90 degrees
+            A.ShiftScaleRotate(
+                shift_limit=0.0625, scale_limit=0.1, rotate_limit=15, 
+                interpolation=cv2.INTER_NEAREST, p=0.5
+            ),  # Shifting, scaling, and rotating
+            A.ElasticTransform(
+                alpha=1, sigma=50, interpolation=cv2.INTER_NEAREST, p=0.5
+            ),
+            A.RandomCrop(height=self.patch_size[0], width=self.patch_size[1], p=0.5),  # Random cropping
+            ToTensorV2(),
+        ], additional_targets={'mask': 'mask'})
 
     @staticmethod
     def load_geojsons_to_mask(geojson_path, image_shape, transform):
@@ -332,41 +380,157 @@ def custom_collate_fn(batch):
     )
 
 
+class SEBlock(nn.Module):
+    def __init__(self, channels, reduction=16):
+        super(SEBlock, self).__init__()
+        self.global_avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.fc = nn.Sequential(
+            nn.Linear(channels, channels // reduction, bias=False),
+            nn.ReLU(inplace=True),
+            nn.Linear(channels // reduction, channels, bias=False),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        b, c, _, _ = x.size()
+        y = self.global_avg_pool(x).view(b, c)
+        y = self.fc(y).view(b, c, 1, 1)
+        return x * y
+    
+
+class ResidualBlock(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(ResidualBlock, self).__init__()
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
+            SEBlock(out_channels)
+        )
+        # Shortcut to align input and output channels
+        self.shortcut = nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False) if in_channels != out_channels else nn.Identity()
+        self.relu = nn.ReLU(inplace=True)
+
+    def forward(self, x):
+        shortcut = self.shortcut(x)  # Align dimensions if needed
+        return self.relu(shortcut + self.conv(x))
+    
+
+class ASPP(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super(ASPP, self).__init__()
+        self.conv1x1 = nn.Conv2d(in_channels, out_channels, kernel_size=1)
+        self.conv3x3_1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, dilation=1)
+        self.conv3x3_2 = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=2, dilation=2)
+        self.conv3x3_3 = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=4, dilation=4)
+        self.global_avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.conv1x1_pool = nn.Conv2d(in_channels, out_channels, kernel_size=1)
+        self.final_conv = nn.Conv2d(out_channels * 5, out_channels, kernel_size=1)
+        self.relu = nn.ReLU(inplace=True)
+
+    def forward(self, x):
+        x1 = self.relu(self.conv1x1(x))
+        x2 = self.relu(self.conv3x3_1(x))
+        x3 = self.relu(self.conv3x3_2(x))
+        x4 = self.relu(self.conv3x3_3(x))
+        
+        # Global average pooling
+        x5 = self.global_avg_pool(x)
+        x5 = self.conv1x1_pool(x5)
+        x5 = nn.functional.interpolate(x5, size=x.shape[2:], mode='bilinear', align_corners=False)
+
+        # Concatenate all features
+        x = torch.cat([x1, x2, x3, x4, x5], dim=1)
+        return self.final_conv(x)
+    
+
+class DilatedResidualBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, dilation=2):
+        super(DilatedResidualBlock, self).__init__()
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, dilation=dilation, padding=dilation),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(out_channels, out_channels, kernel_size=3, dilation=dilation, padding=dilation),
+            SEBlock(out_channels)
+        )
+        # 1x1 convolution for shortcut to align input and output channels
+        self.shortcut = nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=False) if in_channels != out_channels else nn.Identity()
+        self.relu = nn.ReLU(inplace=True)
+
+    def forward(self, x):
+        shortcut = self.shortcut(x)  # Align dimensions if needed
+        return self.relu(shortcut + self.conv(x))
+    
+
+class ComboLoss(nn.Module):
+    def __init__(self, bce_weight=0.5, dice_weight=0.5):
+        super().__init__()
+        self.bce = nn.BCELoss()
+        self.dice = DiceLoss()
+        self.bce_weight = bce_weight
+        self.dice_weight = dice_weight
+
+    def forward(self, outputs, targets):
+        bce_loss = self.bce(outputs, targets)
+        dice_loss = self.dice(outputs, targets)
+        return self.bce_weight * bce_loss + self.dice_weight * dice_loss
+    
+
+def compute_distance_map(mask):
+    from scipy.ndimage import distance_transform_edt
+    inverse_mask = 1 - mask
+    return distance_transform_edt(mask) + distance_transform_edt(inverse_mask)
+
+class BoundaryLoss(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, outputs, targets):
+        outputs = outputs.sigmoid()  # Ensure outputs are in [0, 1]
+        targets = targets.float()
+        
+        # Compute distance maps
+        distance_map = compute_distance_map(targets.cpu().numpy())
+        distance_map = torch.from_numpy(distance_map).to(outputs.device)
+        
+        boundary_loss = (distance_map * (outputs - targets) ** 2).mean()
+        return boundary_loss
+    
+'''
+class LovaszHingeLoss(nn.Module):
+    def forward(self, outputs, targets):
+        outputs = outputs.squeeze(1)  # Remove channel dimension
+        targets = targets.squeeze(1).float()
+        return lovasz_hinge(outputs, targets)
+''' 
+
 class UNet(nn.Module):
     def __init__(self, input_channels=1, output_channels=1):
         super(UNet, self).__init__()
         # Encoder
-        self.enc1 = self.conv_block(input_channels, 64)
+        self.enc1 = ResidualBlock(input_channels, 64)
         self.pool1 = nn.MaxPool2d(2)
-        self.enc2 = self.conv_block(64, 128)
+        self.enc2 = ResidualBlock(64, 128)
         self.pool2 = nn.MaxPool2d(2)
-        self.enc3 = self.conv_block(128, 256)
+        self.enc3 = ResidualBlock(128, 256)
         self.pool3 = nn.MaxPool2d(2)
-        self.enc4 = self.conv_block(256, 512)
+        self.enc4 = DilatedResidualBlock(256, 512, dilation=2)
         self.pool4 = nn.MaxPool2d(2)
 
         # Bottleneck
-        self.bottleneck = self.conv_block(512, 1024)
+        self.bottleneck = DilatedResidualBlock(512, 1024, dilation=4)
 
         # Decoder
         self.up4 = nn.ConvTranspose2d(1024, 512, kernel_size=2, stride=2)
-        self.dec4 = self.conv_block(1024, 512)
+        self.dec4 = ResidualBlock(1024, 512)
         self.up3 = nn.ConvTranspose2d(512, 256, kernel_size=2, stride=2)
-        self.dec3 = self.conv_block(512, 256)
+        self.dec3 = ResidualBlock(512, 256)
         self.up2 = nn.ConvTranspose2d(256, 128, kernel_size=2, stride=2)
-        self.dec2 = self.conv_block(256, 128)
+        self.dec2 = ResidualBlock(256, 128)
         self.up1 = nn.ConvTranspose2d(128, 64, kernel_size=2, stride=2)
-        self.dec1 = self.conv_block(128, 64)
+        self.dec1 = ResidualBlock(128, 64)
 
         self.final = nn.Conv2d(64, output_channels, kernel_size=1)
-
-    def conv_block(self, in_channels, out_channels):
-        return nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),  # Use padding to maintain size
-            nn.ReLU(inplace=True),
-            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),  # Use padding to maintain size
-            nn.ReLU(inplace=True)
-        )
 
     def forward(self, x):
         # Encoder path
@@ -396,14 +560,146 @@ class UNet(nn.Module):
         return torch.sigmoid(self.final(dec1))
 
 
+class UNetWithDeepSupervision(nn.Module):
+    def __init__(self, input_channels=1, output_channels=1):
+        super(UNetWithDeepSupervision, self).__init__()
+        # Encoder
+        self.enc1 = ResidualBlock(input_channels, 64)
+        self.pool1 = nn.MaxPool2d(2)
+        self.enc2 = ResidualBlock(64, 128)
+        self.pool2 = nn.MaxPool2d(2)
+        self.enc3 = DilatedResidualBlock(128, 256, dilation=1)
+        self.pool3 = nn.MaxPool2d(2)
+        self.enc4 = DilatedResidualBlock(256, 512, dilation=2)
+        self.pool4 = nn.MaxPool2d(2)
+
+        # Bottleneck with ASPP
+        self.bottleneck = ASPP(512, 1024)
+
+        # Decoder with auxiliary outputs
+        self.up4 = nn.ConvTranspose2d(1024, 512, kernel_size=2, stride=2)
+        self.dec4 = ResidualBlock(1024, 512)
+        self.aux4 = nn.Conv2d(512, output_channels, kernel_size=1)  # Auxiliary output
+
+        self.up3 = nn.ConvTranspose2d(512, 256, kernel_size=2, stride=2)
+        self.dec3 = ResidualBlock(512, 256)
+        self.aux3 = nn.Conv2d(256, output_channels, kernel_size=1)  # Auxiliary output
+
+        self.up2 = nn.ConvTranspose2d(256, 128, kernel_size=2, stride=2)
+        self.dec2 = ResidualBlock(256, 128)
+        self.aux2 = nn.Conv2d(128, output_channels, kernel_size=1)  # Auxiliary output
+
+        self.up1 = nn.ConvTranspose2d(128, 64, kernel_size=2, stride=2)
+        self.dec1 = ResidualBlock(128, 64)
+        self.final = nn.Conv2d(64, output_channels, kernel_size=1)
+
+    def forward(self, x):
+        # Encoder path
+        enc1 = self.enc1(x)
+        pool1 = self.pool1(enc1)
+        enc2 = self.enc2(pool1)
+        pool2 = self.pool2(enc2)
+        enc3 = self.enc3(pool2)
+        pool3 = self.pool3(enc3)
+        enc4 = self.enc4(pool3)
+        pool4 = self.pool4(enc4)
+
+        # Bottleneck with ASPP
+        bottleneck = self.bottleneck(pool4)
+
+        # Decoder path with auxiliary outputs
+        up4 = self.up4(bottleneck)
+        dec4 = self.dec4(torch.cat([up4, enc4], dim=1))
+        aux4 = self.aux4(dec4)  # Auxiliary output
+
+        up3 = self.up3(dec4)
+        dec3 = self.dec3(torch.cat([up3, enc3], dim=1))
+        aux3 = self.aux3(dec3)  # Auxiliary output
+
+        up2 = self.up2(dec3)
+        dec2 = self.dec2(torch.cat([up2, enc2], dim=1))
+        aux2 = self.aux2(dec2)  # Auxiliary output
+
+        up1 = self.up1(dec2)
+        dec1 = self.dec1(torch.cat([up1, enc1], dim=1))
+        final = self.final(dec1)
+
+        # Interpolate auxiliary outputs to match final output resolution
+        aux4_resized = nn.functional.interpolate(aux4, size=final.shape[2:], mode="bilinear", align_corners=False)
+        aux3_resized = nn.functional.interpolate(aux3, size=final.shape[2:], mode="bilinear", align_corners=False)
+        aux2_resized = nn.functional.interpolate(aux2, size=final.shape[2:], mode="bilinear", align_corners=False)
+
+        return final, aux4_resized, aux3_resized, aux2_resized
+    
+
+class UNetWithASPP(nn.Module):
+    def __init__(self, input_channels=1, output_channels=1):
+        super(UNetWithASPP, self).__init__()
+        # Encoder
+        self.enc1 = ResidualBlock(input_channels, 64)
+        self.pool1 = nn.MaxPool2d(2)
+        self.enc2 = ResidualBlock(64, 128)
+        self.pool2 = nn.MaxPool2d(2)
+        self.enc3 = DilatedResidualBlock(128, 256, dilation=1)
+        self.pool3 = nn.MaxPool2d(2)
+        self.enc4 = DilatedResidualBlock(256, 512, dilation=2)
+        self.pool4 = nn.MaxPool2d(2)
+
+        # Bottleneck (ASPP)
+        self.bottleneck = ASPP(512, 1024)
+
+        # Decoder
+        self.up4 = nn.ConvTranspose2d(1024, 512, kernel_size=2, stride=2)
+        self.dec4 = ResidualBlock(1024, 512)
+        self.up3 = nn.ConvTranspose2d(512, 256, kernel_size=2, stride=2)
+        self.dec3 = ResidualBlock(512, 256)
+        self.up2 = nn.ConvTranspose2d(256, 128, kernel_size=2, stride=2)
+        self.dec2 = ResidualBlock(256, 128)
+        self.up1 = nn.ConvTranspose2d(128, 64, kernel_size=2, stride=2)
+        self.dec1 = ResidualBlock(128, 64)
+
+        self.final = nn.Conv2d(64, output_channels, kernel_size=1)
+
+    def forward(self, x):
+        # Encoder path
+        enc1 = self.enc1(x)
+        pool1 = self.pool1(enc1)
+        enc2 = self.enc2(pool1)
+        pool2 = self.pool2(enc2)
+        enc3 = self.enc3(pool2)
+        pool3 = self.pool3(enc3)
+        enc4 = self.enc4(pool3)
+        pool4 = self.pool4(enc4)
+
+        # Bottleneck (ASPP)
+        bottleneck = self.bottleneck(pool4)
+
+        # Decoder path
+        up4 = self.up4(bottleneck)
+        dec4 = self.dec4(torch.cat([up4, enc4], dim=1))
+        up3 = self.up3(dec4)
+        dec3 = self.dec3(torch.cat([up3, enc3], dim=1))
+        up2 = self.up2(dec3)
+        dec2 = self.dec2(torch.cat([up2, enc2], dim=1))
+        up1 = self.up1(dec2)
+        dec1 = self.dec1(torch.cat([up1, enc1], dim=1))
+
+        # Final output
+        return self.final(dec1)
+    
+
 def load_model_if_exists(model, model_save_path, device):
     if os.path.exists(model_save_path):
-        model.load_state_dict(torch.load(model_save_path))
+        model.load_state_dict(torch.load(model_save_path, map_location=device, weights_only=True))
         print(f"Loaded model weights from {model_save_path}")
     else:
         print("No previous model found. Starting training from scratch.")
     model.to(device)
     return model
+
+
+def requires_sigmoid(criterion):
+    return isinstance(criterion, (nn.BCELoss, DiceLoss, WeightedBCEDiceLoss, ComboLoss))
 
 
 def train_refinement_model(train_dataloader, val_dataloader, model, criterion, optimizer, num_epochs, device):
@@ -419,13 +715,27 @@ def train_refinement_model(train_dataloader, val_dataloader, model, criterion, o
                 inputs, targets = inputs.to(device), targets.to(device)
 
                 optimizer.zero_grad()
-                outputs = model(inputs)
-                loss = criterion(outputs, targets)
-                loss.backward()
+
+                final_output, aux4, aux3, aux2 = model(inputs)
+
+                if requires_sigmoid(criterion):
+                    final_output = torch.sigmoid(final_output)
+                    aux4 = torch.sigmoid(aux4)
+                    aux3 = torch.sigmoid(aux3)
+                    aux2 = torch.sigmoid(aux2)
+                    
+                final_loss = criterion(final_output, targets)
+                aux_loss4 = criterion(aux4, targets)
+                aux_loss3 = criterion(aux3, targets)
+                aux_loss2 = criterion(aux2, targets)
+
+                total_loss = final_loss + 0.4 * aux_loss4 + 0.3 * aux_loss3 + 0.2 * aux_loss2
+                
+                total_loss.backward()
                 optimizer.step()
 
-                running_loss += loss.item()
-                pbar.set_postfix(loss=loss.item())
+                running_loss += total_loss.item()
+                pbar.set_postfix(loss=total_loss.item())
                 pbar.update(1)
 
         avg_train_loss = running_loss / len(train_dataloader)
@@ -433,12 +743,32 @@ def train_refinement_model(train_dataloader, val_dataloader, model, criterion, o
 
         model.eval()
         val_loss = 0.0
+
         with torch.no_grad():
             for inputs, targets in val_dataloader:
                 inputs, targets = inputs.to(device), targets.to(device)
-                outputs = model(inputs)
-                loss = criterion(outputs, targets)
+
+                # Forward pass through the model
+                final_output, aux4, aux3, aux2 = model(inputs)
+
+                # Apply sigmoid if required by the criterion
+                if requires_sigmoid(criterion):
+                    final_output = torch.sigmoid(final_output)
+                    aux4 = torch.sigmoid(aux4)
+                    aux3 = torch.sigmoid(aux3)
+                    aux2 = torch.sigmoid(aux2)
+
+                # Compute losses for all outputs
+                final_loss = criterion(final_output, targets)
+                aux_loss4 = criterion(aux4, targets)
+                aux_loss3 = criterion(aux3, targets)
+                aux_loss2 = criterion(aux2, targets)
+
+                # Combine the losses with respective weights
+                loss = final_loss + 0.4 * aux_loss4 + 0.3 * aux_loss3 + 0.2 * aux_loss2
                 val_loss += loss.item()
+
+                
 
         avg_val_loss = val_loss / len(val_dataloader)
         print(f"Epoch {epoch + 1}/{num_epochs}, Validation Loss: {avg_val_loss:.4f}")
@@ -460,47 +790,97 @@ def train_refinement_model(train_dataloader, val_dataloader, model, criterion, o
 def test_refinement_model(
     test_dataloader,
     model,
+    criterion,
+    device,
+    model_save_path="./output/refine/best_model.pth",
 ):
+    # Load the best model
     model.load_state_dict(torch.load(model_save_path))
     model.eval()
 
     test_loss = 0.0
-    all_outputs = []
+    all_final_outputs = []
     all_gt_masks = []
 
     with torch.no_grad():
         with tqdm(total=len(test_dataloader), desc="Testing", unit="batch") as pbar:
             for inputs, targets in test_dataloader:
                 inputs, targets = inputs.to(device), targets.to(device)
-            
-                outputs = model(inputs)
 
-                loss = criterion(outputs, targets)
-                test_loss += loss.item()
+                # Forward pass through the model
+                final_output, aux4, aux3, aux2 = model(inputs)
 
-                all_outputs.append(outputs.cpu())
+                # Apply sigmoid if the criterion requires probabilities
+                if requires_sigmoid(criterion):
+                    final_output = torch.sigmoid(final_output)
+                    aux4 = torch.sigmoid(aux4)
+                    aux3 = torch.sigmoid(aux3)
+                    aux2 = torch.sigmoid(aux2)
+
+                # Compute individual losses
+                final_loss = criterion(final_output, targets)
+                aux_loss4 = criterion(aux4, targets)
+                aux_loss3 = criterion(aux3, targets)
+                aux_loss2 = criterion(aux2, targets)
+
+                # Combine losses with weights
+                total_loss = final_loss + 0.4 * aux_loss4 + 0.3 * aux_loss3 + 0.2 * aux_loss2
+                test_loss += total_loss.item()
+
+                # Store predictions and ground truth for evaluation
+                all_final_outputs.append(final_output.cpu())
                 all_gt_masks.append(targets.cpu())
 
-                pbar.set_postfix(loss=loss.item())
+                pbar.set_postfix(loss=total_loss.item())
                 pbar.update(1)
 
+    # Calculate average test loss
     avg_test_loss = test_loss / len(test_dataloader)
     print(f"Test Loss: {avg_test_loss:.4f}")
 
-    outputs_bin = (torch.cat(all_outputs) > 0.5).numpy().astype(int).flatten()
+    # Flatten all outputs and targets for IoU calculation
+    outputs_bin = (torch.cat(all_final_outputs) > 0.5).numpy().astype(int).flatten()
     gt_masks_bin = torch.cat(all_gt_masks).numpy().astype(int).flatten()
 
-    iou = jaccard_score(gt_masks_bin, outputs_bin, average="binary")
-    print(f"IoU Score: {iou:.4f}")
+    # Find the best threshold for IoU
+    best_iou, best_threshold = 0, 0.5
+    for t in np.linspace(0.1, 0.9, 9):
+        iou = jaccard_score(gt_masks_bin, (outputs_bin > t).astype(int), average="binary")
+        if iou > best_iou:
+            best_iou, best_threshold = iou, t
 
+    print(f"Best IoU Score: {best_iou:.4f}")
+    print(f"Best Threshold: {best_threshold:.4f}")
+
+
+def get_loss_function(name="Combo", **kwargs):
+    if name == "Combo":
+        return ComboLoss(**kwargs)
+    elif name == "Boundary":
+        return BoundaryLoss()
+    #elif name == "Lovasz":
+    #    return LovaszHingeLoss()
+    elif name == "WeightedBCEDice":
+        return WeightedBCEDiceLoss(weight_background=kwargs.get('weight_background', 0.1),
+                                   weight_segment=kwargs.get('weight_segment', 0.9))
+    elif name == "Focal":
+        return FocalLoss(alpha=kwargs.get('alpha', 0.25), gamma=kwargs.get('gamma', 2))
+    elif name == "Tversky":
+        return TverskyLoss(alpha=kwargs.get('alpha', 0.3), beta=kwargs.get('beta', 0.7))
+    else:
+        raise ValueError(f"Unknown loss function: {name}")
+    
 
 if __name__ == "__main__":
+    '''
     data_folder = os.getenv("DATA_PATH")
     if not data_folder:
         raise ValueError("DATA_PATH environment variable is not set. Please set it before running the script.")
-    #data_folder = "/Users/anisr/Documents/dead_trees/Finland"
-    #predictions_folder = "/Users/anisr/Documents/dead_trees/Finland/Predictions"
+    
     predictions_folder = os.path.join(data_folder, "Predictions")
+    '''
+    data_folder = "/Users/anisr/Documents/dead_trees/Finland"
+    predictions_folder = "/Users/anisr/Documents/dead_trees/Finland/Predictions"
     
     #full_dataset = SegmentationRefinementDataset(data_folder)
 
@@ -514,21 +894,33 @@ if __name__ == "__main__":
     val_dataset = SegmentationRefinementDataset(data_folder, predictions_folder, augment=False)
     test_dataset = SegmentationRefinementDataset(data_folder, predictions_folder, augment=False)
 
-    train_dataloader = DataLoader(train_dataset, batch_size=4, shuffle=True, num_workers=2)
-    val_dataloader = DataLoader(val_dataset, batch_size=4, shuffle=False, num_workers=2)
-    test_dataloader = DataLoader(test_dataset, batch_size=4, shuffle=False, num_workers=2)
+    patch_weights = train_dataset.get_patch_weights()
+
+    if len(patch_weights) != len(train_dataset):
+        raise ValueError(f"Patch weights ({len(patch_weights)}) and dataset length ({len(train_dataset)}) do not match!")
+
+    sampler = WeightedRandomSampler(weights=patch_weights, num_samples=len(train_dataset), replacement=True)
+
+    num_workers = max(1, multiprocessing.cpu_count() - 1)  # Use one less than the total CPU cores
+
+    train_dataloader = DataLoader(train_dataset, batch_size=4, sampler=sampler, num_workers=num_workers)
+    val_dataloader = DataLoader(val_dataset, batch_size=4, shuffle=False, num_workers=num_workers)
+    test_dataloader = DataLoader(test_dataset, batch_size=4, shuffle=False, num_workers=num_workers)
 
     print("Train DataLoader size:", len(train_dataloader))
     print("Validation DataLoader size:", len(val_dataloader))
     print("Test DataLoader size:", len(test_dataloader))
 
-    model = UNet()
+    model = UNetWithDeepSupervision()
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device)
 
-    criterion = TverskyLoss(alpha=0.7, beta=0.3)
+    loss_function_name = "Combo"  # Change to "Boundary", "Lovasz", etc.
+    criterion = get_loss_function(loss_function_name, bce_weight=0.6, dice_weight=0.4)
+
     optimizer = Adam(model.parameters(), lr=0.0005)
-    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3)
+    # scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3)
+    scheduler = CyclicLR(optimizer, base_lr=1e-5, max_lr=1e-3, step_size_up=2000)
 
     num_epochs = 10
     model_save_path = "./output/refine/best_model.pth"
