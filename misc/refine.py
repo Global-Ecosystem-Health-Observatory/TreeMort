@@ -872,7 +872,6 @@ def get_loss_function(name="Combo", **kwargs):
     
 
 if __name__ == "__main__":
-    '''
     data_folder = os.getenv("DATA_PATH")
     if not data_folder:
         raise ValueError("DATA_PATH environment variable is not set. Please set it before running the script.")
@@ -881,15 +880,8 @@ if __name__ == "__main__":
     '''
     data_folder = "/Users/anisr/Documents/dead_trees/Finland"
     predictions_folder = "/Users/anisr/Documents/dead_trees/Finland/Predictions"
+    '''
     
-    #full_dataset = SegmentationRefinementDataset(data_folder)
-
-    #train_size = int(0.7 * len(full_dataset))
-    #val_size = int(0.15 * len(full_dataset))
-    #test_size = len(full_dataset) - train_size - val_size
-
-    # train_dataset, val_dataset, test_dataset = random_split(full_dataset, [train_size, val_size, test_size])
-
     train_dataset = SegmentationRefinementDataset(data_folder, predictions_folder, augment=True)
     val_dataset = SegmentationRefinementDataset(data_folder, predictions_folder, augment=False)
     test_dataset = SegmentationRefinementDataset(data_folder, predictions_folder, augment=False)
