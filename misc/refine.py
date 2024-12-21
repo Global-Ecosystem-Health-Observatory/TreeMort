@@ -968,7 +968,7 @@ if __name__ == "__main__":
 
     train_refinement_model(train_dataloader, val_dataloader, model, criterion, optimizer, num_epochs, device)
 
-    test_refinement_model(test_dataloader, model)
+    test_refinement_model(test_dataloader, model, criterion, device)
 
 
 ''' Usage:
