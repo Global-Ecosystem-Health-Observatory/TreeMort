@@ -964,7 +964,7 @@ if __name__ == "__main__":
         raise ValueError(f"Unsupported scheduler type: {scheduler_type}")
 
     num_epochs = 100
-    model_save_path = "./output/refine/best_model.pth"
+    model_save_path = "./output/refine/best.weights.pth"
 
     train_refinement_model(train_dataloader, val_dataloader, model, criterion, optimizer, num_epochs, device)
 

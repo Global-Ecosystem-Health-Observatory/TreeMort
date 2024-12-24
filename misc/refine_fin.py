@@ -164,7 +164,7 @@ if __name__ == "__main__":
 Usage:
 
 PYTHONPATH="/Users/anisr/Documents/TreeSeg" python misc/refine_fin.py \
-    --best-model ./output/refine/best_model.pth \
+    --best-model ./output/refine/best.weights.pth \
     --input-folder /Users/anisr/Documents/dead_trees/Finland/Predictions \
     --output-folder /Users/anisr/Documents/dead_trees/Finland/Predictions_r
 

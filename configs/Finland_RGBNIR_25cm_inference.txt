@@ -5,6 +5,7 @@ stride = 128
 nir-rgb-order = [3, 0, 1, 2]
 
 best-model = ./output/flair_unet_dual/best.weights.pth
+refine-model = ./output/refine/best.weights.pth
 
 model-config = ./configs/flair_unet_bs8_cs256.txt
 
