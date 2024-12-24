@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=treemort-inference
+#SBATCH --job-name=treemort-refine
 #SBATCH --account=project_2004205
 #SBATCH --output=output/stdout/%A_%a.out
 #SBATCH --error=output/stderr/%A_%a.err
@@ -13,7 +13,7 @@
 # Usage:
 # export TREEMORT_VENV_PATH="/custom/path/to/venv"
 # export TREEMORT_REPO_PATH="/custom/path/to/treemort/repo"
-# sbatch --export=ALL,CONFIG_PATH="/custom/path/to/config",DATA_PATH="/custom/path/to/data",OUTPUT_PATH="/custom/path/to/output" run_inference.sh
+# sbatch --export=ALL,DATA_PATH="/custom/path/to/data" run_refine.sh
 
 MODULE_NAME="pytorch/2.3"
 module load $MODULE_NAME
@@ -30,20 +30,10 @@ fi
 
 TREEMORT_REPO_PATH="${TREEMORT_REPO_PATH:-/users/rahmanan/TreeMort}"
 
-ENGINE_PATH="${TREEMORT_REPO_PATH}/inference/engine.py"
+REFINE_PATH="${TREEMORT_REPO_PATH}/misc/refine.py"
 
-if [ ! -f "$ENGINE_PATH" ]; then
-    echo "[ERROR] Inference engine source file not found at $ENGINE_PATH"
-    exit 1
-fi
-
-if [ -z "$CONFIG_PATH" ]; then
-    echo "[ERROR] CONFIG_PATH variable is not set. Please provide a config path using --export."
-    exit 1
-fi
-
-if [ ! -f "$CONFIG_PATH" ]; then
-    echo "[ERROR] Config file not found at $CONFIG_PATH"
+if [ ! -f "$REFINE_PATH" ]; then
+    echo "[ERROR] Model refinement source file not found at $REFINE_PATH"
     exit 1
 fi
 
@@ -52,30 +42,18 @@ if [ -z "$DATA_PATH" ]; then
     exit 1
 fi
 
-if [ -z "$OUTPUT_PATH" ]; then
-    echo "[ERROR] OUTPUT_PATH variable is not set. Please provide a data path using --export."
-    exit 1
-fi
-
 if [ ! -d "$DATA_PATH" ]; then
     echo "[ERROR] Data directory not found at $DATA_PATH"
     exit 1
 fi
 
-if [ ! -d "$OUTPUT_PATH" ]; then
-    echo "[ERROR] Output directory not found at $OUTPUT_PATH"
-    exit 1
-fi
-
-echo "[INFO] Starting inference with the following settings:"
+echo "[INFO] Starting refinement with the following settings:"
 echo "       Data path: $DATA_PATH"
-echo "       Output path: $OUTPUT_PATH"
-echo "       Config file: $CONFIG_PATH"
-echo "       Inference engine: $ENGINE_PATH"
+echo "       Inference engine: $REFINE_PATH"
 echo "       CPUs per task: $SLURM_CPUS_PER_TASK"
 echo "       Memory per CPU: $SLURM_MEM_PER_CPU MB"
 
-srun python3 "$ENGINE_PATH" "$DATA_PATH" --config "$CONFIG_PATH" --outdir "$OUTPUT_PATH" --post-process
+srun python3 "$REFINE_PATH" "$DATA_PATH"
 
 EXIT_STATUS=$?
 if [ $EXIT_STATUS -ne 0 ]; then

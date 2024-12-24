@@ -26,6 +26,9 @@ from inference.utils import (
 )
 from inference.graph_partition import perform_graph_partitioning
 
+from misc.refine import UNetWithDeepSupervision
+from misc.refine_fin import prepare_patches, combine_patches
+
 logger = get_logger(__name__)
 
 
@@ -103,13 +106,10 @@ def process_batch(patches, coords, prediction_map, count_map, model, threshold, 
     return prediction_map, count_map
 
 
-def load_model(config_path, best_model, id2label):
+def load_model(config_path, best_model, id2label, device):
     logger.info("Loading model configuration...")
     conf = setup(config_path)
     logger.info("Model configuration loaded.")
-    
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    logger.info(f"Using device: {device}")
 
     logger.info("Loading or resuming model...")
     model, _, _, _ = build_model(conf, id2label, device)
@@ -122,9 +122,41 @@ def load_model(config_path, best_model, id2label):
     return model
 
 
-def process_image(model, image_path, geojson_path, conf, post_process):
+def load_refine_model(model_path, device):
+    refine_model = UNetWithDeepSupervision()
+
+    if os.path.exists(model_path):
+        refine_model.load_state_dict(torch.load(model_path, map_location=device, weights_only=True))
+        logger.info(f"Loaded model weights from {model_path}")
+    else:
+        logger.error("No previous model found.")
+
+    refine_model.eval()
+    refine_model.to(device)
+
+    return refine_model
+
+
+def refine_mask(mask, refine_model, device, patch_size=64, stride=64):
+    patches, patch_positions = prepare_patches(mask, patch_size, stride)
+
+    processed_patches = []
+    for (i, j), patch in zip(patch_positions, patches):
+        input_tensor = torch.from_numpy(patch).float().unsqueeze(0).unsqueeze(0).to(device)
+        with torch.no_grad():
+            pred_tensor = torch.sigmoid(refine_model(input_tensor)[0])
+        pred_mask = (pred_tensor.squeeze().cpu().numpy() > 0.5).astype(np.uint8)
+        processed_patches.append(((i, j), pred_mask))
+
+    combined_mask = combine_patches(processed_patches, mask.shape, patch_size, stride)
+
+    return combined_mask
+
+def process_image(model, refine_model, image_path, geojson_path, conf, post_process):
     try:
         logger.info(f"Starting process for image: {image_path}")
+
+        device = next(model.parameters()).device
 
         image, transform, crs = load_and_preprocess_image(image_path, conf.nir_rgb_order)
         logger.info(f"Image loaded and preprocessed. Shape: {image.shape}")
@@ -139,7 +171,10 @@ def process_image(model, image_path, geojson_path, conf, post_process):
         logger.info(f"Mask created with shape: {binary_mask.shape}")
 
         if post_process:
-            partitioned_labels = perform_graph_partitioning(image, binary_mask)
+            refined_mask = refine_mask(binary_mask, refine_model, device)
+            logger.info(f"Mask refined with shape: {refined_mask.shape}")
+        
+            partitioned_labels = perform_graph_partitioning(image, refined_mask)
             logger.info(f"Partition graph segmentation completed with max label: {np.max(partitioned_labels)}")
             
             refined_labels = generate_watershed_labels(segment_map, partitioned_labels, centroid_map=centroid_map, min_distance=conf.min_distance, blur_sigma=conf.blur_sigma, dilation_radius=conf.dilation_radius, centroid_threshold=conf.centroid_threshold)
@@ -173,6 +208,7 @@ def parse_config(config_file_path):
 
     parser.add("--model-config",       type=str, required=True, help="Path to the model configuration file (e.g., architecture, hyperparameters).")
     parser.add("--best-model",         type=str, required=True, help="Path to the file containing the best model weights.")
+    parser.add("--refine-model",       type=str, required=True, help="Path to the file containing the refine model weights.")
     parser.add("--window-size",        type=int,   default=256, help="Size of the sliding window for inference (default: 256 pixels).")
     parser.add("--stride",             type=int,   default=128, help="Stride length for sliding window during inference (default: 128 pixels).")
     parser.add("--threshold",          type=float, default=0.5, help="Threshold for binary classification during inference (default: 0.5).")
@@ -192,7 +228,12 @@ def parse_config(config_file_path):
 
 def process_single_image(image_path, conf, output_dir, id2label, post_process):
     try:
-        model = load_model(conf.model_config, conf.best_model, id2label)
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        logger.info(f"Using device: {device}")
+
+        model = load_model(conf.model_config, conf.best_model, id2label, device)
+
+        refine_model = load_refine_model(conf.refine_model, device)
 
         if output_dir:
             geojson_path = os.path.join(output_dir, os.path.basename(os.path.splitext(image_path)[0] + ".geojson"))
@@ -204,7 +245,7 @@ def process_single_image(image_path, conf, output_dir, id2label, post_process):
         if not os.path.exists(directory):
             os.makedirs(directory, exist_ok=True)
         
-        process_image(model, image_path, geojson_path, conf, post_process)
+        process_image(model, refine_model, image_path, geojson_path, conf, post_process)
 
         logger.info(f"Processed image saved to: {geojson_path}")
     except Exception as e:
@@ -315,6 +356,6 @@ export TREEMORT_VENV_PATH="/projappl/project_2004205/rahmanan/venv"
 export TREEMORT_REPO_PATH="/users/rahmanan/TreeMort"
 export TREEMORT_DATA_PATH="/scratch/project_2008436/rahmanan/dead_trees"
 
-sbatch --export=ALL,CONFIG_PATH="$TREEMORT_REPO_PATH/configs/Finland_RGBNIR_25cm.txt",DATA_PATH="$TREEMORT_DATA_PATH/Finland/RGBNIR/25cm" $TREEMORT_REPO_PATH/scripts/run_inference.sh
+sbatch --export=ALL,CONFIG_PATH="$TREEMORT_REPO_PATH/configs/Finland_RGBNIR_25cm_inference.txt",DATA_PATH="$TREEMORT_DATA_PATH/Finland/RGBNIR/25cm",OUTPUT_PATH="$TREEMORT_DATA_PATH/Finland/Predictions" $TREEMORT_REPO_PATH/scripts/run_inference.sh    
 
 '''
