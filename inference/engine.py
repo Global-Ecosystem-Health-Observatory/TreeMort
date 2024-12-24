@@ -356,6 +356,6 @@ export TREEMORT_VENV_PATH="/projappl/project_2004205/rahmanan/venv"
 export TREEMORT_REPO_PATH="/users/rahmanan/TreeMort"
 export TREEMORT_DATA_PATH="/scratch/project_2008436/rahmanan/dead_trees"
 
-sbatch --export=ALL,CONFIG_PATH="$TREEMORT_REPO_PATH/configs/Finland_RGBNIR_25cm_inference.txt",DATA_PATH="$TREEMORT_DATA_PATH/Finland/RGBNIR/25cm",OUTPUT_PATH="$TREEMORT_DATA_PATH/Finland/Predictions" $TREEMORT_REPO_PATH/scripts/run_inference.sh    
+sbatch --export=ALL,CONFIG_PATH="$TREEMORT_REPO_PATH/configs/Finland_RGBNIR_25cm_inference.txt",DATA_PATH="$TREEMORT_DATA_PATH/Finland/RGBNIR/25cm",OUTPUT_PATH="$TREEMORT_DATA_PATH/Finland/Predictions" $TREEMORT_REPO_PATH/scripts/run_inference.sh
 
 '''
