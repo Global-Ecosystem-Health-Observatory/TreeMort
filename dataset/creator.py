@@ -1,12 +1,15 @@
 import os
 import h5py
+import rasterio
 import argparse
 import configargparse
 import concurrent.futures
 
 import numpy as np
 
+from pyproj import Transformer
 from pathlib import Path
+from rasterio.transform import xy
 
 from dataset.preprocessutils import (
     get_image_and_polygons,
@@ -52,29 +55,44 @@ def extract_patches(image, label, window_size, stride):
     return patches
 
 
-def process_image(
-    image_path,
-    label_path,
-    conf
-):
+def process_image(image_path, label_path, conf):
     image_name = os.path.basename(image_path)
 
     try:
+        with rasterio.open(image_path) as src:
+            transform = src.transform
+            crs = src.crs  # CRS of the raster
+            geographic_crs = "EPSG:4326"  # Geographic CRS (WGS84)
+
+            transformer = Transformer.from_crs(crs, geographic_crs, always_xy=True)
+
         img_arr, polygons = get_image_and_polygons(
-                image_path,
-                label_path,
-                conf.nir_rgb_order,
-                conf.normalize_channelwise,
-                conf.normalize_imagewise,
-            )
+            image_path,
+            label_path,
+            conf.nir_rgb_order,
+            conf.normalize_channelwise,
+            conf.normalize_imagewise,
+        )
 
         label_mask, centroid_mask = create_label_mask_with_centroids(img_arr, polygons)
         combined_mask = np.stack([label_mask, centroid_mask], axis=-1)
+
         patches = extract_patches(img_arr, combined_mask, conf.window_size, conf.stride)
-        labeled_patches = [
-            (patch[0], patch[1], int(np.any(patch[1][:, :, 0])), image_name)
-            for patch in patches
-        ]
+
+        labeled_patches = []
+        for idx, patch in enumerate(patches):
+            patch_row, patch_col = idx // (img_arr.shape[1] // conf.stride), idx % (img_arr.shape[1] // conf.stride)
+            pixel_x, pixel_y = patch_col * conf.stride, patch_row * conf.stride
+            pixel_centroid_x = pixel_x + conf.window_size // 2
+            pixel_centroid_y = pixel_y + conf.window_size // 2
+
+            raster_lon, raster_lat = xy(transform, pixel_centroid_y, pixel_centroid_x)
+            centroid_lon, centroid_lat = transformer.transform(raster_lon, raster_lat)
+
+            contains_dead_tree = int(np.any(patch[1][:, :, 0]))
+
+            labeled_patches.append((patch[0], patch[1], contains_dead_tree, image_name, centroid_lat, centroid_lon))
+
         return image_name, labeled_patches
 
     except Exception as e:
@@ -83,22 +101,27 @@ def process_image(
     
 
 def write_to_hdf5(hdf5_file, data):
-    with h5py.File(hdf5_file, "a") as hf:  # Open in append mode
-        if data:  # Ensure data is not empty
+    with h5py.File(hdf5_file, "a") as hf:
+        if data:
             for file_stub, labeled_patches in data:
-                if labeled_patches:  # Only process if labeled_patches is not empty
-                    for idx, (image_patch, label_patch, contains_dead_tree, filename) in enumerate(labeled_patches):
+                if labeled_patches:
+                    for idx, (image_patch, label_patch, contains_dead_tree, filename, lat, lon) in enumerate(labeled_patches):
                         key = f"{file_stub}_{idx}"
-                        hf.create_group(key)
-                        hf[key].create_dataset("image", data=image_patch, compression="gzip")
-                        hf[key].create_dataset("label", data=label_patch, compression="gzip")
-                        hf[key].attrs["contains_dead_tree"] = contains_dead_tree
-                        hf[key].attrs["source_image"] = filename
+                        
+                        patch_group = hf.create_group(key)
+                        
+                        patch_group.create_dataset("image", data=image_patch, compression="gzip")
+                        patch_group.create_dataset("label", data=label_patch, compression="gzip")
+                        
+                        patch_group.attrs["contains_dead_tree"] = contains_dead_tree
+                        patch_group.attrs["source_image"] = filename
+                        patch_group.attrs["latitude"] = lat
+                        patch_group.attrs["longitude"] = lon
                 else:
                     print(f"[WARNING] No labeled patches for file: {file_stub}")
         else:
             print("[WARNING] No data provided to write.")
-
+            
 
 def convert_to_hdf5(
     conf,
