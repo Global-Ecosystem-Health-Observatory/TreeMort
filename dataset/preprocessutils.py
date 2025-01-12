@@ -17,11 +17,14 @@ def create_label_mask(img_arr: np.ndarray, polys: list[np.ndarray]):
     return label_mask
 
 
-def create_label_mask_with_centroids(img_arr: np.ndarray, polys: list[np.ndarray], sigma: float = 2.0):
+def create_label_mask_with_centroids(
+    img_arr: np.ndarray, polys: list[np.ndarray], sigma: float = 2.0
+):
     image_h, image_w = img_arr.shape[:2]
 
     label_mask = np.zeros((image_h, image_w), dtype=np.float32)
     centroid_mask = np.zeros((image_h, image_w), dtype=np.float32)
+    dead_tree_count = 0
 
     for poly in tqdm(polys, desc="Creating label masks and centroids"):
         cv2.fillPoly(label_mask, pts=[poly], color=1)
@@ -31,13 +34,15 @@ def create_label_mask_with_centroids(img_arr: np.ndarray, polys: list[np.ndarray
             centroid_x = int(moments["m10"] / moments["m00"])
             centroid_y = int(moments["m01"] / moments["m00"])
 
+            dead_tree_count += 1
+
             y, x = np.meshgrid(np.arange(image_h), np.arange(image_w), indexing="ij")
             gaussian = np.exp(-((x - centroid_x) ** 2 + (y - centroid_y) ** 2) / (2 * sigma ** 2))
             centroid_mask += gaussian
 
     centroid_mask = np.clip(centroid_mask, 0, 1)
-    
-    return label_mask, centroid_mask
+
+    return label_mask, centroid_mask, dead_tree_count
 
 
 def segmap_to_topo(img_arr: np.ndarray, contours: list) -> np.ndarray:
