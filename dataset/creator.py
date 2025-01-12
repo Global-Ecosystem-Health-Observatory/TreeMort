@@ -56,6 +56,9 @@ def extract_patches(image, label, window_size, stride):
 
 
 def process_image(image_path, label_path, conf):
+    import rasterio
+    import numpy as np
+
     image_name = os.path.basename(image_path)
 
     try:
@@ -89,9 +92,18 @@ def process_image(image_path, label_path, conf):
             raster_lon, raster_lat = xy(transform, pixel_centroid_y, pixel_centroid_x)
             centroid_lon, centroid_lat = transformer.transform(raster_lon, raster_lat)
 
-            contains_dead_tree = int(np.any(patch[1][:, :, 0]))
+            dead_tree_count = int(np.sum(patch[1][:, :, 1]))
 
-            labeled_patches.append((patch[0], patch[1], contains_dead_tree, image_name, centroid_lat, centroid_lon))
+            labeled_patches.append(
+                (
+                    patch[0],              # Image patch
+                    patch[1],              # Combined label patch
+                    dead_tree_count,       # Number of dead tree segments
+                    image_name,            # Source image name
+                    centroid_lat,          # Centroid latitude
+                    centroid_lon           # Centroid longitude
+                )
+            )
 
         return image_name, labeled_patches
 
@@ -105,7 +117,7 @@ def write_to_hdf5(hdf5_file, data):
         if data:
             for file_stub, labeled_patches in data:
                 if labeled_patches:
-                    for idx, (image_patch, label_patch, contains_dead_tree, filename, lat, lon) in enumerate(labeled_patches):
+                    for idx, (image_patch, label_patch, dead_tree_count, filename, lat, lon) in enumerate(labeled_patches):
                         key = f"{file_stub}_{idx}"
                         
                         patch_group = hf.create_group(key)
@@ -113,7 +125,7 @@ def write_to_hdf5(hdf5_file, data):
                         patch_group.create_dataset("image", data=image_patch, compression="gzip")
                         patch_group.create_dataset("label", data=label_patch, compression="gzip")
                         
-                        patch_group.attrs["contains_dead_tree"] = contains_dead_tree
+                        patch_group.attrs["dead_tree_count"] = dead_tree_count
                         patch_group.attrs["source_image"] = filename
                         patch_group.attrs["latitude"] = lat
                         patch_group.attrs["longitude"] = lon
