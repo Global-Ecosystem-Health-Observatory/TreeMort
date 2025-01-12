@@ -9,6 +9,7 @@ import numpy as np
 
 from pyproj import Transformer
 from pathlib import Path
+from scipy.ndimage import label as nd_label  # Explicit import to avoid shadowing
 from rasterio.transform import xy
 
 from dataset.preprocessutils import (
@@ -37,7 +38,7 @@ def pad_label(label, window_size):
     )
 
 
-def extract_patches(image, label, window_size, stride):
+def extract_patches(image, label, window_size, stride, threshold=0.5):
     image = pad_image(image, window_size)
     label = pad_label(label, window_size)
     h, w = image.shape[:2]
@@ -46,12 +47,17 @@ def extract_patches(image, label, window_size, stride):
     for y in range(0, h - window_size + 1, stride):
         for x in range(0, w - window_size + 1, stride):
             image_patch = image[y : y + window_size, x : x + window_size]
-            
             label_patch = label[y : y + window_size, x : x + window_size]
+            
             label_patch[:, :, 0] = (label_patch[:, :, 0] > 0).astype(np.float32)
             label_patch[:, :, 1] = (label_patch[:, :, 1] > 0).astype(np.float32)
 
-            patches.append((image_patch, label_patch))
+            gaussian_map = label_patch[:, :, 1]
+            binary_map = (gaussian_map > threshold).astype(np.int32)
+            labeled_array, num_features = nd_label(binary_map)
+
+            patches.append((image_patch, label_patch, num_features))
+
     return patches
 
 
@@ -77,7 +83,7 @@ def process_image(image_path, label_path, conf):
             conf.normalize_imagewise,
         )
 
-        label_mask, centroid_mask = create_label_mask_with_centroids(img_arr, polygons)
+        label_mask, centroid_mask, _ = create_label_mask_with_centroids(img_arr, polygons)
         combined_mask = np.stack([label_mask, centroid_mask], axis=-1)
 
         patches = extract_patches(img_arr, combined_mask, conf.window_size, conf.stride)
@@ -92,13 +98,11 @@ def process_image(image_path, label_path, conf):
             raster_lon, raster_lat = xy(transform, pixel_centroid_y, pixel_centroid_x)
             centroid_lon, centroid_lat = transformer.transform(raster_lon, raster_lat)
 
-            dead_tree_count = int(np.sum(patch[1][:, :, 1]))
-
             labeled_patches.append(
                 (
                     patch[0],              # Image patch
                     patch[1],              # Combined label patch
-                    dead_tree_count,       # Number of dead tree segments
+                    patch[2],              # Number of dead tree segments
                     image_name,            # Source image name
                     centroid_lat,          # Centroid latitude
                     centroid_lon           # Centroid longitude
