@@ -1,106 +1,25 @@
 import os
-import fiona
+import csv
 import numpy as np
-import geopandas as gpd
 
 from tqdm import tqdm
 from typing import Tuple, List, Dict
-from shapely.geometry import shape
+from scipy.stats import norm
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-
-def validate_geometry(geom):
-    try:
-        if not geom.is_valid:
-            geom = geom.buffer(0)
-        if geom.geom_type not in ["Polygon", "MultiPolygon"]:
-            return None
-        return geom
-    except Exception:
-        return None
+from misc.utils import (
+    find_file_pairs,
+    load_geodata_with_unique_ids,
+    calculate_iou_metrics,
+    calculate_centroid_errors,
+    calculate_precision_recall_f1,
+    extract_centroid_from_metadata,
+)
 
 
-def load_geodata_with_unique_ids(file_path: str) -> gpd.GeoDataFrame:
-    with fiona.open(file_path) as src:
-        features = [
-            {
-                **feature,
-                "id": str(idx),  # Ensure unique IDs
-                "geometry": shape(feature["geometry"]) if feature["geometry"] else None,
-            }
-            for idx, feature in enumerate(src)
-        ]
-        geometries = [feature["geometry"] for feature in features]
-        gdf = gpd.GeoDataFrame(features, geometry=geometries, crs=src.crs)
-        gdf["geometry"] = gdf["geometry"].apply(validate_geometry)
-        return gdf[gdf["geometry"].notnull()]
-
-
-def calculate_iou_metrics(prediction_gdf: gpd.GeoDataFrame, ground_truth_gdf: gpd.GeoDataFrame) -> Tuple[float, float]:
-
-    def calculate_pixel_iou():
-        intersection = gpd.overlay(prediction_gdf, ground_truth_gdf, how="intersection")
-        if intersection.empty:
-            return 0.0
-        intersection["iou"] = intersection["geometry"].apply(
-            lambda geom: geom.area
-            / (
-                prediction_gdf.loc[prediction_gdf.intersects(geom), "geometry"].area.values[0]
-                + ground_truth_gdf.loc[ground_truth_gdf.intersects(geom), "geometry"].area.values[0]
-                - geom.area
-            )
-        )
-        return intersection["iou"].mean()
-
-    def calculate_tree_iou():
-        prediction_union = prediction_gdf.geometry.unary_union
-        filtered_gt = ground_truth_gdf[ground_truth_gdf.intersects(prediction_union)]
-        tp, fp, fn = 0, 0, 0
-
-        for pred_geom in prediction_gdf["geometry"]:
-            if filtered_gt.intersects(pred_geom).any():
-                tp += 1
-            else:
-                fp += 1
-        for gt_geom in filtered_gt["geometry"]:
-            if not prediction_gdf.intersects(gt_geom).any():
-                fn += 1
-
-        return tp / (tp + fp + fn) if (tp + fp + fn) > 0 else 1.0
-
-    return calculate_pixel_iou(), calculate_tree_iou()
-
-
-def calculate_centroid_association_metrics(
-    prediction_gdf: gpd.GeoDataFrame, ground_truth_gdf: gpd.GeoDataFrame
-) -> Tuple[int, int, int]:
-    if prediction_gdf.empty or ground_truth_gdf.empty:
-        tp = 0
-        fp = len(prediction_gdf) if not prediction_gdf.empty else 0
-        fn = len(ground_truth_gdf) if not ground_truth_gdf.empty else 0
-        return tp, fp, fn
-
-    prediction_gdf["centroid"] = prediction_gdf["geometry"].centroid
-    ground_truth_gdf["centroid"] = ground_truth_gdf["geometry"].centroid
-
-    matched_preds, matched_gts = set(), set()
-
-    for gt_idx, gt_row in ground_truth_gdf.iterrows():
-        distances = prediction_gdf["centroid"].distance(gt_row["centroid"])
-        if distances.empty:
-            continue  # Skip if there are no predictions to match
-        nearest_idx = distances.idxmin()
-        if nearest_idx not in matched_preds:
-            matched_preds.add(nearest_idx)
-            matched_gts.add(gt_idx)
-
-    tp = len(matched_gts)
-    fp = len(prediction_gdf) - len(matched_preds)
-    fn = len(ground_truth_gdf) - len(matched_gts)
-    return tp, fp, fn
-
-
-def process_prediction_file(prediction_path: str, ground_truth_path: str) -> Tuple[float, float, int, int, int]:
+def process_prediction_file(
+    image_path: str, prediction_path: str, ground_truth_path: str
+) -> Tuple[float, float, int, int, int, float, float, float, float, float, float, float]:
     try:
         prediction_gdf = load_geodata_with_unique_ids(prediction_path)
         ground_truth_gdf = load_geodata_with_unique_ids(ground_truth_path)
@@ -109,105 +28,213 @@ def process_prediction_file(prediction_path: str, ground_truth_path: str) -> Tup
             ground_truth_gdf = ground_truth_gdf.to_crs(prediction_gdf.crs)
 
         pixel_iou, tree_iou = calculate_iou_metrics(prediction_gdf, ground_truth_gdf)
-        tp_centroid, fp_centroid, fn_centroid = calculate_centroid_association_metrics(prediction_gdf, ground_truth_gdf)
+        tp_centroid, fp_centroid, fn_centroid, centroid_error = calculate_centroid_errors(
+            prediction_gdf, ground_truth_gdf
+        )
 
-        '''
-        print(f"\nEvaluation Results  : {os.path.basename(prediction_path)}")
-        print("=" * 30)
-        print(f"Mean Pixel IoU        : {pixel_iou:.4f}")
-        print(f"Mean Tree IoU         : {tree_iou:.4f}")
-        print(f"Total True Positives  : {tp_centroid}")
-        print(f"Total False Positives : {fp_centroid}")
-        print(f"Total False Negatives : {fn_centroid}")
-        print("=" * 30)
-        '''
+        precision, recall, f1_score = calculate_precision_recall_f1(tp_centroid, fp_centroid, fn_centroid)
 
-        return pixel_iou, tree_iou, tp_centroid, fp_centroid, fn_centroid
+        latitude, longitude = extract_centroid_from_metadata(image_path)
+
+        prediction_count = len(prediction_gdf)
+        ground_truth_count = len(ground_truth_gdf)
+
+        return (
+            pixel_iou,
+            tree_iou,
+            tp_centroid,
+            fp_centroid,
+            fn_centroid,
+            precision,
+            recall,
+            f1_score,
+            centroid_error,
+            latitude,
+            longitude,
+            prediction_count,
+            ground_truth_count,
+        )
 
     except Exception as e:
         print(f"Error processing files: {prediction_path} or {ground_truth_path}. Error: {e}")
-        return 0, 0, 0, 0, 0
+        return 0, 0, 0, 0, 0, 0, 0, 0, 0, None, None, 0, 0
 
 
-def find_file_pairs(
-    data_folder: str,
-    predictions_folder: str = None,
-    image_dir_name: str = "Images",
-    geojsons_dir_name: str = "Geojsons",
-    predictions_dir_name: str = "Predictions",
-    file_ext: str = ".geojson",
-) -> List[Tuple[str, str, str]]:
-    pairs = []
-    pred_folder = predictions_folder if predictions_folder else os.path.join(data_folder, predictions_dir_name)
-    
-    for root, dirs, _ in os.walk(data_folder):
-        if {image_dir_name, geojsons_dir_name}.issubset(dirs):
-            image_files = {
-                os.path.splitext(f)[0]: os.path.join(root, image_dir_name, f)
-                for f in os.listdir(os.path.join(root, image_dir_name))
-                if f.endswith(".tiff") or f.endswith(".tif")  # Assuming images are in TIFF format
-            }
-            gt_files = {
-                os.path.splitext(f)[0]: os.path.join(root, geojsons_dir_name, f)
-                for f in os.listdir(os.path.join(root, geojsons_dir_name))
-                if f.endswith(file_ext)
-            }
-            pred_files = {
-                os.path.splitext(f)[0]: os.path.join(pred_folder, f)
-                for f in os.listdir(pred_folder)
-                if f.endswith(file_ext)
-            }
-            # Match files by name
-            common_files = image_files.keys() & gt_files.keys() & pred_files.keys()
-            for fname in common_files:
-                pairs.append((image_files[fname], gt_files[fname], pred_files[fname]))
-    return pairs
+def save_results_to_csv(results, output_file):
+    with open(output_file, mode='w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(
+            [
+                "File",
+                "Pixel IoU",
+                "Tree IoU",
+                "True Positives",
+                "False Positives",
+                "False Negatives",
+                "Precision",
+                "Recall",
+                "F1-Score",
+                "Centroid Error",
+                "Latitude",
+                "Longitude",
+                "Prediction Count",
+                "Ground Truth Count",
+            ]
+        )
+        for result in results:
+            writer.writerow(result)
+    print(f"Results saved to {output_file}")
 
 
-def calculate_mean_ious(data_folder: str, predictions_folder: str = None) -> Dict[str, float]:
+def compute_confidence_interval(data: List[float], confidence: float = 0.95) -> Tuple[float, float]:
+    if len(data) == 0:
+        return float('nan'), float('nan')
+    mean = np.mean(data)
+    std_dev = np.std(data, ddof=1)  # Use sample standard deviation
+    n = len(data)
+    z_score = norm.ppf((1 + confidence) / 2)
+    margin_of_error = z_score * (std_dev / np.sqrt(n))
+    return mean - margin_of_error, mean + margin_of_error
+
+
+def calculate_mean_ious(data_folder: str, predictions_folder: str = None, output_csv: str = None) -> Dict[str, float]:
     file_pairs = find_file_pairs(data_folder, predictions_folder)
-    
-    metrics = {"pixel_iou": [], "tree_iou": [], "tp": 0, "fp": 0, "fn": 0}
+
+    metrics = {
+        "pixel_iou": [],
+        "tree_iou": [],
+        "tp": 0,
+        "fp": 0,
+        "fn": 0,
+        "precision": [],
+        "recall": [],
+        "f1_score": [],
+        "centroid_err": [],
+    }
+    detailed_results = []
 
     with ThreadPoolExecutor() as executor:
         futures = {
-            executor.submit(process_prediction_file, pred_path, gt_path): (
+            executor.submit(process_prediction_file, image_path, pred_path, gt_path): (
                 pred_path,
                 gt_path,
             )
-            for _, pred_path, gt_path in file_pairs
+            for image_path, pred_path, gt_path in file_pairs
         }
         for future in tqdm(as_completed(futures), total=len(futures), desc="Processing File Pairs"):
             try:
-                pixel_iou, tree_iou, tp, fp, fn = future.result()
+                pixel_iou, tree_iou, tp, fp, fn, p, r, f1, cerr, lat, lon, pred_count, gt_count = future.result()
                 metrics["pixel_iou"].append(pixel_iou)
                 metrics["tree_iou"].append(tree_iou)
                 metrics["tp"] += tp
                 metrics["fp"] += fp
                 metrics["fn"] += fn
+                metrics["precision"].append(p)
+                metrics["recall"].append(r)
+                metrics["f1_score"].append(f1)
+                metrics["centroid_err"].append(cerr)
+
+                detailed_results.append(
+                    [
+                        os.path.basename(futures[future][0]),
+                        pixel_iou,
+                        tree_iou,
+                        tp,
+                        fp,
+                        fn,
+                        p,
+                        r,
+                        f1,
+                        cerr,
+                        lat,
+                        lon,
+                        pred_count,
+                        gt_count,
+                    ]
+                )
             except Exception as e:
                 print(f"Error in processing: {e}")
 
-    return {
-        "mean_pixel_iou": (np.mean(metrics["pixel_iou"]) if metrics["pixel_iou"] else 0.0),
-        "mean_tree_iou": np.mean(metrics["tree_iou"]) if metrics["tree_iou"] else 0.0,
+    if output_csv:
+        save_results_to_csv(detailed_results, output_csv)
+
+    results = {
+        "mean_pixel_iou": np.mean(metrics["pixel_iou"]),
+        "std_pixel_iou": np.std(metrics["pixel_iou"]),
+        "ci_pixel_iou": compute_confidence_interval(metrics["pixel_iou"]),
+        "mean_tree_iou": np.mean(metrics["tree_iou"]),
+        "std_tree_iou": np.std(metrics["tree_iou"]),
+        "ci_tree_iou": compute_confidence_interval(metrics["tree_iou"]),
+        "mean_precision": np.mean(metrics["precision"]),
+        "std_precision": np.std(metrics["precision"]),
+        "ci_precision": compute_confidence_interval(metrics["precision"]),
+        "mean_recall": np.mean(metrics["recall"]),
+        "std_recall": np.std(metrics["recall"]),
+        "ci_recall": compute_confidence_interval(metrics["recall"]),
+        "mean_f1_score": np.mean(metrics["f1_score"]),
+        "std_f1_score": np.std(metrics["f1_score"]),
+        "ci_f1_score": compute_confidence_interval(metrics["f1_score"]),
+        "mean_centroid_err": np.nanmean(metrics["centroid_err"]),
+        "std_centroid_err": np.nanstd(metrics["centroid_err"]),
+        "ci_centroid_err": compute_confidence_interval(metrics["centroid_err"]),
         "total_tp": metrics["tp"],
         "total_fp": metrics["fp"],
         "total_fn": metrics["fn"],
     }
+    return results
 
 
 if __name__ == "__main__":
     data_folder = "/Users/anisr/Documents/dead_trees/Finland"
-    predictions_folder = "/Users/anisr/Documents/dead_trees/Finland/Predictions_dual"
+    predictions_folders = [
+        "/Users/anisr/Documents/dead_trees/Finland/Predictions",
+        "/Users/anisr/Documents/dead_trees/Finland/Predictions_r",
+    ]
+    output_csvs = [
+        "./output/eval/eval_fin.csv",
+        "./output/eval/eval_fin_r.csv",
+    ]
 
-    results = calculate_mean_ious(data_folder, predictions_folder)
+    for predictions_folder, output_csv in zip(predictions_folders, output_csvs):
+        print(f"\nProcessing Predictions Folder: {predictions_folder}")
+        os.makedirs(os.path.dirname(output_csv), exist_ok=True)
 
-    print("\nEvaluation Results:")
-    print("=" * 30)
-    print(f"Mean Pixel IoU        : {results['mean_pixel_iou']:.4f}")
-    print(f"Mean Tree IoU         : {results['mean_tree_iou']:.4f}")
-    print(f"Total True Positives  : {results['total_tp']}")
-    print(f"Total False Positives : {results['total_fp']}")
-    print(f"Total False Negatives : {results['total_fn']}")
-    print("=" * 30)
+        results = calculate_mean_ious(data_folder, predictions_folder, output_csv)
+
+        print("\nEvaluation Results:")
+        print("=" * 50)
+        print(
+            f"Mean Pixel IoU        : {results['mean_pixel_iou']:.4f} "
+            f"(CI: {results['ci_pixel_iou'][0]:.4f} - {results['ci_pixel_iou'][1]:.4f}, "
+            f"Std: {results['std_pixel_iou']:.4f})"
+        )
+        print(
+            f"Mean Tree IoU         : {results['mean_tree_iou']:.4f} "
+            f"(CI: {results['ci_tree_iou'][0]:.4f} - {results['ci_tree_iou'][1]:.4f}, "
+            f"Std: {results['std_tree_iou']:.4f})"
+        )
+        print(
+            f"Precision             : {results['mean_precision']:.4f} "
+            f"(CI: {results['ci_precision'][0]:.4f} - {results['ci_precision'][1]:.4f}, "
+            f"Std: {results['std_precision']:.4f})"
+        )
+        print(
+            f"Recall                : {results['mean_recall']:.4f} "
+            f"(CI: {results['ci_recall'][0]:.4f} - {results['ci_recall'][1]:.4f}, "
+            f"Std: {results['std_recall']:.4f})"
+        )
+        print(
+            f"F1-Score              : {results['mean_f1_score']:.4f} "
+            f"(CI: {results['ci_f1_score'][0]:.4f} - {results['ci_f1_score'][1]:.4f}, "
+            f"Std: {results['std_f1_score']:.4f})"
+        )
+        print(
+            f"Mean Centroid Error   : {results['mean_centroid_err']:.4f} "
+            f"(CI: {results['ci_centroid_err'][0]:.4f} - {results['ci_centroid_err'][1]:.4f}, "
+            f"Std: {results['std_centroid_err']:.4f})"
+        )
+        print("=" * 50)
+        print(f"Total True Positives  : {results['total_tp']}")
+        print(f"Total False Positives : {results['total_fp']}")
+        print(f"Total False Negatives : {results['total_fn']}")
+        print("=" * 50)

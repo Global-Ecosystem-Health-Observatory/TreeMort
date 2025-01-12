@@ -1,4 +1,5 @@
 import os
+import torch
 import rasterio
 
 import numpy as np
@@ -13,7 +14,7 @@ from sklearn.cluster import SpectralClustering
 from shapely.geometry import Polygon
 from rasterio.features import rasterize
 from networkx.algorithms import community
-from networkx.algorithms.components import connected_components
+from sklearn.cluster import SpectralClustering
 
 from treemort.utils.logger import get_logger
 
@@ -182,12 +183,12 @@ def save_polygons_as_geojson(labels, transform, output_geojson_path):
 
 
 def perform_graph_partitioning(image, predicted_mask, min_distance=2, sigma=2):
-    G, labels = create_graph(predicted_mask, image)
+    G, labels = create_graph(predicted_mask.cpu().numpy(), image.cpu().numpy())
 
-    partitioned_labels = np.zeros_like(labels, dtype=np.int32)
+    partitioned_labels = torch.zeros_like(predicted_mask, dtype=torch.int32)
     component_id = 1  # Start component IDs from 1
 
-    for component in connected_components(G):
+    for component in nx.connected_components(G):
         subgraph = G.subgraph(component).copy()
         n_nodes = len(subgraph.nodes)
 
@@ -197,11 +198,10 @@ def perform_graph_partitioning(image, predicted_mask, min_distance=2, sigma=2):
             component_id += 1
             continue
 
-        n_clusters = min(len(subgraph.nodes), 48)  # Limit clusters to max 48 or number of nodes
         adj_matrix = nx.to_numpy_array(subgraph)
 
         try:
-            n_clusters = min(n_clusters, adj_matrix.shape[0] - 1)
+            n_clusters = min(len(subgraph.nodes), 48, adj_matrix.shape[0] - 1)  # Combine the constraints
             if n_clusters < 1:
                 logger.warning(f"Skipping clustering: n_clusters={n_clusters}, adj_matrix.shape={adj_matrix.shape}")
                 continue  # Skip clustering if not feasible
