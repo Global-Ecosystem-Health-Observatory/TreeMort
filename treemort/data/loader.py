@@ -16,12 +16,10 @@ def prepare_datasets(conf):
 
     image_patch_map = load_and_organize_data(hdf5_path)
 
-    # train_keys, val_keys, test_keys = stratify_images_by_patch_count(image_patch_map, conf.val_size, conf.test_size)
-
     train_keys, val_keys, test_keys = stratify_images_by_region(
         image_patch_map,
-        train_ratio=1.0 - (conf.val_size + conf.test_size),
-        val_ratio=conf.val_size
+        val_ratio=conf.val_size,
+        test_ratio=conf.test_size
     )
 
     random.seed(None) # makes loader non-deterministic

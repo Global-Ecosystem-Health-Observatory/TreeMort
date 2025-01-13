@@ -13,8 +13,8 @@ class BalancedSampler(Sampler):
 
         with h5py.File(self.hdf5_file, "r") as hf:
             for idx, key in enumerate(self.keys):
-                contains_dead_tree = hf[key].attrs.get("contains_dead_tree", 0)
-                if contains_dead_tree:
+                dead_tree_count = hf[key].attrs.get("dead_tree_count", 0)
+                if dead_tree_count:
                     self.dead_tree_indices.append(idx)
                 else:
                     self.no_dead_tree_indices.append(idx)
