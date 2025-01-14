@@ -50,12 +50,12 @@ def process_image(
         segment_map, centroid_map = prediction_maps
 
         if post_process:
-            logger.debug('A')
+            logger.info('A')
             refined_mask = refine_mask(segment_map, refine_model, device)
-            logger.debug('B')
+            logger.info('B')
             partitioned_labels = perform_graph_partitioning(image, refined_mask)
 
-            logger.debug('C')
+            logger.info('C')
             refined_labels = generate_watershed_labels(
                 segment_map.cpu().numpy(),
                 partitioned_labels,
@@ -65,7 +65,7 @@ def process_image(
                 dilation_radius=conf.dilation_radius,
                 centroid_threshold=conf.centroid_threshold,
             )
-            logger.debug('D')
+            logger.info('D')
             save_labels_as_geojson(
                 refined_labels,
                 transform,
@@ -102,10 +102,10 @@ def process_single_image(
         model = load_model(conf.model_config, conf.best_model, id2label, device)
         refine_model = load_refine_model(conf.refine_model, device)
 
-        logger.debug('Z0')
+        logger.info('Z0')
         geojson_path = os.path.join(output_dir, f"{os.path.splitext(os.path.basename(image_path))[0]}.geojson")
         os.makedirs(os.path.dirname(geojson_path), exist_ok=True)
-        logger.debug('Z1')
+        logger.info('Z1')
         process_image(model, refine_model, image_path, geojson_path, conf, post_process)
     except Exception as e:
         log_and_raise(logger, RuntimeError(f"Error processing image {os.path.basename(image_path)}: {e}"))
