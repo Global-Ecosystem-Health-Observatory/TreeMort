@@ -78,6 +78,7 @@ def process_image(
                 min_solidity=conf.min_solidity,
             )
         else:
+            logger.info('E')
             binary_mask = threshold_prediction_map(segment_map, conf.threshold)
             contours = extract_contours(binary_mask)
             geojson_data = contours_to_geojson(contours, transform, crs, os.path.splitext(os.path.basename(image_path))[0])
