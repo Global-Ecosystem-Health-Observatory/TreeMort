@@ -532,21 +532,31 @@ def contours_to_geojson(
     logger = get_logger()
 
     if not contours:
-        log_and_raise(logger, ValueError("Contours list is empty. Cannot create GeoJSON."))
+        logger.warning("Contours list is empty. Returning an empty GeoJSON.")
+        return {
+            "type": "FeatureCollection",
+            "name": name,
+            "crs": None if not crs else {
+                "type": "name",
+                "properties": {
+                    "name": f"EPSG:{crs.to_epsg()}" if crs.is_epsg_code else str(crs)
+                }
+            },
+            "features": []
+        }
 
     geojson_crs = None
     if crs:
         if crs.is_epsg_code:  # If CRS is an EPSG code
-            epsg_code = crs.to_epsg()
             geojson_crs = {
                 "type": "name",
                 "properties": {
-                    "name": f"EPSG:{epsg_code}"
+                    "name": f"EPSG:{crs.to_epsg()}"
                 }
             }
         else:
             logger.warning("CRS is not in EPSG format; setting CRS to null in GeoJSON.")
-    
+
     geojson = {
         "type": "FeatureCollection",
         "name": name,

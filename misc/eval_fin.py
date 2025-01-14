@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from misc.utils import (
     find_file_pairs,
+    filter_file_pairs,
     load_geodata_with_unique_ids,
     calculate_iou_metrics,
     calculate_centroid_errors,
@@ -16,6 +17,8 @@ from misc.utils import (
     extract_centroid_from_metadata,
 )
 
+
+test_keys = ['L2344D_2022_1_ITD.geojson','L3211A_2022_1_ITD.geojson','L3211A_2022_2_ITD.geojson','L4134A_2013_1.geojson','L4134E_2013_1.geojson','L5242G_2017_1_ITD.geojson','L5244D_2017_1_ITD.geojson','M3442B_2011_1.geojson','N4242H_2019_1_ITD.geojson','N5132F_2022_1_ITD.geojson','N5412A_tile_0_2023_ITD.geojson','N5412A_tile_1_2023_ITD.geojson','N5412A_tile_3_2023_ITD.geojson','N5412B_tile_0_2023_ITD.geojson','N5412B_tile_2_2023_ITD.geojson','N5412C_tile_2_2023_ITD.geojson','N5412D_tile_1_2023_ITD.geojson','N5412E_tile_1_2023_ITD.geojson','N5412F_tile_1_2023_ITD.geojson','N5442C_2014_1.geojson','P4131H_2019_1_ITD.geojson','P4131H_2019_2_ITD.geojson','P4341G_2022_1_ITD.geojson','P4343H_2022_1_ITD.geojson','P5322F_2_1.geojson','Q3334C_2019_1_ITD.geojson','Q3334C_2019_2_ITD.geojson','Q4211E_2019_1_ITD.geojson','Q4323B_2022_1_ITD.geojson','Q5422F_2022_1_ITD.geojson','Q5422H_2022_1_ITD.geojson','R4234D_2019_1_ITD.geojson','R4414E_tile_0_2023_ITD.geojson','R4414E_tile_3_2023_ITD.geojson','R4414F_tile_0_2023_ITD.geojson','R4414F_tile_1_2023_ITD.geojson','R4414F_tile_3_2023_ITD.geojson','R4423E_tile_1_2023_ITD.geojson','R4423E_tile_2_2023_ITD.geojson','S5112B_2022_1_ITD.geojson','T4123G_2022_1_ITD.geojson','U4324B_2022_1_ITD.geojson','U5224D_2022_1_ITD.geojson','U5242A_2022_1_ITD.geojson','V4311C_2022_1_ITD.geojson','V4314G_2022_1_ITD.geojson','V4314G_2022_2_ITD.geojson','V4314H_2022_1_ITD.geojson','V4323C_2022_1_ITD.geojson','V4331A_2022_1_ITD.geojson','V4331A_2022_2_ITD.geojson','V4341C_2022_1_ITD.geojson']
 
 def process_prediction_file(
     image_path: str, prediction_path: str, ground_truth_path: str
@@ -100,6 +103,8 @@ def compute_confidence_interval(data: List[float], confidence: float = 0.95) -> 
 def calculate_mean_ious(data_folder: str, predictions_folder: str = None, output_csv: str = None) -> Dict[str, float]:
     file_pairs = find_file_pairs(data_folder, predictions_folder)
 
+    filtered_file_pairs = filter_file_pairs(file_pairs, test_keys)
+
     metrics = {
         "pixel_iou": [],
         "tree_iou": [],
@@ -119,7 +124,7 @@ def calculate_mean_ious(data_folder: str, predictions_folder: str = None, output
                 pred_path,
                 gt_path,
             )
-            for image_path, pred_path, gt_path in file_pairs
+            for image_path, pred_path, gt_path in filtered_file_pairs
         }
         for future in tqdm(as_completed(futures), total=len(futures), desc="Processing File Pairs"):
             try:

@@ -76,7 +76,7 @@ def process_image(
             binary_mask = threshold_prediction_map(segment_map, conf.threshold)
             
             contours = extract_contours(binary_mask)
-
+            print(contours)
             geojson_data = contours_to_geojson(contours, transform, crs, os.path.splitext(os.path.basename(image_path))[0])
             save_geojson(geojson_data, geojson_path)
     
@@ -253,6 +253,16 @@ export TREEMORT_VENV_PATH="/projappl/project_2004205/rahmanan/venv"
 export TREEMORT_REPO_PATH="/users/rahmanan/TreeMort"
 export TREEMORT_DATA_PATH="/scratch/project_2008436/rahmanan/dead_trees"
 
-sbatch --export=ALL,CONFIG_PATH="$TREEMORT_REPO_PATH/configs/Finland_RGBNIR_25cm_inference.txt",DATA_PATH="$TREEMORT_DATA_PATH/Finland/RGBNIR/25cm",OUTPUT_PATH="$TREEMORT_DATA_PATH/Finland/Predictions" $TREEMORT_REPO_PATH/scripts/run_inference.sh
+sbatch \
+    --export=ALL,CONFIG_PATH="$TREEMORT_REPO_PATH/configs/Finland_RGBNIR_25cm_inference.txt",\
+    DATA_PATH="$TREEMORT_DATA_PATH/Finland/RGBNIR/25cm",\
+    OUTPUT_PATH="$TREEMORT_DATA_PATH/Finland/Predictions" \
+    $TREEMORT_REPO_PATH/scripts/run_inference.sh
+
+sbatch \
+    --export=ALL,CONFIG_PATH="$TREEMORT_REPO_PATH/configs/Finland_RGBNIR_25cm_inference.txt",\
+    DATA_PATH="$TREEMORT_DATA_PATH/Finland/RGBNIR/25cm",\
+    OUTPUT_PATH="$TREEMORT_DATA_PATH/Finland/Predictions_r" \
+    $TREEMORT_REPO_PATH/scripts/run_inference.sh --post-process
 
 '''
