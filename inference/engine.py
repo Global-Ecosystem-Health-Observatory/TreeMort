@@ -40,16 +40,13 @@ def process_image(
     logger.debug(f"Processing image: {os.path.basename(image_path)}")
 
     try:
-        logger.info('A0')
         device = next(model.parameters()).device
-        logger.info('A1')
+        
         image, transform, crs = load_and_preprocess_image(image_path, conf.nir_rgb_order)
         logger.debug(f"Loaded and preprocessed image: {os.path.basename(image_path)}")
-        logger.info('A2')
+        
         prediction_maps = sliding_window_inference(model, image, window_size=conf.window_size, stride=conf.stride, threshold=conf.threshold)
-        logger.info('A3')
         segment_map, centroid_map = prediction_maps
-        logger.info(post_process)
 
         if post_process:
             logger.info('A')
