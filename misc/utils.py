@@ -44,6 +44,13 @@ def find_file_pairs(
     return pairs
 
 
+def filter_file_pairs(file_pairs, keys):
+    return [
+        pair for pair in file_pairs 
+        if any(key in pair[1] for key in keys)
+    ]
+
+
 def validate_geometry(geom):
     try:
         if not geom.is_valid:
