@@ -49,12 +49,9 @@ def process_image(
         segment_map, centroid_map = prediction_maps
 
         if post_process:
-            logger.info('A')
             refined_mask = refine_mask(segment_map, refine_model, device)
-            logger.info('B')
             partitioned_labels = perform_graph_partitioning(image, refined_mask)
 
-            logger.info('C')
             refined_labels = generate_watershed_labels(
                 segment_map.cpu().numpy(),
                 partitioned_labels.cpu().numpy(),
@@ -64,7 +61,7 @@ def process_image(
                 dilation_radius=conf.dilation_radius,
                 centroid_threshold=conf.centroid_threshold,
             )
-            logger.info('D')
+
             save_labels_as_geojson(
                 refined_labels,
                 transform,
@@ -151,6 +148,8 @@ def run_inference(
 
     try:
         num_processes = min(num_processes, cpu_count())
+        logger.info(f"Number of Processes: {num_processes}")
+        logger.info(f"Number of CPUs: {cpu_count()}")
         with Pool(processes=num_processes, initializer=initialize_logger, initargs=(verbosity,)) as pool:
             pool.starmap(process_single_image, tasks)
         logger.info(f"Batch processing completed: {len(image_paths)} images processed.")
