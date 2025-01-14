@@ -63,8 +63,8 @@ if [ ! -d "$DATA_PATH" ]; then
 fi
 
 if [ ! -d "$OUTPUT_PATH" ]; then
-    echo "[ERROR] Output directory not found at $OUTPUT_PATH"
-    exit 1
+    echo "[WARNING] Output directory not found at $OUTPUT_PATH. Creating it now..."
+    mkdir -p "$OUTPUT_PATH" || { echo "[ERROR] Failed to create output directory at $OUTPUT_PATH"; exit 1; }
 fi
 
 POST_PROCESS=""
