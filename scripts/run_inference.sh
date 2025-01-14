@@ -4,10 +4,10 @@
 #SBATCH --output=output/stdout/%A_%a.out
 #SBATCH --error=output/stderr/%A_%a.err
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=4
+#SBATCH --cpus-per-task=2
 #SBATCH --time=05:00:00
 #SBATCH --partition=gpu
-#SBATCH --mem-per-cpu=12000
+#SBATCH --mem-per-cpu=24000
 #SBATCH --gres=gpu:v100:1
 
 # Usage:

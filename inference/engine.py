@@ -49,9 +49,12 @@ def process_image(
         segment_map, centroid_map = prediction_maps
 
         if post_process:
+            print('A')
             refined_mask = refine_mask(segment_map, refine_model, device)
+            print('B')
             partitioned_labels = perform_graph_partitioning(image, refined_mask)
 
+            print('C')
             refined_labels = generate_watershed_labels(
                 segment_map.cpu().numpy(),
                 partitioned_labels,
@@ -61,7 +64,7 @@ def process_image(
                 dilation_radius=conf.dilation_radius,
                 centroid_threshold=conf.centroid_threshold,
             )
-
+            print('D')
             save_labels_as_geojson(
                 refined_labels,
                 transform,
