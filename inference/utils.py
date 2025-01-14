@@ -489,27 +489,21 @@ def generate_watershed_labels(
 def extract_contours(binary_mask: np.ndarray) -> List[np.ndarray]:
     logger = get_logger()
 
-    # Convert PyTorch tensor to NumPy array if necessary
     if isinstance(binary_mask, torch.Tensor):
         binary_mask = binary_mask.cpu().numpy()
 
-    # Ensure binary_mask is 2D
     if binary_mask.ndim == 3:  # (C, H, W) -> Take the first channel
         binary_mask = binary_mask[0]
     elif binary_mask.ndim > 3:  # (N, C, H, W) -> Take the first image and channel
         binary_mask = binary_mask[0, 0]
 
-    # Ensure binary_mask is binary
     binary_mask = (binary_mask > 0).astype(np.uint8)
 
-    # Check if the binary_mask is valid
     if binary_mask.ndim != 2 or not np.issubdtype(binary_mask.dtype, np.integer):
         log_and_raise(logger, ValueError("binary_mask must be a 2D binary integer array."))
 
-    # Extract contours
     contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-    # Reshape contours to ensure (N, 2) format
     reshaped_contours = [contour.reshape(-1, 2) for contour in contours]
     logger.info(f"Extracted {len(reshaped_contours)} contours from the binary mask.")
     return reshaped_contours
