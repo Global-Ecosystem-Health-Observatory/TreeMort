@@ -40,22 +40,22 @@ def process_image(
     logger.debug(f"Processing image: {os.path.basename(image_path)}")
 
     try:
-        print('Z2')
+        logger.debug('Z2')
         device = next(model.parameters()).device
-        print('A1')
+        logger.debug('A1')
         image, transform, crs = load_and_preprocess_image(image_path, conf.nir_rgb_order)
         logger.debug(f"Loaded and preprocessed image: {os.path.basename(image_path)}")
-        print('A2')
+        logger.debug('A2')
         prediction_maps = sliding_window_inference(model, image, window_size=conf.window_size, stride=conf.stride, threshold=conf.threshold)
         segment_map, centroid_map = prediction_maps
 
         if post_process:
-            print('A')
+            logger.debug('A')
             refined_mask = refine_mask(segment_map, refine_model, device)
-            print('B')
+            logger.debug('B')
             partitioned_labels = perform_graph_partitioning(image, refined_mask)
 
-            print('C')
+            logger.debug('C')
             refined_labels = generate_watershed_labels(
                 segment_map.cpu().numpy(),
                 partitioned_labels,
@@ -65,7 +65,7 @@ def process_image(
                 dilation_radius=conf.dilation_radius,
                 centroid_threshold=conf.centroid_threshold,
             )
-            print('D')
+            logger.debug('D')
             save_labels_as_geojson(
                 refined_labels,
                 transform,
@@ -104,7 +104,7 @@ def process_single_image(
 
         geojson_path = os.path.join(output_dir, f"{os.path.splitext(os.path.basename(image_path))[0]}.geojson")
         os.makedirs(os.path.dirname(geojson_path), exist_ok=True)
-        print('Z1')
+        logger.debug('Z1')
         process_image(model, refine_model, image_path, geojson_path, conf, post_process)
     except Exception as e:
         log_and_raise(logger, RuntimeError(f"Error processing image {os.path.basename(image_path)}: {e}"))
