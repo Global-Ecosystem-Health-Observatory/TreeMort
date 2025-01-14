@@ -40,12 +40,12 @@ def process_image(
     logger.debug(f"Processing image: {os.path.basename(image_path)}")
 
     try:
-        logger.debug('Z2')
+        logger.info('A0')
         device = next(model.parameters()).device
-        logger.debug('A1')
+        logger.info('A1')
         image, transform, crs = load_and_preprocess_image(image_path, conf.nir_rgb_order)
         logger.debug(f"Loaded and preprocessed image: {os.path.basename(image_path)}")
-        logger.debug('A2')
+        logger.info('A2')
         prediction_maps = sliding_window_inference(model, image, window_size=conf.window_size, stride=conf.stride, threshold=conf.threshold)
         segment_map, centroid_map = prediction_maps
 
@@ -102,10 +102,9 @@ def process_single_image(
         model = load_model(conf.model_config, conf.best_model, id2label, device)
         refine_model = load_refine_model(conf.refine_model, device)
 
-        logger.info('Z0')
         geojson_path = os.path.join(output_dir, f"{os.path.splitext(os.path.basename(image_path))[0]}.geojson")
         os.makedirs(os.path.dirname(geojson_path), exist_ok=True)
-        logger.info('Z1')
+
         process_image(model, refine_model, image_path, geojson_path, conf, post_process)
     except Exception as e:
         log_and_raise(logger, RuntimeError(f"Error processing image {os.path.basename(image_path)}: {e}"))
