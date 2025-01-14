@@ -76,7 +76,7 @@ def process_image(
             binary_mask = threshold_prediction_map(segment_map, conf.threshold)
             
             contours = extract_contours(binary_mask)
-            print(contours)
+            
             geojson_data = contours_to_geojson(contours, transform, crs, os.path.splitext(os.path.basename(image_path))[0])
             save_geojson(geojson_data, geojson_path)
     
