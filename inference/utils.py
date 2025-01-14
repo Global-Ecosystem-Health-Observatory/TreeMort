@@ -143,20 +143,18 @@ def sliding_window_inference(
     threshold: float = 0.5
 ) -> torch.Tensor:
     _validate_inference_params(window_size, stride, threshold)
-
-    logger = get_logger()
-    logger.info('S1')
+    
     device = next(model.parameters()).device
     padded_image = pad_image(image, window_size)
-    logger.info('S2')
+    
     prediction_map, count_map = _initialize_maps(padded_image.shape[1:], device)
     patches, coords = _generate_patches(padded_image, window_size, stride)
-    logger.info('S3')
+    
     for batch in _batch_patches(patches, coords, batch_size):
         prediction_map, count_map = process_batch(
             batch["patches"], batch["coords"], prediction_map, count_map, model, threshold, device
         )
-    logger.info('S')
+    
     return _finalize_prediction(prediction_map, count_map, image.shape, threshold)
 
 
@@ -200,29 +198,16 @@ def _finalize_prediction(
     original_shape: Tuple[int, int, int],
     threshold: float
 ) -> torch.Tensor:
-    
-    logger = get_logger()
-
-    logger.info('F1')
-
     no_contribution_mask = (count_map == 0)
     count_map[no_contribution_mask] = 1
-
-    logger.info('F2')
 
     final_prediction = prediction_map / count_map
     final_prediction[:, no_contribution_mask] = 0
     final_prediction = torch.clamp(final_prediction, 0, 1)
 
-    logger.info('F3')
-
     _, original_h, original_w = original_shape
-    output = final_prediction[:, :original_h, :original_w]
+    return final_prediction[:, :original_h, :original_w]
     
-    logger.info('F4')
-
-    return output
-
 
 def process_batch(
     patches: list[torch.Tensor],
@@ -504,10 +489,14 @@ def generate_watershed_labels(
 def extract_contours(binary_mask: np.ndarray) -> List[np.ndarray]:
     logger = get_logger()
 
+    if isinstance(binary_mask, torch.Tensor):
+        binary_mask = binary_mask.cpu().numpy()
+
     if binary_mask.ndim != 2 or not np.issubdtype(binary_mask.dtype, np.integer):
         log_and_raise(logger, ValueError("binary_mask must be a 2D binary integer array."))
 
     binary_mask = (binary_mask > 0).astype(np.uint8)
+
     contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     logger.info(f"Extracted {len(contours)} contours from the binary mask.")
     return contours
