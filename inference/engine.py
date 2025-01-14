@@ -41,10 +41,10 @@ def process_image(
 
     try:
         device = next(model.parameters()).device
-
+        print('A1')
         image, transform, crs = load_and_preprocess_image(image_path, conf.nir_rgb_order)
         logger.debug(f"Loaded and preprocessed image: {os.path.basename(image_path)}")
-
+        print('A2')
         prediction_maps = sliding_window_inference(model, image, window_size=conf.window_size, stride=conf.stride, threshold=conf.threshold)
         segment_map, centroid_map = prediction_maps
 
