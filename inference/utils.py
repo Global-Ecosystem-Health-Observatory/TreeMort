@@ -156,7 +156,7 @@ def sliding_window_inference(
         prediction_map, count_map = process_batch(
             batch["patches"], batch["coords"], prediction_map, count_map, model, threshold, device
         )
-    logger.info('S4')
+    logger.info('S')
     return _finalize_prediction(prediction_map, count_map, image.shape, threshold)
 
 
@@ -357,7 +357,7 @@ def combine_patches(
 
     logger.debug(f"Combining {len(patches)} patches into an image of shape {image_shape}.")
     combined_mask = combined_mask / torch.clamp(count_map, min=1.0)
-    return (combined_mask > threshold).to(dtype=torch.uint8)
+    return (combined_mask > threshold).to(dtype=torch.float32)
 
 
 def threshold_prediction_map(prediction_map: torch.Tensor, threshold: float = 0.5) -> torch.Tensor:
@@ -370,7 +370,7 @@ def threshold_prediction_map(prediction_map: torch.Tensor, threshold: float = 0.
     if not isinstance(threshold, (float, int)):
         log_and_raise(logger, ValueError("threshold must be a float or an int"))
 
-    binary_mask = (prediction_map >= threshold).to(dtype=torch.uint8)
+    binary_mask = (prediction_map >= threshold).to(dtype=torch.float32)
     return binary_mask
 
 
@@ -397,7 +397,7 @@ def refine_mask(
             with torch.no_grad():
                 pred_tensor = torch.sigmoid(refine_model(input_tensor)[0])
 
-            pred_mask = (pred_tensor.squeeze() > 0.5).to(dtype=torch.uint8)
+            pred_mask = (pred_tensor.squeeze() > 0.5).to(dtype=torch.float32)
 
             processed_patches.append(((i, j), pred_mask))
 
