@@ -40,6 +40,7 @@ def process_image(
     logger.debug(f"Processing image: {os.path.basename(image_path)}")
 
     try:
+        print('Z2')
         device = next(model.parameters()).device
         print('A1')
         image, transform, crs = load_and_preprocess_image(image_path, conf.nir_rgb_order)
@@ -103,7 +104,7 @@ def process_single_image(
 
         geojson_path = os.path.join(output_dir, f"{os.path.splitext(os.path.basename(image_path))[0]}.geojson")
         os.makedirs(os.path.dirname(geojson_path), exist_ok=True)
-
+        print('Z1')
         process_image(model, refine_model, image_path, geojson_path, conf, post_process)
     except Exception as e:
         log_and_raise(logger, RuntimeError(f"Error processing image {os.path.basename(image_path)}: {e}"))
