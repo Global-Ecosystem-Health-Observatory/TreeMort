@@ -49,7 +49,7 @@ def process_image(
         prediction_maps = sliding_window_inference(model, image, window_size=conf.window_size, stride=conf.stride, threshold=conf.threshold)
         logger.info('A3')
         segment_map, centroid_map = prediction_maps
-        logger.info('A4')
+        logger.info(post_process)
 
         if post_process:
             logger.info('A')
