@@ -88,7 +88,7 @@ echo "       Inference engine: $ENGINE_PATH"
 echo "       CPUs per task: $SLURM_CPUS_PER_TASK"
 echo "       Memory per CPU: $SLURM_MEM_PER_CPU MB"
 
-srun python3 "$ENGINE_PATH" "$DATA_PATH" --config "$CONFIG_PATH" --outdir "$OUTPUT_PATH" $POST_PROCES
+srun python3 "$ENGINE_PATH" "$DATA_PATH" --config "$CONFIG_PATH" --outdir "$OUTPUT_PATH" $POST_PROCESS
 
 EXIT_STATUS=$?
 if [ $EXIT_STATUS -ne 0 ]; then

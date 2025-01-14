@@ -78,10 +78,13 @@ def process_image(
                 min_solidity=conf.min_solidity,
             )
         else:
-            logger.info('E')
+            logger.info('E1')
             binary_mask = threshold_prediction_map(segment_map, conf.threshold)
+            logger.info('E2')
             contours = extract_contours(binary_mask)
+            logger.info('E3')
             geojson_data = contours_to_geojson(contours, transform, crs, os.path.splitext(os.path.basename(image_path))[0])
+            logger.info('E4')
             save_geojson(geojson_data, geojson_path)
     
         logger.info(f"Successfully processed and saved GeoJSON for: {os.path.basename(image_path)}")
