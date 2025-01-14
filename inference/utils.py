@@ -508,8 +508,11 @@ def extract_contours(binary_mask: np.ndarray) -> List[np.ndarray]:
 
     # Extract contours
     contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    logger.info(f"Extracted {len(contours)} contours from the binary mask.")
-    return contours
+
+    # Reshape contours to ensure (N, 2) format
+    reshaped_contours = [contour.reshape(-1, 2) for contour in contours]
+    logger.info(f"Extracted {len(reshaped_contours)} contours from the binary mask.")
+    return reshaped_contours
 
 
 def apply_transform(contour: np.ndarray, transform: Affine) -> np.ndarray:
