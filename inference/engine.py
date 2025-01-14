@@ -102,6 +102,7 @@ def process_single_image(
         model = load_model(conf.model_config, conf.best_model, id2label, device)
         refine_model = load_refine_model(conf.refine_model, device)
 
+        logger.debug('Z0')
         geojson_path = os.path.join(output_dir, f"{os.path.splitext(os.path.basename(image_path))[0]}.geojson")
         os.makedirs(os.path.dirname(geojson_path), exist_ok=True)
         logger.debug('Z1')
