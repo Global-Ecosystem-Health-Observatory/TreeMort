@@ -200,15 +200,28 @@ def _finalize_prediction(
     original_shape: Tuple[int, int, int],
     threshold: float
 ) -> torch.Tensor:
+    
+    logger = get_logger()
+
+    logger.info('F1')
+
     no_contribution_mask = (count_map == 0)
     count_map[no_contribution_mask] = 1
+
+    logger.info('F2')
 
     final_prediction = prediction_map / count_map
     final_prediction[:, no_contribution_mask] = 0
     final_prediction = torch.clamp(final_prediction, 0, 1)
 
+    logger.info('F3')
+
     _, original_h, original_w = original_shape
-    return final_prediction[:, :original_h, :original_w]
+    output = final_prediction[:, :original_h, :original_w]
+    
+    logger.info('F4')
+
+    return output
 
 
 def process_batch(
