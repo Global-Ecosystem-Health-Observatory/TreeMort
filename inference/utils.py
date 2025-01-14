@@ -603,7 +603,7 @@ def save_geojson(geojson_data: dict, output_path: str) -> None:
             geojson.dump(geojson_data, f, indent=2, ensure_ascii=False)
         logger.info(f"GeoJSON successfully saved to {output_path}.")
     except OSError as e:
-        log_and_raise(logger, RuntimeError(f"Error saving GeoJSON to {output_path}: {e}"))
+        log_and_raise(logger, RuntimeError(f"Error saving GeoJSON to {os.path.basename(output_path)}: {e}"))
 
 
 def save_labels_as_geojson(
@@ -645,7 +645,18 @@ def save_labels_as_geojson(
                             geometries.append({"geometry": geometry, "properties": {"label": int(label_value)}})
 
     if not geometries:
-        logger.info("No valid geometries found. GeoJSON will not be created.")
+        logger.info("No valid geometries found. Creating an empty GeoJSON.")
+        empty_geojson = {
+            "type": "FeatureCollection",
+            "features": []
+        }
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        try:
+            with open(output_path, "w") as f:
+                geojson.dump(empty_geojson, f, indent=2, ensure_ascii=False)
+            logger.info(f"Empty GeoJSON successfully created at {os.path.basename(output_path)}.")
+        except Exception as e:
+            log_and_raise(logger, RuntimeError(f"Error saving empty GeoJSON to {os.path.basename(output_path)}: {e}"))
         return
 
     gdf = gpd.GeoDataFrame.from_features(geometries, crs=crs)
