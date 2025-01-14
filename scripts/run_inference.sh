@@ -67,6 +67,19 @@ if [ ! -d "$OUTPUT_PATH" ]; then
     exit 1
 fi
 
+POST_PROCESS=""
+
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --post-process) POST_PROCESS="--post-process"; shift ;;
+        *) echo "[ERROR] Unknown parameter passed: $1"; exit 1 ;;
+    esac
+done
+
+if [ -n "$POST_PROCESS" ]; then
+    echo "[INFO] Post-processing is enabled"
+fi
+
 echo "[INFO] Starting inference with the following settings:"
 echo "       Data path: $DATA_PATH"
 echo "       Output path: $OUTPUT_PATH"
@@ -75,7 +88,7 @@ echo "       Inference engine: $ENGINE_PATH"
 echo "       CPUs per task: $SLURM_CPUS_PER_TASK"
 echo "       Memory per CPU: $SLURM_MEM_PER_CPU MB"
 
-srun python3 "$ENGINE_PATH" "$DATA_PATH" --config "$CONFIG_PATH" --outdir "$OUTPUT_PATH" --post-process
+srun python3 "$ENGINE_PATH" "$DATA_PATH" --config "$CONFIG_PATH" --outdir "$OUTPUT_PATH" $POST_PROCES
 
 EXIT_STATUS=$?
 if [ $EXIT_STATUS -ne 0 ]; then
