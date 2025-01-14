@@ -6,6 +6,10 @@ from treemort.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
+def expand_path(path):
+    return os.path.expandvars(path)
+
+
 def setup(config_file_path=None):
     if config_file_path:
         if not os.path.exists(config_file_path):
@@ -48,6 +52,8 @@ def setup(config_file_path=None):
     
     conf, _ = parser.parse_known_args()
     
+    conf.data_folder = expand_path(conf.data_folder)
+
     logger.info("Configuration successfully loaded.")
     
     return conf

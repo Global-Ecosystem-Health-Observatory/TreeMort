@@ -25,7 +25,6 @@ from treemort.utils.logger import configure_logger, get_logger
 from misc.refine import UNetWithDeepSupervision
 
 
-
 def initialize_logger(verbosity: str) -> None:
     configure_logger(verbosity=verbosity)
 
@@ -33,6 +32,10 @@ def initialize_logger(verbosity: str) -> None:
 def log_and_raise(logger, exception: Exception):
     logger.error(str(exception))
     raise exception
+
+
+def expand_path(path):
+    return os.path.expandvars(path)
 
 
 def validate_path(logger, path: str, is_dir: bool = False) -> bool:
@@ -63,7 +66,7 @@ def load_model(
     except Exception as e:
         log_and_raise(logger, RuntimeError(f"Failed to load model weights: {e}"))
 
-    logger.info(f"Model loaded successfully: {os.path.join(os.path.basename(os.path.dirname(best_model)), os.path.basename(best_model))} (Config: {os.path.basename(config_path)})")
+    logger.debug(f"Model loaded successfully: {os.path.join(os.path.basename(os.path.dirname(best_model)), os.path.basename(best_model))} (Config: {os.path.basename(config_path)})")
     return model
 
 
@@ -83,7 +86,7 @@ def load_refine_model(
     except Exception as e:
         log_and_raise(logger, RuntimeError(f"Failed to load refine model weights: {e}"))
 
-    logger.info(f"Refine model loaded successfully: {os.path.join(os.path.basename(os.path.dirname(model_path)), os.path.basename(model_path))}")
+    logger.debug(f"Refine model loaded successfully: {os.path.join(os.path.basename(os.path.dirname(model_path)), os.path.basename(model_path))}")
     return refine_model
 
 
