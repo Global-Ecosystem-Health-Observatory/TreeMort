@@ -147,7 +147,9 @@ def run_inference(
     ]
 
     try:
-        num_processes = min(num_processes, cpu_count())
+        slurm_cpus = os.getenv("SLURM_CPUS_PER_TASK")
+        num_processes = int(slurm_cpus) if slurm_cpus else min(num_processes, cpu_count())
+
         logger.info(f"Number of Processes: {num_processes}")
         logger.info(f"Number of CPUs: {cpu_count()}")
         with Pool(processes=num_processes, initializer=initialize_logger, initargs=(verbosity,)) as pool:
