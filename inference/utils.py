@@ -144,17 +144,19 @@ def sliding_window_inference(
 ) -> torch.Tensor:
     _validate_inference_params(window_size, stride, threshold)
 
+    logger = get_logger()
+    logger.info('S1')
     device = next(model.parameters()).device
     padded_image = pad_image(image, window_size)
-
+    logger.info('S2')
     prediction_map, count_map = _initialize_maps(padded_image.shape[1:], device)
     patches, coords = _generate_patches(padded_image, window_size, stride)
-
+    logger.info('S3')
     for batch in _batch_patches(patches, coords, batch_size):
         prediction_map, count_map = process_batch(
             batch["patches"], batch["coords"], prediction_map, count_map, model, threshold, device
         )
-
+    logger.info('S4')
     return _finalize_prediction(prediction_map, count_map, image.shape, threshold)
 
 
