@@ -23,6 +23,7 @@ from inference.utils import (
     save_geojson,
     log_and_raise,
     validate_path,
+    expand_path,
 )
 from inference.graph_partition import perform_graph_partitioning
 
@@ -96,7 +97,7 @@ def process_single_image(
     try:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         logger.info(f"Processing image: {os.path.basename(image_path)}")
-    
+
         model = load_model(conf.model_config, conf.best_model, id2label, device)
         refine_model = load_refine_model(conf.refine_model, device)
 
@@ -150,8 +151,6 @@ def run_inference(
         slurm_cpus = os.getenv("SLURM_CPUS_PER_TASK")
         num_processes = int(slurm_cpus) if slurm_cpus else min(num_processes, cpu_count())
 
-        logger.info(f"Number of Processes: {num_processes}")
-        logger.info(f"Number of CPUs: {cpu_count()}")
         with Pool(processes=num_processes, initializer=initialize_logger, initargs=(verbosity,)) as pool:
             pool.starmap(process_single_image, tasks)
         logger.info(f"Batch processing completed: {len(image_paths)} images processed.")
@@ -181,6 +180,9 @@ def parse_config(config_file_path: str) -> argparse.Namespace:
     parser.add("--nir-rgb-order",      type=int, nargs='+', default=[3, 0, 1, 2], help="Order of NIR, Red, Green, and Blue channels in the input imagery.")
 
     conf, _ = parser.parse_known_args()
+
+    conf.model_config = expand_path(conf.model_config)
+
     return conf
 
 
@@ -216,9 +218,9 @@ python -m inference.engine \
 2) save geojsons to an output folder
 
 python -m inference.engine \
-    /Users/anisr/Documents/dead_trees/Finland/RGBNIR/25cm/2011/Images/M3442B_2011_1.tiff \
-    --config ./configs/Finland_RGBNIR_25cm_inference.txt \
-    --outdir /Users/anisr/Documents/dead_trees/Finland/RGBNIR/25cm/2011/Predictions_r \
+    ${TREEMORT_DATA_PATH}/Finland/RGBNIR/25cm/2011/Images/M3442B_2011_1.tiff \
+    --config ${TREEMORT_REPO_PATH}/configs/Finland_RGBNIR_25cm_inference.txt \
+    --outdir ${TREEMORT_DATA_PATH}/Finland/Predictions_r \
     --post-process --verbosity debug
 
 - For entire folder
@@ -232,9 +234,9 @@ python -m inference.engine \
 2) save geojsons to output folder
 
 python -m inference.engine \
-    /Users/anisr/Documents/dead_trees/Finland/RGBNIR/25cm \
-    --config ./configs/Finland_RGBNIR_25cm_inference.txt \
-    --outdir /Users/anisr/Documents/dead_trees/Finland/Predictions_r \
+    ${TREEMORT_DATA_PATH}/Finland/RGBNIR/25cm \
+    --config ${TREEMORT_REPO_PATH}/configs/Finland_RGBNIR_25cm_inference.txt \
+    --outdir ${TREEMORT_DATA_PATH}/Finland/Predictions_r \
     --post-process
 
 - Run viewer api service
