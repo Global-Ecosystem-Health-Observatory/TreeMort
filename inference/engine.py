@@ -56,7 +56,7 @@ def process_image(
         if post_process:
             refined_mask = refine_mask(segment_map, refine_model, device)
 
-            refined_mask_np = refined_mask.cpu().numpy().astype(np.bool)
+            refined_mask_np = refined_mask.cpu().numpy().astype(bool)
             image_np = image.cpu().numpy()
             centroid_map_np = centroid_map.cpu().numpy()
 
