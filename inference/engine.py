@@ -58,6 +58,7 @@ def process_image(
 
             refined_mask_np = refined_mask.cpu().numpy().astype(bool)
             image_np = image.cpu().numpy()
+            # segment_map_np = segment_map.cpu().numpy()
             centroid_map_np = centroid_map.cpu().numpy()
 
             partitioned_labels = decompose_elliptical_regions(
@@ -71,21 +72,19 @@ def process_image(
 
             refined_partitioned_labels = refine_elliptical_regions_with_graph(partitioned_labels, image_np)
 
+            # partitioned_labels = perform_graph_partitioning(image_np, refined_mask_np)
+
+            # refined_labels = generate_watershed_labels(
+            #     segment_map_np,
+            #     refined_partitioned_labels,
+            #     centroid_map=centroid_map_np,
+            #     min_distance=conf.min_distance,
+            #     blur_sigma=conf.blur_sigma,
+            #     dilation_radius=conf.dilation_radius,
+            #     centroid_threshold=conf.centroid_threshold,
+            # )
+
             refined_labels = refine_segments(refined_partitioned_labels, image_np)
-
-            '''
-            partitioned_labels = perform_graph_partitioning(image, refined_mask)
-
-            refined_labels = generate_watershed_labels(
-                segment_map.cpu().numpy(),
-                partitioned_labels.cpu().numpy(),
-                centroid_map=centroid_map.cpu().numpy(),
-                min_distance=conf.min_distance,
-                blur_sigma=conf.blur_sigma,
-                dilation_radius=conf.dilation_radius,
-                centroid_threshold=conf.centroid_threshold,
-            )
-            '''
 
             save_labels_as_geojson(
                 refined_labels,
@@ -168,7 +167,7 @@ def run_inference(
     tasks = [
         (image_path, conf, output_dir, id2label, post_process)
         for image_path in image_paths
-        if not os.path.exists(os.path.join(output_dir, f"{os.path.splitext(os.path.basename(image_path))[0]}.geojson"))
+        #if not os.path.exists(os.path.join(output_dir, f"{os.path.splitext(os.path.basename(image_path))[0]}.geojson"))
     ]
 
     try:
