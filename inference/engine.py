@@ -3,6 +3,8 @@ import torch
 import argparse
 import configargparse
 
+import numpy as np
+
 from pathlib import Path
 from multiprocessing import Pool, cpu_count
 
@@ -24,8 +26,10 @@ from inference.utils import (
     log_and_raise,
     validate_path,
     expand_path,
+    decompose_elliptical_regions,
+    refine_segments,
 )
-from inference.graph_partition import perform_graph_partitioning
+from inference.graph_partition import perform_graph_partitioning, refine_elliptical_regions_with_graph
 
 
 def process_image(
@@ -51,6 +55,25 @@ def process_image(
 
         if post_process:
             refined_mask = refine_mask(segment_map, refine_model, device)
+
+            refined_mask_np = refined_mask.cpu().numpy().astype(np.bool)
+            image_np = image.cpu().numpy()
+            centroid_map_np = centroid_map.cpu().numpy()
+
+            partitioned_labels = decompose_elliptical_regions(
+                refined_mask_np, 
+                intensity_image=image_np, 
+                centroid_map=centroid_map_np, 
+                min_distance=conf.min_distance, 
+                sigma=conf.blur_sigma,
+                peak_threshold=conf.centroid_threshold
+            )
+
+            refined_partitioned_labels = refine_elliptical_regions_with_graph(partitioned_labels, image_np)
+
+            refined_labels = refine_segments(refined_partitioned_labels, image_np)
+
+            '''
             partitioned_labels = perform_graph_partitioning(image, refined_mask)
 
             refined_labels = generate_watershed_labels(
@@ -62,6 +85,7 @@ def process_image(
                 dilation_radius=conf.dilation_radius,
                 centroid_threshold=conf.centroid_threshold,
             )
+            '''
 
             save_labels_as_geojson(
                 refined_labels,
@@ -76,7 +100,7 @@ def process_image(
             binary_mask = threshold_prediction_map(segment_map, conf.threshold)
             
             contours = extract_contours(binary_mask)
-            
+
             geojson_data = contours_to_geojson(contours, transform, crs, os.path.splitext(os.path.basename(image_path))[0])
             save_geojson(geojson_data, geojson_path)
     
@@ -264,5 +288,8 @@ sbatch \
     DATA_PATH="$TREEMORT_DATA_PATH/Finland/RGBNIR/25cm",\
     OUTPUT_PATH="$TREEMORT_DATA_PATH/Finland/Predictions_r" \
     $TREEMORT_REPO_PATH/scripts/run_inference.sh --post-process
+
+scp -O -r rahmanan@puhti.csc.fi:/scratch/project_2008436/rahmanan/dead_trees/Finland/Predictions ~/Documents/dead_trees/Finland
+scp -O -r rahmanan@puhti.csc.fi:/scratch/project_2008436/rahmanan/dead_trees/Finland/Predictions_r ~/Documents/dead_trees/Finland
 
 '''
