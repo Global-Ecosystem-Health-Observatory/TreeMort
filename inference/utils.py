@@ -753,7 +753,7 @@ def decompose_elliptical_regions(binary_mask, intensity_image, centroid_map, min
     smoothed_intensity = gaussian(intensity_image, sigma=sigma)
     smoothed_centroid_map = gaussian(centroid_map, sigma=sigma)
 
-    thresholded_centroid_map = np.where(smoothed_centroid_map >= peak_threshold, smoothed_centroid_map, 0).astype(np.bool)
+    thresholded_centroid_map = np.where(smoothed_centroid_map >= peak_threshold, smoothed_centroid_map, 0).astype(bool)
 
     combined = smoothed_distance * smoothed_intensity
 
