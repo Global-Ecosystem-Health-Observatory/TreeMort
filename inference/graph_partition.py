@@ -217,6 +217,56 @@ def perform_graph_partitioning(image, predicted_mask, min_distance=2, sigma=2):
     return partitioned_labels
 
 
+def refine_elliptical_regions_with_graph(labels, intensity_image):
+    intensity_image = intensity_image.mean(axis=0) if intensity_image.ndim == 3 else intensity_image
+
+    if labels.shape != intensity_image.shape:
+        raise ValueError(f"Shape mismatch: labels {labels.shape} and intensity_image {intensity_image.shape}")
+
+    regions = measure.regionprops(labels, intensity_image=intensity_image)
+    G = nx.Graph()
+
+    for region in regions:
+        G.add_node(region.label, centroid=(0, 0), mean_intensity=0)  # Default attributes
+        if region.area >= 10:
+            G.nodes[region.label]['centroid'] = region.centroid
+            G.nodes[region.label]['mean_intensity'] = region.mean_intensity
+
+    # Add edges within the graph based on proximity and intensity difference
+    for region1 in regions:
+        for region2 in regions:
+            if region1.label != region2.label:
+                dist = np.linalg.norm(np.array(region1.centroid) - np.array(region2.centroid))
+                intensity_diff = abs(region1.mean_intensity - region2.mean_intensity)
+                if dist < 15 and intensity_diff < 0.2:  # Threshold for proximity and intensity
+                    G.add_edge(region1.label, region2.label, weight=1 / (dist + 1e-5))
+
+    # Add edges between disconnected components
+    components = list(nx.connected_components(G))
+    for i in range(len(components) - 1):
+        node1 = list(components[i])[0]
+        node2 = list(components[i + 1])[0]
+        centroid1 = G.nodes[node1]['centroid']
+        centroid2 = G.nodes[node2]['centroid']
+        dist = np.linalg.norm(np.array(centroid1) - np.array(centroid2))
+        G.add_edge(node1, node2, weight=1 / (dist + 1e-5))
+
+    num_nodes = len(G.nodes)
+    n_clusters = min(num_nodes - 1, 10)
+
+    if num_nodes < 2:
+        raise ValueError("Graph has too few nodes for spectral clustering.")
+
+    adjacency_matrix = nx.to_numpy_array(G)
+    clustering = SpectralClustering(n_clusters=n_clusters, affinity='precomputed').fit(adjacency_matrix)
+    refined_labels = labels.copy()
+
+    for i, region in enumerate(regions):
+        refined_labels[labels == region.label] = clustering.labels_[i] + 1
+
+    return refined_labels
+
+
 def main(image_path, prediction_path, ground_truth_path, output_folder, output_image_name="partitioned_labels.tif"):
     image, transform, _ = load_image(image_path)
     predicted_gdf, _ = load_geodataframes(prediction_path, ground_truth_path)

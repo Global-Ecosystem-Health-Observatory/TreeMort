@@ -7,16 +7,24 @@ import rasterio
 import rasterio.features
 
 import numpy as np
+import networkx as nx
 import geopandas as gpd
 
 from affine import Affine
 from typing import Optional, List, Tuple, Generator, Dict
-from scipy.ndimage import gaussian_filter, label, distance_transform_edt
-from shapely.geometry import Polygon, shape
-from skimage.feature import peak_local_max
-from skimage.morphology import binary_dilation, disk, square
-from skimage.segmentation import watershed, relabel_sequential
+
 from rasterio.crs import CRS
+from sklearn.cluster import SpectralClustering
+from shapely.geometry import Polygon, shape
+
+from scipy import ndimage
+from scipy.ndimage import gaussian_filter, label, distance_transform_edt
+
+from skimage import measure
+from skimage.feature import peak_local_max
+from skimage.filters import gaussian
+from skimage.morphology import binary_dilation, binary_erosion, disk, square
+from skimage.segmentation import watershed, relabel_sequential, find_boundaries
 
 from treemort.modeling.builder import build_model
 from treemort.utils.config import setup
@@ -641,8 +649,9 @@ def save_labels_as_geojson(
                     convex_hull = geometry.convex_hull
                     if convex_hull.is_valid and not convex_hull.is_empty:
                         area = geometry.area
-                        if is_valid_geometry(geometry, area, convex_hull):
-                            geometries.append({"geometry": geometry, "properties": {"label": int(label_value)}})
+                        #if is_valid_geometry(geometry, area, convex_hull):
+                        #    geometries.append({"geometry": geometry, "properties": {"label": int(label_value)}})
+                        geometries.append({"geometry": geometry, "properties": {"label": int(label_value)}})
 
     if not geometries:
         logger.info("No valid geometries found. Creating an empty GeoJSON.")
@@ -735,3 +744,60 @@ def calculate_iou(geojson_path: str, predictions_path: str) -> Optional[float]:
         return iou
     except Exception as e:
         log_and_raise(logger, RuntimeError(f"Error calculating IoU: {e}"))
+
+
+def decompose_elliptical_regions(binary_mask, intensity_image, centroid_map, min_distance=5, sigma=2, peak_threshold=0.7):
+    distance = ndimage.distance_transform_edt(binary_mask)
+    
+    smoothed_distance = gaussian(distance, sigma=sigma)
+    smoothed_intensity = gaussian(intensity_image, sigma=sigma)
+    smoothed_centroid_map = gaussian(centroid_map, sigma=sigma)
+
+    thresholded_centroid_map = np.where(smoothed_centroid_map >= peak_threshold, smoothed_centroid_map, 0).astype(np.bool)
+
+    combined = smoothed_distance * smoothed_intensity
+
+    if combined.ndim > 2:
+        combined = combined.mean(axis=0)
+
+    if combined.shape != binary_mask.shape:
+        raise ValueError(f"Shape mismatch: combined {combined.shape} vs binary_mask {binary_mask.shape}")
+
+    local_maxi = peak_local_max(
+        combined,
+        min_distance=min_distance,
+        labels=thresholded_centroid_map,
+        exclude_border=False
+    )
+    
+    markers = np.zeros_like(binary_mask, dtype=np.int32)
+    for idx, (row, col) in enumerate(local_maxi):
+        markers[row, col] = idx + 1
+    
+    refined_labels = watershed(-combined, markers, mask=binary_mask)
+    return refined_labels
+
+
+def refine_segments(partitioned_labels, intensity_image, dilation_size=2, erosion_size=2):
+    refined_labels = np.zeros_like(partitioned_labels, dtype=np.int32)
+
+    intensity_image_2d = intensity_image.mean(axis=0) if intensity_image.ndim == 3 else intensity_image
+
+    for label in np.unique(partitioned_labels):
+        if label == 0:  # Skip background
+            continue
+
+        mask = (partitioned_labels == label)
+        mean_intensity = intensity_image_2d[mask].mean()
+
+        contour = find_boundaries(mask, mode="inner") | find_boundaries(mask, mode="outer")
+        contour_intensities = intensity_image_2d[contour]
+
+        if np.mean(contour_intensities < mean_intensity) > 0.5:  # Mostly background intensity
+            refined_mask = binary_erosion(mask, disk(erosion_size))
+        else:  # Mostly foreground intensity
+            refined_mask = binary_dilation(mask, disk(dilation_size))
+
+        refined_labels[refined_mask] = label
+
+    return refined_labels
