@@ -255,7 +255,10 @@ def refine_elliptical_regions_with_graph(labels, intensity_image):
     n_clusters = min(num_nodes - 1, 10)
 
     if num_nodes < 2:
-        raise ValueError("Graph has too few nodes for spectral clustering.")
+        logger.warning(f"Graph has too few nodes ({num_nodes}) for spectral clustering. Assigning default label.")
+        for node in G.nodes:
+            refined_labels[labels == node] = node  # Assign unique label
+        return refined_labels
 
     adjacency_matrix = nx.to_numpy_array(G)
     clustering = SpectralClustering(n_clusters=n_clusters, affinity='precomputed').fit(adjacency_matrix)
