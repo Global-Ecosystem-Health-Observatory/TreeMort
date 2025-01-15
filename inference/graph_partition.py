@@ -183,7 +183,7 @@ def save_polygons_as_geojson(labels, transform, output_geojson_path):
 
 
 def perform_graph_partitioning(image, predicted_mask, min_distance=2, sigma=2):
-    G, labels = create_graph(predicted_mask.cpu().numpy(), image.cpu().numpy())
+    G, labels = create_graph(predicted_mask, image)
 
     partitioned_labels = torch.zeros_like(predicted_mask, dtype=torch.int32)
     component_id = 1  # Start component IDs from 1
@@ -223,6 +223,8 @@ def refine_elliptical_regions_with_graph(labels, intensity_image):
     if labels.shape != intensity_image.shape:
         raise ValueError(f"Shape mismatch: labels {labels.shape} and intensity_image {intensity_image.shape}")
 
+    refined_labels = labels.copy()
+
     regions = measure.regionprops(labels, intensity_image=intensity_image)
     G = nx.Graph()
 
@@ -232,13 +234,13 @@ def refine_elliptical_regions_with_graph(labels, intensity_image):
             G.nodes[region.label]['centroid'] = region.centroid
             G.nodes[region.label]['mean_intensity'] = region.mean_intensity
 
-    # Add edges within the graph based on proximity and intensity difference
+    # Add edges based on proximity and intensity difference
     for region1 in regions:
         for region2 in regions:
             if region1.label != region2.label:
                 dist = np.linalg.norm(np.array(region1.centroid) - np.array(region2.centroid))
                 intensity_diff = abs(region1.mean_intensity - region2.mean_intensity)
-                if dist < 15 and intensity_diff < 0.2:  # Threshold for proximity and intensity
+                if dist < 15 and intensity_diff < 0.2:  # Thresholds for proximity and intensity
                     G.add_edge(region1.label, region2.label, weight=1 / (dist + 1e-5))
 
     # Add edges between disconnected components
@@ -255,14 +257,12 @@ def refine_elliptical_regions_with_graph(labels, intensity_image):
     n_clusters = min(num_nodes - 1, 10)
 
     if num_nodes < 2:
-        logger.warning(f"Graph has too few nodes ({num_nodes}) for spectral clustering. Assigning default label.")
         for node in G.nodes:
             refined_labels[labels == node] = node  # Assign unique label
         return refined_labels
 
     adjacency_matrix = nx.to_numpy_array(G)
     clustering = SpectralClustering(n_clusters=n_clusters, affinity='precomputed').fit(adjacency_matrix)
-    refined_labels = labels.copy()
 
     for i, region in enumerate(regions):
         refined_labels[labels == region.label] = clustering.labels_[i] + 1
