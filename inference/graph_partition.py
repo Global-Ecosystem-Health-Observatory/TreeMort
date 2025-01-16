@@ -230,7 +230,7 @@ def refine_elliptical_regions_with_graph(labels, intensity_image):
 
     for region in regions:
         G.add_node(region.label, centroid=(0, 0), mean_intensity=0)  # Default attributes
-        if region.area >= 10:
+        if region.area >= 16:
             G.nodes[region.label]['centroid'] = region.centroid
             G.nodes[region.label]['mean_intensity'] = region.mean_intensity
 
@@ -240,7 +240,7 @@ def refine_elliptical_regions_with_graph(labels, intensity_image):
             if region1.label != region2.label:
                 dist = np.linalg.norm(np.array(region1.centroid) - np.array(region2.centroid))
                 intensity_diff = abs(region1.mean_intensity - region2.mean_intensity)
-                if dist < 15 and intensity_diff < 0.2:  # Thresholds for proximity and intensity
+                if dist < 10 and intensity_diff < 0.3:  # Thresholds for proximity and intensity
                     G.add_edge(region1.label, region2.label, weight=1 / (dist + 1e-5))
 
     # Add edges between disconnected components
