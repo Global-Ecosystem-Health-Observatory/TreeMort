@@ -649,9 +649,9 @@ def save_labels_as_geojson(
                     convex_hull = geometry.convex_hull
                     if convex_hull.is_valid and not convex_hull.is_empty:
                         area = geometry.area
-                        #if is_valid_geometry(geometry, area, convex_hull):
-                        #    geometries.append({"geometry": geometry, "properties": {"label": int(label_value)}})
-                        geometries.append({"geometry": geometry, "properties": {"label": int(label_value)}})
+                        if is_valid_geometry(geometry, area, convex_hull):
+                            geometries.append({"geometry": geometry, "properties": {"label": int(label_value)}})
+                        # geometries.append({"geometry": geometry, "properties": {"label": int(label_value)}})
 
     if not geometries:
         logger.info("No valid geometries found. Creating an empty GeoJSON.")
