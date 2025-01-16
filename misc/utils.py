@@ -95,18 +95,24 @@ def calculate_iou_metrics(prediction_gdf: gpd.GeoDataFrame, ground_truth_gdf: gp
         return intersection["iou"].mean()
 
     def calculate_tree_iou():
-        prediction_union = prediction_gdf.geometry.unary_union
-        filtered_gt = ground_truth_gdf[ground_truth_gdf.intersects(prediction_union)]
-        tp, fp, fn = 0, 0, 0
+        if prediction_gdf.empty or ground_truth_gdf.empty:
+            print("Either predictions or ground truth is empty.")
+            return 0.0
 
-        for pred_geom in prediction_gdf["geometry"]:
-            if filtered_gt.intersects(pred_geom).any():
-                tp += 1
-            else:
-                fp += 1
-        for gt_geom in filtered_gt["geometry"]:
-            if not prediction_gdf.intersects(gt_geom).any():
-                fn += 1
+        matched_preds = set()
+        matched_gts = set()
+
+        for gt_idx, gt_geom in ground_truth_gdf.iterrows():
+            intersecting_preds = prediction_gdf[prediction_gdf.intersects(gt_geom["geometry"])]
+            
+            for pred_idx, pred_geom in intersecting_preds.iterrows():
+                if pred_idx not in matched_preds:
+                    matched_preds.add(pred_idx)
+                    matched_gts.add(gt_idx)
+
+        tp = len(matched_gts)  # Matched ground truth segments
+        fp = len(prediction_gdf) - len(matched_preds)  # Unmatched predictions
+        fn = len(ground_truth_gdf) - len(matched_gts)  # Unmatched ground truth
 
         return tp / (tp + fp + fn) if (tp + fp + fn) > 0 else 1.0
 
