@@ -14,16 +14,19 @@ from affine import Affine
 from typing import Optional, List, Tuple, Generator, Dict
 
 from rasterio.crs import CRS
-from sklearn.cluster import SpectralClustering
 from shapely.geometry import Polygon, shape
 
+from sklearn.cluster import SpectralClustering
+from sklearn.decomposition import PCA
+
 from scipy import ndimage
-from scipy.ndimage import gaussian_filter, label, distance_transform_edt
+from scipy.ndimage import gaussian_filter, label, distance_transform_edt, binary_dilation, binary_erosion
 
 from skimage import measure
+from skimage.draw import ellipse
 from skimage.feature import peak_local_max
 from skimage.filters import gaussian
-from skimage.morphology import binary_dilation, binary_erosion, disk, square
+from skimage.morphology import disk, square, remove_small_objects
 from skimage.segmentation import watershed, relabel_sequential, find_boundaries
 
 from treemort.modeling.builder import build_model
@@ -74,7 +77,9 @@ def load_model(
     except Exception as e:
         log_and_raise(logger, RuntimeError(f"Failed to load model weights: {e}"))
 
-    logger.debug(f"Model loaded successfully: {os.path.join(os.path.basename(os.path.dirname(best_model)), os.path.basename(best_model))} (Config: {os.path.basename(config_path)})")
+    logger.debug(
+        f"Model loaded successfully: {os.path.join(os.path.basename(os.path.dirname(best_model)), os.path.basename(best_model))} (Config: {os.path.basename(config_path)})"
+    )
     return model
 
 
@@ -94,18 +99,19 @@ def load_refine_model(
     except Exception as e:
         log_and_raise(logger, RuntimeError(f"Failed to load refine model weights: {e}"))
 
-    logger.debug(f"Refine model loaded successfully: {os.path.join(os.path.basename(os.path.dirname(model_path)), os.path.basename(model_path))}")
+    logger.debug(
+        f"Refine model loaded successfully: {os.path.join(os.path.basename(os.path.dirname(model_path)), os.path.basename(model_path))}"
+    )
     return refine_model
 
 
 def load_and_preprocess_image(
-    tiff_file: str,
-    nir_rgb_order: Optional[List[int]] = None
+    tiff_file: str, nir_rgb_order: Optional[List[int]] = None
 ) -> Tuple[torch.Tensor, Affine, CRS]:
     logger = get_logger()
 
     validate_path(logger, tiff_file)
-    
+
     with rasterio.open(tiff_file) as src:
         image = src.read()
         transform = src.transform
@@ -114,7 +120,7 @@ def load_and_preprocess_image(
 
     _validate_image_channels(image, nir_rgb_order)
     nir_rgb_order = nir_rgb_order or list(range(image.shape[0]))
-    
+
     image = image.astype(np.float32) / max_pixel_value
     image = image[nir_rgb_order] if nir_rgb_order != list(range(image.shape[0])) else image
     image_tensor = torch.tensor(image, dtype=torch.float32)
@@ -132,7 +138,7 @@ def _get_max_pixel_value(bit_depth) -> float:
         return np.iinfo(bit_depth).max
     if np.issubdtype(bit_depth, np.floating):
         return 1.0
-    
+
     log_and_raise(logger, ValueError(f"Unsupported data type: {bit_depth}"))
 
 
@@ -151,21 +157,21 @@ def sliding_window_inference(
     window_size: int = 256,
     stride: int = 128,
     batch_size: int = 1,
-    threshold: float = 0.5
+    threshold: float = 0.5,
 ) -> torch.Tensor:
     _validate_inference_params(window_size, stride, threshold)
-    
+
     device = next(model.parameters()).device
     padded_image = pad_image(image, window_size)
-    
+
     prediction_map, count_map = _initialize_maps(padded_image.shape[1:], device)
     patches, coords = _generate_patches(padded_image, window_size, stride)
-    
+
     for batch in _batch_patches(patches, coords, batch_size):
         prediction_map, count_map = process_batch(
             batch["patches"], batch["coords"], prediction_map, count_map, model, threshold, device
         )
-    
+
     return _finalize_prediction(prediction_map, count_map, image.shape, threshold)
 
 
@@ -176,7 +182,7 @@ def _validate_inference_params(window_size: int, stride: int, threshold: float) 
         log_and_raise(logger, ValueError("window_size and stride must be positive integers."))
     if not (0 <= threshold <= 1):
         log_and_raise(logger, ValueError("threshold must be between 0 and 1."))
-    
+
 
 def _initialize_maps(image_shape: Tuple[int, int], device: torch.device) -> Tuple[torch.Tensor, torch.Tensor]:
     h, w = image_shape
@@ -185,12 +191,14 @@ def _initialize_maps(image_shape: Tuple[int, int], device: torch.device) -> Tupl
     return prediction_map, count_map
 
 
-def _generate_patches(image: torch.Tensor, window_size: int, stride: int) -> Tuple[List[torch.Tensor], List[Tuple[int, int]]]:
+def _generate_patches(
+    image: torch.Tensor, window_size: int, stride: int
+) -> Tuple[List[torch.Tensor], List[Tuple[int, int]]]:
     h, w = image.shape[1:]
     patches, coords = [], []
     for y in range(0, h - window_size + 1, stride):
         for x in range(0, w - window_size + 1, stride):
-            patch = image[:, y:y + window_size, x:x + window_size].float()
+            patch = image[:, y : y + window_size, x : x + window_size].float()
             patches.append(patch)
             coords.append((y, x))
     return patches, coords
@@ -200,16 +208,13 @@ def _batch_patches(
     patches: List[torch.Tensor], coords: List[Tuple[int, int]], batch_size: int
 ) -> Generator[Dict[str, List], None, None]:
     for i in range(0, len(patches), batch_size):
-        yield {"patches": patches[i:i + batch_size], "coords": coords[i:i + batch_size]}
+        yield {"patches": patches[i : i + batch_size], "coords": coords[i : i + batch_size]}
 
 
 def _finalize_prediction(
-    prediction_map: torch.Tensor,
-    count_map: torch.Tensor,
-    original_shape: Tuple[int, int, int],
-    threshold: float
+    prediction_map: torch.Tensor, count_map: torch.Tensor, original_shape: Tuple[int, int, int], threshold: float
 ) -> torch.Tensor:
-    no_contribution_mask = (count_map == 0)
+    no_contribution_mask = count_map == 0
     count_map[no_contribution_mask] = 1
 
     final_prediction = prediction_map / count_map
@@ -218,7 +223,7 @@ def _finalize_prediction(
 
     _, original_h, original_w = original_shape
     return final_prediction[:, :original_h, :original_w]
-    
+
 
 def process_batch(
     patches: list[torch.Tensor],
@@ -227,27 +232,19 @@ def process_batch(
     count_map: torch.Tensor,
     model: torch.nn.Module,
     threshold: float,
-    device: torch.device
+    device: torch.device,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     logger = get_logger()
 
     _validate_batch_inputs(patches, coords, threshold)
-    
+
     predictions = _infer_patches(patches, model, device)
 
     for i, (y, x) in enumerate(coords):
         binary_confidence = predictions[i, 0]
         centroid_confidence = predictions[i, 1]
 
-        _update_maps(
-            prediction_map,
-            count_map,
-            binary_confidence,
-            centroid_confidence,
-            threshold,
-            y,
-            x
-        )
+        _update_maps(prediction_map, count_map, binary_confidence, centroid_confidence, threshold, y, x)
 
     return prediction_map, count_map
 
@@ -278,14 +275,14 @@ def _update_maps(
     centroid_confidence: torch.Tensor,
     threshold: float,
     y: int,
-    x: int
+    x: int,
 ) -> None:
     binary_mask = (binary_confidence >= threshold).float()
 
-    prediction_map[:, y:y + binary_confidence.shape[0], x:x + binary_confidence.shape[1]] += torch.stack(
+    prediction_map[:, y : y + binary_confidence.shape[0], x : x + binary_confidence.shape[1]] += torch.stack(
         [binary_confidence, centroid_confidence]
     )
-    count_map[y:y + binary_confidence.shape[0], x:x + binary_confidence.shape[1]] += binary_mask
+    count_map[y : y + binary_confidence.shape[0], x : x + binary_confidence.shape[1]] += binary_mask
 
 
 def pad_tensor(tensor: torch.Tensor, patch_size: int) -> torch.Tensor:
@@ -293,25 +290,22 @@ def pad_tensor(tensor: torch.Tensor, patch_size: int) -> torch.Tensor:
 
     if tensor.ndim != 2 or patch_size <= 0:
         log_and_raise(logger, ValueError("Expected a 2D tensor and a positive patch size."))
-    
+
     height, width = tensor.shape
     pad_height = (patch_size - height % patch_size) % patch_size
     pad_width = (patch_size - width % patch_size) % patch_size
-    
+
     return torch.nn.functional.pad(tensor, (0, pad_width, 0, pad_height))
 
 
 def prepare_patches(
-    mask: torch.Tensor,
-    patch_size: int = 256,
-    stride: int = 128,
-    pad: bool = False
+    mask: torch.Tensor, patch_size: int = 256, stride: int = 128, pad: bool = False
 ) -> Tuple[List[torch.Tensor], List[Tuple[int, int]]]:
     logger = get_logger()
 
     if mask.ndim != 2:
         log_and_raise(logger, ValueError("Mask must be a 2D tensor."))
-    
+
     if pad:
         mask = pad_tensor(mask, patch_size)
 
@@ -321,11 +315,13 @@ def prepare_patches(
 
     for i in range(0, h - patch_size + 1, stride):
         for j in range(0, w - patch_size + 1, stride):
-            patch = mask[i:i + patch_size, j:j + patch_size]
+            patch = mask[i : i + patch_size, j : j + patch_size]
             patches.append(patch)
             positions.append((i, j))
 
-    logger.debug(f"Generated {len(patches)} patches shaped {mask.shape} with patch size {patch_size} and stride {stride}.")
+    logger.debug(
+        f"Generated {len(patches)} patches shaped {mask.shape} with patch size {patch_size} and stride {stride}."
+    )
     return patches, positions
 
 
@@ -335,7 +331,7 @@ def combine_patches(
     device: torch.device,
     patch_size: int,
     stride: int,
-    threshold: float = 0.5
+    threshold: float = 0.5,
 ) -> torch.Tensor:
     logger = get_logger()
 
@@ -344,7 +340,12 @@ def combine_patches(
 
     for (i, j), patch in patches:
         if patch.shape[0] != patch_size or patch.shape[1] != patch_size:
-            log_and_raise(logger, ValueError(f"Patch at ({i}, {j}) has an invalid size {patch.shape}, expected ({patch_size}, {patch_size})."))
+            log_and_raise(
+                logger,
+                ValueError(
+                    f"Patch at ({i}, {j}) has an invalid size {patch.shape}, expected ({patch_size}, {patch_size})."
+                ),
+            )
         if i % stride != 0 or j % stride != 0:
             log_and_raise(logger, ValueError(f"Patch at ({i}, {j}) is not aligned with the stride {stride}."))
 
@@ -355,14 +356,19 @@ def combine_patches(
     logger.debug(f"Provided image_shape: {image_shape}")
 
     if image_shape != (expected_height, expected_width):
-        log_and_raise(logger, ValueError(f"Provided image_shape {image_shape} does not match expected dimensions {(expected_height, expected_width)}."))
+        log_and_raise(
+            logger,
+            ValueError(
+                f"Provided image_shape {image_shape} does not match expected dimensions {(expected_height, expected_width)}."
+            ),
+        )
 
     combined_mask = torch.zeros(image_shape, dtype=torch.float32, device=device)
     count_map = torch.zeros(image_shape, dtype=torch.float32, device=device)
 
     for (i, j), patch in patches:
-        combined_mask[i:i + patch.shape[0], j:j + patch.shape[1]] += patch
-        count_map[i:i + patch.shape[0], j:j + patch.shape[1]] += 1
+        combined_mask[i : i + patch.shape[0], j : j + patch.shape[1]] += patch
+        count_map[i : i + patch.shape[0], j : j + patch.shape[1]] += 1
 
     logger.debug(f"Combining {len(patches)} patches into an image of shape {image_shape}.")
     combined_mask = combined_mask / torch.clamp(count_map, min=1.0)
@@ -384,11 +390,7 @@ def threshold_prediction_map(prediction_map: torch.Tensor, threshold: float = 0.
 
 
 def refine_mask(
-    mask: torch.Tensor,
-    refine_model: torch.nn.Module,
-    device: torch.device,
-    patch_size: int = 64,
-    stride: int = 64
+    mask: torch.Tensor, refine_model: torch.nn.Module, device: torch.device, patch_size: int = 64, stride: int = 64
 ) -> torch.Tensor:
     logger = get_logger()
 
@@ -410,15 +412,9 @@ def refine_mask(
 
             processed_patches.append(((i, j), pred_mask))
 
-        combined_mask = combine_patches(
-            processed_patches,
-            (padded_height, padded_width),
-            device,
-            patch_size,
-            stride
-        )
+        combined_mask = combine_patches(processed_patches, (padded_height, padded_width), device, patch_size, stride)
 
-        combined_mask = combined_mask[:mask.shape[0], :mask.shape[1]]
+        combined_mask = combined_mask[: mask.shape[0], : mask.shape[1]]
         return combined_mask
     except Exception as e:
         logger.error(f"Error refining mask: {e}")
@@ -426,18 +422,20 @@ def refine_mask(
 
 
 def generate_watershed_labels(
-    prediction_map: np.ndarray, 
-    mask: np.ndarray, 
-    centroid_map: Optional[np.ndarray] = None, 
-    min_distance: int = 4, 
-    blur_sigma: float = 2, 
-    dilation_radius: int = 1, 
-    centroid_threshold: float = 0.7, 
-    structuring_element: str = "disk"
+    prediction_map: np.ndarray,
+    mask: np.ndarray,
+    centroid_map: Optional[np.ndarray] = None,
+    min_distance: int = 4,
+    blur_sigma: float = 2,
+    dilation_radius: int = 1,
+    centroid_threshold: float = 0.7,
+    structuring_element: str = "disk",
 ) -> np.ndarray:
     logger = get_logger()
 
-    logger.debug(f"Generating watershed labels with blur_sigma={blur_sigma}, min_distance={min_distance}, dilation_radius={dilation_radius}.")
+    logger.debug(
+        f"Generating watershed labels with blur_sigma={blur_sigma}, min_distance={min_distance}, dilation_radius={dilation_radius}."
+    )
 
     smoothed_prediction_map = gaussian_filter(prediction_map, sigma=blur_sigma)
 
@@ -458,7 +456,7 @@ def generate_watershed_labels(
             min_distance=min_distance,
             exclude_border=False,
             labels=mask_grown,
-            threshold_abs=0.1  # Adjust threshold as needed
+            threshold_abs=0.1,  # Adjust threshold as needed
         )
 
         ''' Method 1
@@ -479,14 +477,14 @@ def generate_watershed_labels(
             min_distance=min_distance,
             exclude_border=False,
             labels=mask_grown,
-            threshold_abs=0.1  # Adjust threshold as needed
+            threshold_abs=0.1,  # Adjust threshold as needed
         )
 
     valid_markers = [(y, x) for y, x in peaks if mask_grown[y, x] == 1]
     if not valid_markers:
         logger.warning("No valid markers detected; returning original mask.")
         return mask
-    
+
     markers = np.zeros_like(prediction_map, dtype=int)
     for i, (y, x) in enumerate(valid_markers):
         markers[y, x] = i + 1
@@ -531,12 +529,7 @@ def apply_transform(contour: np.ndarray, transform: Affine) -> np.ndarray:
     return transformed_contour
 
 
-def contours_to_geojson(
-    contours: List[np.ndarray], 
-    transform: Affine, 
-    crs: CRS, 
-    name: str
-) -> dict:
+def contours_to_geojson(contours: List[np.ndarray], transform: Affine, crs: CRS, name: str) -> dict:
     logger = get_logger()
 
     if not contours:
@@ -544,33 +537,22 @@ def contours_to_geojson(
         return {
             "type": "FeatureCollection",
             "name": name,
-            "crs": None if not crs else {
-                "type": "name",
-                "properties": {
-                    "name": f"EPSG:{crs.to_epsg()}" if crs.is_epsg_code else str(crs)
-                }
-            },
-            "features": []
+            "crs": (
+                None
+                if not crs
+                else {"type": "name", "properties": {"name": f"EPSG:{crs.to_epsg()}" if crs.is_epsg_code else str(crs)}}
+            ),
+            "features": [],
         }
 
     geojson_crs = None
     if crs:
         if crs.is_epsg_code:  # If CRS is an EPSG code
-            geojson_crs = {
-                "type": "name",
-                "properties": {
-                    "name": f"EPSG:{crs.to_epsg()}"
-                }
-            }
+            geojson_crs = {"type": "name", "properties": {"name": f"EPSG:{crs.to_epsg()}"}}
         else:
             logger.warning("CRS is not in EPSG format; setting CRS to null in GeoJSON.")
 
-    geojson = {
-        "type": "FeatureCollection",
-        "name": name,
-        "crs": geojson_crs,
-        "features": []
-    }
+    geojson = {"type": "FeatureCollection", "name": name, "crs": geojson_crs, "features": []}
 
     skipped_contours = 0
     for contour in contours:
@@ -581,14 +563,13 @@ def contours_to_geojson(
 
             polygon = Polygon(transformed_contour)
             if polygon.is_valid and not polygon.is_empty:
-                geojson["features"].append({
-                    "type": "Feature",
-                    "geometry": {
-                        "type": "Polygon",
-                        "coordinates": [transformed_contour.tolist()]
-                    },
-                    "properties": {}
-                })
+                geojson["features"].append(
+                    {
+                        "type": "Feature",
+                        "geometry": {"type": "Polygon", "coordinates": [transformed_contour.tolist()]},
+                        "properties": {},
+                    }
+                )
             else:
                 skipped_contours += 1
         else:
@@ -621,25 +602,21 @@ def save_labels_as_geojson(
     output_path: str,
     min_area_threshold: float = 3.0,
     max_aspect_ratio: float = 5.0,
-    min_solidity: float = 0.8
+    min_solidity: float = 0.8,
 ) -> None:
     logger = get_logger()
 
     def is_valid_geometry(geometry, area, convex_hull):
         aspect_ratio = convex_hull.length / (4 * np.sqrt(area)) if area > 0 else float("inf")
         solidity = area / convex_hull.area if convex_hull.area > 0 else 0
-        return (
-            area >= min_area_threshold
-            and aspect_ratio <= max_aspect_ratio
-            and solidity >= min_solidity
-        )
+        return area >= min_area_threshold and aspect_ratio <= max_aspect_ratio and solidity >= min_solidity
 
     geometries = []
     for label_value in np.unique(labels):
         if label_value == 0:  # Skip background
             continue
 
-        mask = (labels == label_value)
+        mask = labels == label_value
         shapes_gen = rasterio.features.shapes(mask.astype(np.int32), transform=transform)
 
         for shape_geom, shape_value in shapes_gen:
@@ -655,10 +632,7 @@ def save_labels_as_geojson(
 
     if not geometries:
         logger.info("No valid geometries found. Creating an empty GeoJSON.")
-        empty_geojson = {
-            "type": "FeatureCollection",
-            "features": []
-        }
+        empty_geojson = {"type": "FeatureCollection", "features": []}
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
         try:
             with open(output_path, "w") as f:
@@ -678,11 +652,7 @@ def save_labels_as_geojson(
         log_and_raise(logger, RuntimeError(f"Error saving GeoJSON to {output_path}: {e}"))
 
 
-def detect_peaks(
-    centroid_map: np.ndarray, 
-    sigma: float = 2, 
-    min_distance: int = 5
-) -> np.ndarray:
+def detect_peaks(centroid_map: np.ndarray, sigma: float = 2, min_distance: int = 5) -> np.ndarray:
     logger = get_logger()
 
     if centroid_map.ndim != 2:
@@ -746,9 +716,11 @@ def calculate_iou(geojson_path: str, predictions_path: str) -> Optional[float]:
         log_and_raise(logger, RuntimeError(f"Error calculating IoU: {e}"))
 
 
-def decompose_elliptical_regions(binary_mask, intensity_image, centroid_map, min_distance=5, sigma=2, peak_threshold=0.7):
+def decompose_elliptical_regions(
+    binary_mask, intensity_image, centroid_map, min_distance=5, sigma=2, peak_threshold=0.7
+):
     distance = ndimage.distance_transform_edt(binary_mask)
-    
+
     smoothed_distance = gaussian(distance, sigma=sigma)
     smoothed_intensity = gaussian(intensity_image, sigma=sigma)
     smoothed_centroid_map = gaussian(centroid_map, sigma=sigma)
@@ -764,27 +736,19 @@ def decompose_elliptical_regions(binary_mask, intensity_image, centroid_map, min
         raise ValueError(f"Shape mismatch: combined {combined.shape} vs binary_mask {binary_mask.shape}")
 
     local_maxi = peak_local_max(
-        combined,
-        min_distance=min_distance,
-        labels=thresholded_centroid_map,
-        exclude_border=False
+        combined, min_distance=min_distance, labels=thresholded_centroid_map, exclude_border=False
     )
-    
+
     markers = np.zeros_like(binary_mask, dtype=np.int32)
     for idx, (row, col) in enumerate(local_maxi):
         markers[row, col] = idx + 1
-    
+
     refined_labels = watershed(-combined, markers, mask=binary_mask)
     return refined_labels
 
 
 def refine_segments(
-    partitioned_labels, 
-    intensity_image, 
-    max_dilation=10, 
-    max_erosion=10, 
-    erosion_threshold=0.4,
-    dilation_threshold=0.1
+    partitioned_labels, intensity_image, max_dilation=10, max_erosion=10, erosion_threshold=0.4, dilation_threshold=0.1
 ):
     refined_labels = np.zeros_like(partitioned_labels, dtype=np.int32)
     intensity_image_2d = intensity_image.mean(axis=0) if intensity_image.ndim == 3 else intensity_image
@@ -793,7 +757,7 @@ def refine_segments(
         if label == 0:  # Skip background
             continue
 
-        mask = (partitioned_labels == label)
+        mask = partitioned_labels == label
         mean_intensity = intensity_image_2d[mask].mean()
 
         refined_mask = mask.copy()
@@ -819,3 +783,181 @@ def refine_segments(
         refined_labels[refined_mask] = label
 
     return refined_labels
+
+
+def filter_segment_map(segment_map, min_size=50):
+    if segment_map.dtype != bool:
+        binary_segment_map = segment_map > 0
+    else:
+        binary_segment_map = segment_map
+
+    filtered_segment_map = remove_small_objects(binary_segment_map, min_size=min_size)
+
+    return filtered_segment_map
+
+
+def refine_elliptical_regions_with_graph(labels, intensity_image):
+    intensity_image = intensity_image.mean(axis=0) if intensity_image.ndim == 3 else intensity_image
+
+    if labels.shape != intensity_image.shape:
+        raise ValueError(f"Shape mismatch: labels {labels.shape} and intensity_image {intensity_image.shape}")
+
+    refined_labels = labels.copy()
+    regions = measure.regionprops(labels, intensity_image=intensity_image)
+
+    # Create graph with regions as nodes
+    G = nx.Graph()
+    for region in regions:
+        if region.area >= 16:  # Skip very small regions
+            G.add_node(
+                region.label,
+                centroid=region.centroid,
+                mean_intensity=region.mean_intensity,
+                area=region.area,
+            )
+
+    # Add edges based on proximity and intensity difference
+    avg_region_diameter = np.sqrt(np.mean([region.area for region in regions if region.area >= 16]))
+    global_intensity_range = np.ptp(intensity_image)
+
+    for region1 in regions:
+        for region2 in regions:
+            if region1.label != region2.label:
+                dist = np.linalg.norm(np.array(region1.centroid) - np.array(region2.centroid))
+                intensity_diff = abs(region1.mean_intensity - region2.mean_intensity)
+
+                normalized_dist = dist / avg_region_diameter
+                normalized_intensity_diff = intensity_diff / global_intensity_range
+
+                if normalized_dist < 1.5 and normalized_intensity_diff < 0.2:
+                    weight = 1 / (normalized_dist + normalized_intensity_diff + 1e-5)
+                    G.add_edge(region1.label, region2.label, weight=weight)
+
+    components = list(nx.connected_components(G))
+    for i in range(len(components) - 1):
+        node1 = list(components[i])[0]
+        node2 = list(components[i + 1])[0]
+        centroid1 = G.nodes[node1]['centroid']
+        centroid2 = G.nodes[node2]['centroid']
+        dist = np.linalg.norm(np.array(centroid1) - np.array(centroid2))
+        G.add_edge(node1, node2, weight=1 / (dist + 1e-5))
+
+    num_nodes = len(G.nodes)
+    n_clusters = min(max(2, num_nodes // 2), 10)  # Dynamically adjust clusters
+
+    if num_nodes < 2:
+        for node in G.nodes:
+            refined_labels[labels == node] = node
+        return refined_labels
+
+    adjacency_matrix = nx.to_numpy_array(G)
+    clustering = SpectralClustering(n_clusters=n_clusters, affinity='precomputed', random_state=42).fit(
+        adjacency_matrix
+    )
+
+    for i, region in enumerate(regions):
+        refined_labels[labels == region.label] = clustering.labels_[i] + 1
+
+    return refined_labels
+
+
+def preprocess_centroid_map(centroid_map, segment_map, sigma=5):
+    smoothed_centroid_map = centroid_map
+
+    normalized_centroid_map = smoothed_centroid_map / smoothed_centroid_map.max()
+
+    binary_mask = segment_map > 0  # Mask for valid regions
+    masked_centroid_map = normalized_centroid_map * binary_mask
+
+    return masked_centroid_map
+
+
+def refine_centroid_map(segment_map, centroid_map):
+    distance_map = distance_transform_edt(segment_map > 0)
+
+    refined_centroid_map = distance_map * centroid_map
+
+    return refined_centroid_map
+
+
+def detect_multiple_peaks(refined_centroid_map, min_distance=5, threshold_abs=0.2):
+    coordinates = peak_local_max(refined_centroid_map, min_distance=min_distance, threshold_abs=threshold_abs)
+    return coordinates
+
+
+def segment_using_watershed(segment_map, refined_centroid_map, peak_coords):
+    markers = np.zeros_like(segment_map, dtype=int)
+    for i, (row, col) in enumerate(peak_coords, start=1):
+        markers[row, col] = i
+
+    segmented_map = watershed(-refined_centroid_map, markers, mask=segment_map)
+
+    return segmented_map
+
+
+def compute_orientation_with_pca(contour_points):
+    contour_points = np.squeeze(contour_points)
+    if len(contour_points.shape) < 2 or contour_points.shape[0] < 2:
+        return None  # Insufficient points for PCA
+
+    pca = PCA(n_components=2)
+    pca.fit(contour_points)
+
+    orientation_angle = np.arctan2(pca.components_[0, 1], pca.components_[0, 0])
+    return orientation_angle
+
+
+def smooth_segment_contours(segment_map, dilation_size=2, min_area=28, min_axes_length=3):
+    refined_segment_map = np.zeros_like(segment_map, dtype=np.int32)
+    unique_labels = np.unique(segment_map)
+
+    for label in unique_labels:
+        if label == 0:  # Background
+            continue
+
+        segment_mask = segment_map == label
+
+        if segment_mask.sum() < min_area:
+            segment_mask = binary_dilation(segment_mask, structure=np.ones((dilation_size, dilation_size)))
+
+        contours, _ = cv2.findContours(segment_mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+        if contours and len(contours[0]) >= 5:  # Minimum points for ellipse fitting
+            orientation_angle_pca = compute_orientation_with_pca(contours[0])
+
+            ellipse_params = cv2.fitEllipse(contours[0])
+
+            ellipse_angle_cv = np.deg2rad(ellipse_params[2])
+            if abs(orientation_angle_pca - ellipse_angle_cv) > np.pi / 4:
+                corrected_angle = orientation_angle_pca
+            else:
+                corrected_angle = ellipse_angle_cv
+
+            axes = (
+                max(ellipse_params[1][0], min_axes_length * 2),  # Semi-minor axis
+                max(ellipse_params[1][1], min_axes_length * 2),  # Semi-major axis
+            )
+            if axes[0] > axes[1]:
+                axes = (axes[1], axes[0])
+                corrected_angle += np.pi / 2
+
+            rr, cc = ellipse(
+                int(ellipse_params[0][1]),
+                int(ellipse_params[0][0]),  # Center
+                int(axes[1] / 2),
+                int(axes[0] / 2),  # Axes
+                rotation=corrected_angle,
+                shape=segment_map.shape,
+            )
+            refined_segment_map[rr, cc] = label
+        else:
+            refined_segment_map[segment_mask] = label
+
+    final_segment_map = np.zeros_like(segment_map, dtype=np.int32)
+    for label in unique_labels:
+        if label == 0:  # Background
+            continue
+        dilated_label = binary_dilation(refined_segment_map == label, structure=np.ones((dilation_size, dilation_size)))
+        final_segment_map[dilated_label] = label
+
+    return final_segment_map
