@@ -90,13 +90,17 @@ def save_results_to_csv(results, output_file):
 
 
 def compute_confidence_interval(data: List[float], confidence: float = 0.95) -> Tuple[float, float]:
-    if len(data) == 0:
+    clean_data = [x for x in data if not np.isnan(x)]
+    
+    if len(clean_data) == 0:
         return float('nan'), float('nan')
-    mean = np.mean(data)
-    std_dev = np.std(data, ddof=1)  # Use sample standard deviation
-    n = len(data)
+
+    mean = np.nanmean(clean_data)
+    std_dev = np.nanstd(clean_data, ddof=1)
+    n = len(clean_data)
     z_score = norm.ppf((1 + confidence) / 2)
     margin_of_error = z_score * (std_dev / np.sqrt(n))
+
     return mean - margin_of_error, mean + margin_of_error
 
 

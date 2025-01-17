@@ -778,20 +778,14 @@ def decompose_elliptical_regions(binary_mask, intensity_image, centroid_map, min
     return refined_labels
 
 
-def refine_segments(partitioned_labels, intensity_image, max_dilation=10, max_erosion=10, intensity_threshold=0.3):
-    """
-    Dynamically refine segmented regions based on intensity differences at the edges.
-    
-    Parameters:
-    - partitioned_labels: Labeled segmentation map (2D array).
-    - intensity_image: Original intensity image (2D or 3D array).
-    - max_dilation: Maximum number of dilation passes to prevent infinite loops.
-    - max_erosion: Maximum number of erosion passes to prevent infinite loops.
-    - intensity_threshold: Maximum allowable intensity difference for edge refinement.
-    
-    Returns:
-    - refined_labels: Refined segmentation map.
-    """
+def refine_segments(
+    partitioned_labels, 
+    intensity_image, 
+    max_dilation=10, 
+    max_erosion=10, 
+    erosion_threshold=0.4,
+    dilation_threshold=0.1
+):
     refined_labels = np.zeros_like(partitioned_labels, dtype=np.int32)
     intensity_image_2d = intensity_image.mean(axis=0) if intensity_image.ndim == 3 else intensity_image
 
@@ -802,28 +796,25 @@ def refine_segments(partitioned_labels, intensity_image, max_dilation=10, max_er
         mask = (partitioned_labels == label)
         mean_intensity = intensity_image_2d[mask].mean()
 
-        # Start with the original mask
         refined_mask = mask.copy()
 
-        # Perform erosion
         for _ in range(max_erosion):
             contour = find_boundaries(refined_mask, mode="inner")
             contour_intensities = intensity_image_2d[contour]
 
-            if np.mean(contour_intensities) < mean_intensity - intensity_threshold:
+            if abs(np.mean(contour_intensities) - mean_intensity) > erosion_threshold:
                 refined_mask = binary_erosion(refined_mask, disk(1))
             else:
-                break  # Stop erosion when boundary intensity is similar to the region mean
+                break
 
-        # Perform dilation
         for _ in range(max_dilation):
             contour = find_boundaries(refined_mask, mode="outer")
             contour_intensities = intensity_image_2d[contour]
 
-            if np.mean(contour_intensities) > mean_intensity + intensity_threshold:
+            if abs(np.mean(contour_intensities) - mean_intensity) <= dilation_threshold:
                 refined_mask = binary_dilation(refined_mask, disk(1))
             else:
-                break  # Stop dilation when boundary intensity is similar to the region mean
+                break
 
         refined_labels[refined_mask] = label
 

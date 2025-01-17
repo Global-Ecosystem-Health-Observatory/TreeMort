@@ -1,6 +1,7 @@
 import os
 import fiona
 import rasterio
+import numpy as np
 import geopandas as gpd
 
 from math import sqrt
@@ -78,44 +79,80 @@ def load_geodata_with_unique_ids(file_path: str) -> gpd.GeoDataFrame:
         return gdf[gdf["geometry"].notnull()]
     
 
-def calculate_iou_metrics(prediction_gdf: gpd.GeoDataFrame, ground_truth_gdf: gpd.GeoDataFrame) -> Tuple[float, float]:
+def calculate_iou_metrics(prediction_gdf: gpd.GeoDataFrame, ground_truth_gdf: gpd.GeoDataFrame, overlap_threshold=0.5) -> Tuple[float, float]:
 
     def calculate_pixel_iou():
-        intersection = gpd.overlay(prediction_gdf, ground_truth_gdf, how="intersection")
-        if intersection.empty:
+        try:
+            if prediction_gdf.empty or ground_truth_gdf.empty:
+                return 0.0
+
+            ious = []
+            for _, pred_row in prediction_gdf.iterrows():
+                pred_geom = pred_row["geometry"]
+
+                intersecting_gts = ground_truth_gdf[ground_truth_gdf.intersects(pred_geom)]
+
+                if intersecting_gts.empty:
+                    continue
+
+                best_match = None
+                best_iou = 0.0
+                for _, gt_row in intersecting_gts.iterrows():
+                    gt_geom = gt_row["geometry"]
+                    intersect_area = pred_geom.intersection(gt_geom).area
+                    union_area = pred_geom.area + gt_geom.area - intersect_area
+                    iou = intersect_area / union_area if union_area > 0 else 0.0
+
+                    if iou > best_iou:
+                        best_iou = iou
+                        best_match = gt_geom
+
+                if best_iou > 0.0:
+                    ious.append(best_iou)
+
+            return np.mean(ious) if ious else 0.0
+
+        except Exception as e:
+            print(f"Error in calculate_pixel_iou: {e}")
             return 0.0
-        intersection["iou"] = intersection["geometry"].apply(
-            lambda geom: geom.area
-            / (
-                prediction_gdf.loc[prediction_gdf.intersects(geom), "geometry"].area.values[0]
-                + ground_truth_gdf.loc[ground_truth_gdf.intersects(geom), "geometry"].area.values[0]
-                - geom.area
-            )
-        )
-        return intersection["iou"].mean()
 
     def calculate_tree_iou():
         if prediction_gdf.empty or ground_truth_gdf.empty:
-            print("Either predictions or ground truth is empty.")
             return 0.0
 
         matched_preds = set()
         matched_gts = set()
 
-        for gt_idx, gt_geom in ground_truth_gdf.iterrows():
-            intersecting_preds = prediction_gdf[prediction_gdf.intersects(gt_geom["geometry"])]
-            
-            for pred_idx, pred_geom in intersecting_preds.iterrows():
-                if pred_idx not in matched_preds:
-                    matched_preds.add(pred_idx)
-                    matched_gts.add(gt_idx)
+        for _, pred_row in prediction_gdf.iterrows():
+            pred_geom = pred_row["geometry"]
+
+            intersecting_gts = ground_truth_gdf[ground_truth_gdf.intersects(pred_geom)]
+
+            if intersecting_gts.empty:
+                continue
+
+            best_match = None
+            best_iou = 0.0
+            for _, gt_row in intersecting_gts.iterrows():
+                gt_geom = gt_row["geometry"]
+                intersect_area = pred_geom.intersection(gt_geom).area
+                union_area = pred_geom.area + gt_geom.area - intersect_area
+                iou = intersect_area / union_area if union_area > 0 else 0.0
+
+                if iou > best_iou:
+                    best_iou = iou
+                    best_match = gt_row.name
+
+            if best_iou >= overlap_threshold and best_match not in matched_gts:
+                matched_preds.add(pred_row.name)
+                matched_gts.add(best_match)
 
         tp = len(matched_gts)  # Matched ground truth segments
         fp = len(prediction_gdf) - len(matched_preds)  # Unmatched predictions
         fn = len(ground_truth_gdf) - len(matched_gts)  # Unmatched ground truth
 
         return tp / (tp + fp + fn) if (tp + fp + fn) > 0 else 1.0
-
+    
     return calculate_pixel_iou(), calculate_tree_iou()
 
 
