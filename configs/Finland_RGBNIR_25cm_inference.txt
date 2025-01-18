@@ -13,7 +13,7 @@ min-area-threshold=1.0  # Smaller canopies typical of boreal species
 max-aspect-ratio=3.0    # Compact shapes expected for Finnish tree canopies
 min-solidity=0.85       # Focus on dense, contiguous canopies
 
-min-distance=5
+min-distance=3
 centroid-threshold=0.7
 dilation-radius=1
 blur-sigma=1.0
