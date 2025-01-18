@@ -924,14 +924,15 @@ def smooth_segment_contours(segment_map, dilation_size=2, min_area=28, min_axes_
 
         if contours and len(contours[0]) >= 5:  # Minimum points for ellipse fitting
             orientation_angle_pca = compute_orientation_with_pca(contours[0])
-
             ellipse_params = cv2.fitEllipse(contours[0])
 
+            if np.isnan(ellipse_params[1][0]) or np.isnan(ellipse_params[1][1]):
+                print(f"Invalid ellipse parameters for label {label}: {ellipse_params}")
+                refined_segment_map[segment_mask] = label
+                continue
+
             ellipse_angle_cv = np.deg2rad(ellipse_params[2])
-            if abs(orientation_angle_pca - ellipse_angle_cv) > np.pi / 4:
-                corrected_angle = orientation_angle_pca
-            else:
-                corrected_angle = ellipse_angle_cv
+            corrected_angle = orientation_angle_pca if abs(orientation_angle_pca - ellipse_angle_cv) > np.pi / 4 else ellipse_angle_cv
 
             axes = (
                 max(ellipse_params[1][0], min_axes_length * 2),  # Semi-minor axis
@@ -941,13 +942,17 @@ def smooth_segment_contours(segment_map, dilation_size=2, min_area=28, min_axes_
                 axes = (axes[1], axes[0])
                 corrected_angle += np.pi / 2
 
+            if np.isnan(axes[1] / 2) or np.isnan(axes[0] / 2):
+                print(f"NaN detected in axis computation for label {label}.")
+                refined_segment_map[segment_mask] = label
+                continue
+
             rr, cc = ellipse(
-                int(ellipse_params[0][1]),
-                int(ellipse_params[0][0]),  # Center
-                int(axes[1] / 2),
-                int(axes[0] / 2),  # Axes
-                rotation=corrected_angle,
-                shape=segment_map.shape,
+                int(ellipse_params[0][1]),  # Center Y
+                int(ellipse_params[0][0]),  # Center X
+                int(axes[1] / 2),  # Semi-major
+                int(axes[0] / 2),  # Semi-minor
+                rotation=corrected_angle, shape=segment_map.shape
             )
             refined_segment_map[rr, cc] = label
         else:
