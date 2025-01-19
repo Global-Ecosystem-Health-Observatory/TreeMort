@@ -20,13 +20,13 @@ from sklearn.cluster import SpectralClustering
 from sklearn.decomposition import PCA
 
 from scipy import ndimage
-from scipy.ndimage import gaussian_filter, label, distance_transform_edt, binary_dilation, binary_erosion
+from scipy.ndimage import gaussian_filter, distance_transform_edt, binary_dilation, binary_erosion
 
 from skimage import measure
 from skimage.draw import ellipse
 from skimage.feature import peak_local_max
 from skimage.filters import gaussian
-from skimage.morphology import disk, square, remove_small_objects
+from skimage.morphology import disk, square, remove_small_objects, label
 from skimage.segmentation import watershed, relabel_sequential, find_boundaries
 
 from treemort.modeling.builder import build_model
@@ -626,9 +626,9 @@ def save_labels_as_geojson(
                     convex_hull = geometry.convex_hull
                     if convex_hull.is_valid and not convex_hull.is_empty:
                         area = geometry.area
-                        if is_valid_geometry(geometry, area, convex_hull):
-                            geometries.append({"geometry": geometry, "properties": {"label": int(label_value)}})
-                        # geometries.append({"geometry": geometry, "properties": {"label": int(label_value)}})
+                        # if is_valid_geometry(geometry, area, convex_hull):
+                        #     geometries.append({"geometry": geometry, "properties": {"label": int(label_value)}})
+                        geometries.append({"geometry": geometry, "properties": {"label": int(label_value)}})
 
     if not geometries:
         logger.info("No valid geometries found. Creating an empty GeoJSON.")
