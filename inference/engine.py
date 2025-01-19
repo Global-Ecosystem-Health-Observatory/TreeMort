@@ -3,8 +3,6 @@ import torch
 import argparse
 import configargparse
 
-import numpy as np
-
 from pathlib import Path
 from multiprocessing import Pool, cpu_count
 from skimage.morphology import label
@@ -63,9 +61,9 @@ def process_image(
         segment_map, centroid_map = prediction_maps
 
         if post_process:
-            refined_mask = refine_mask(segment_map, refine_model, device)
+            # refined_mask = refine_mask(segment_map, refine_model, device)
 
-            refined_mask_np = refined_mask.cpu().numpy().astype(bool)
+            # refined_mask_np = refined_mask.cpu().numpy().astype(bool)
             image_np = image.cpu().numpy()
             segment_map_np = segment_map.cpu().numpy()
             centroid_map_np = centroid_map.cpu().numpy()
@@ -73,7 +71,7 @@ def process_image(
             min_size_threshold = 30  # 1.5 meters in crown diameter
             sigma_value = 5
             
-            filtered_segment_map = filter_segment_map(refined_mask_np, min_size=min_size_threshold)
+            filtered_segment_map = filter_segment_map(segment_map_np, min_size=min_size_threshold)
             graph_partitioned_map = refine_elliptical_regions_with_graph(label(filtered_segment_map), image_np)
             preprocessed_centroid_map = preprocess_centroid_map(
                 centroid_map_np, graph_partitioned_map, sigma=sigma_value
@@ -83,7 +81,7 @@ def process_image(
             watershed_segmented_map = segment_using_watershed(
                 graph_partitioned_map, refined_centroid_map, multiple_peaks
             )
-            smoothed_segment_map = smooth_segment_contours(watershed_segmented_map, dilation_size=1)
+            smoothed_segment_map = smooth_segment_contours(watershed_segmented_map, dilation_size=2)
             
             '''
             filtered_segment_map = filter_segment_map(refined_mask_np, min_size=min_size_threshold)
