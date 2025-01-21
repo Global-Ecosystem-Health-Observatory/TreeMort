@@ -7,7 +7,7 @@
 #SBATCH --cpus-per-task=6                          # Number of CPU cores per task
 #SBATCH --time=05:00:00                            # Time limit (hh:mm:ss)
 #SBATCH --partition=small                          # Partition to submit to
-#SBATCH --mem-per-cpu=12000                        # Memory per CPU in MB (6GB per CPU)
+#SBATCH --mem-per-cpu=24000                        # Memory per CPU in MB (6GB per CPU)
 
 # Usage:
 # export TREEMORT_VENV_PATH="/custom/path/to/venv"
