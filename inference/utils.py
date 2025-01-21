@@ -976,3 +976,58 @@ def refine_dead_tree_segments_adaptive(segment_map, intensity_image, intensity_t
         refined_segment_map[segment_mask == 1] = label
 
     return refined_segment_map
+
+
+def refine_segments_irregular_shape(segment_map, intensity_image, intensity_threshold=0.1, max_growth_radius=50):
+    refined_segment_map = np.zeros_like(segment_map)
+    unique_labels = np.unique(segment_map)
+
+    intensity_image_2d = intensity_image.mean(axis=0) if intensity_image.ndim == 3 else intensity_image
+
+    for label in unique_labels:
+        if label == 0:
+            continue
+
+        segment_mask = (segment_map == label).astype(np.uint8)
+
+        region = regionprops(segment_mask.astype(int))[0]
+        centroid_y, centroid_x = region.centroid
+
+        erosion_kernel = np.ones((3, 3), np.uint8)
+        segment_core = cv2.erode(segment_mask, erosion_kernel, iterations=2)
+
+        core_intensity = intensity_image_2d[segment_core == 1]
+        if core_intensity.size == 0:
+            core_intensity = intensity_image_2d[segment_mask == 1]  # Fallback to full segment
+
+        core_mean_intensity = np.mean(core_intensity)
+
+        convex_hull = convex_hull_image(segment_mask)
+        refined_segment_map[convex_hull] = label
+
+        visited = np.zeros_like(segment_mask, dtype=bool)
+        to_explore = [(int(centroid_x), int(centroid_y))]
+        growth_radius = 0
+
+        while to_explore and growth_radius < max_growth_radius:
+            new_pixels = []
+            for x, y in to_explore:
+                if visited[y, x]:
+                    continue
+                visited[y, x] = True
+
+                if abs(intensity_image_2d[y, x] - core_mean_intensity) > intensity_threshold:
+                    continue
+
+                refined_segment_map[y, x] = label
+
+                for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < segment_map.shape[1] and 0 <= ny < segment_map.shape[0]:
+                        if not visited[ny, nx] and (refined_segment_map[ny, nx] == label or refined_segment_map[ny, nx] == 0):
+                            new_pixels.append((nx, ny))
+
+            to_explore = new_pixels
+            growth_radius += 1
+
+    return refined_segment_map

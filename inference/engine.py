@@ -34,6 +34,7 @@ from inference.utils import (
     segment_using_watershed,
     smooth_segment_contours,
     refine_dead_tree_segments_adaptive,
+    refine_segments_irregular_shape,
 )
 from inference.graph_partition import perform_graph_partitioning, refine_elliptical_regions_with_graph
 
@@ -86,10 +87,17 @@ def process_image(
             smoothed_segment_map = smooth_segment_contours(watershed_segmented_map, dilation_size=1)
 
             refined_segment_map = refine_segments(smoothed_segment_map, image_np)
-            refined_segment_map = refine_dead_tree_segments_adaptive(
-                smoothed_segment_map,
-                image_np,
-                intensity_threshold=0.05
+            # refined_segment_map = refine_dead_tree_segments_adaptive(
+            #     smoothed_segment_map,
+            #     image_np,
+            #     intensity_threshold=0.05
+            # )
+
+            refined_segment_map = refine_segments_irregular_shape(
+                segment_map=smoothed_segment_map,
+                intensity_image=image_np,
+                intensity_threshold=0.03,
+                max_growth_radius=40
             )
             
             '''
