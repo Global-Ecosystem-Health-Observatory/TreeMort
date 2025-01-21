@@ -212,7 +212,7 @@ def run_inference(
     tasks = [
         (image_path, conf, output_dir, id2label, post_process)
         for image_path in image_paths
-        # if not os.path.exists(os.path.join(output_dir, f"{os.path.splitext(os.path.basename(image_path))[0]}.geojson"))
+        if not os.path.exists(os.path.join(output_dir, f"{os.path.splitext(os.path.basename(image_path))[0]}.geojson"))
     ]
 
     try:
