@@ -118,40 +118,43 @@ def calculate_iou_metrics(prediction_gdf: gpd.GeoDataFrame, ground_truth_gdf: gp
 
     def calculate_tree_iou():
         if prediction_gdf.empty or ground_truth_gdf.empty:
-            return 0.0
+            return 0.0  # Return 0 IoU with all counts as 0
 
         matched_preds = set()
         matched_gts = set()
 
-        for _, pred_row in prediction_gdf.iterrows():
+        # Check each predicted tree segment against all ground truth segments
+        for pred_idx, pred_row in prediction_gdf.iterrows():
             pred_geom = pred_row["geometry"]
-
-            intersecting_gts = ground_truth_gdf[ground_truth_gdf.intersects(pred_geom)]
-
-            if intersecting_gts.empty:
-                continue
-
+            best_overlap = 0.0
             best_match = None
-            best_iou = 0.0
-            for _, gt_row in intersecting_gts.iterrows():
+
+            for gt_idx, gt_row in ground_truth_gdf.iterrows():
                 gt_geom = gt_row["geometry"]
                 intersect_area = pred_geom.intersection(gt_geom).area
-                union_area = pred_geom.area + gt_geom.area - intersect_area
-                iou = intersect_area / union_area if union_area > 0 else 0.0
+                pred_area = pred_geom.area
 
-                if iou > best_iou:
-                    best_iou = iou
-                    best_match = gt_row.name
+                if pred_area > 0:
+                    overlap_ratio = intersect_area / pred_area
+                else:
+                    overlap_ratio = 0.0
 
-            if best_iou >= overlap_threshold and best_match not in matched_gts:
-                matched_preds.add(pred_row.name)
+                if overlap_ratio > best_overlap:
+                    best_overlap = overlap_ratio
+                    best_match = gt_idx
+
+            if best_overlap >= overlap_threshold and best_match not in matched_gts:
+                matched_preds.add(pred_idx)
                 matched_gts.add(best_match)
 
-        tp = len(matched_gts)  # Matched ground truth segments
-        fp = len(prediction_gdf) - len(matched_preds)  # Unmatched predictions
-        fn = len(ground_truth_gdf) - len(matched_gts)  # Unmatched ground truth
+        # Calculate TP, FP, FN counts
+        tp = len(matched_gts)  # True Positives: ground truth segments matched correctly
+        fp = len(prediction_gdf) - len(matched_preds)  # False Positives: extra predicted segments
+        fn = len(ground_truth_gdf) - len(matched_gts)  # False Negatives: missed ground truth segments
 
-        return tp / (tp + fp + fn) if (tp + fp + fn) > 0 else 1.0
+        tree_iou = tp / (tp + fp + fn) if (tp + fp + fn) > 0 else 0.0
+        
+        return tree_iou
     
     return calculate_pixel_iou(), calculate_tree_iou()
 

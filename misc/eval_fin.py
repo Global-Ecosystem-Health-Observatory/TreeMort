@@ -31,6 +31,7 @@ def process_prediction_file(
             ground_truth_gdf = ground_truth_gdf.to_crs(prediction_gdf.crs)
 
         pixel_iou, tree_iou = calculate_iou_metrics(prediction_gdf, ground_truth_gdf)
+
         tp_centroid, fp_centroid, fn_centroid, centroid_error = calculate_centroid_errors(
             prediction_gdf, ground_truth_gdf
         )

@@ -33,6 +33,7 @@ from inference.utils import (
     detect_multiple_peaks,
     segment_using_watershed,
     smooth_segment_contours,
+    refine_dead_tree_segments_adaptive,
 )
 from inference.graph_partition import perform_graph_partitioning, refine_elliptical_regions_with_graph
 
@@ -69,19 +70,27 @@ def process_image(
             centroid_map_np = centroid_map.cpu().numpy()
 
             min_size_threshold = 30  # 1.5 meters in crown diameter
-            sigma_value = 5
-            
             filtered_segment_map = filter_segment_map(segment_map_np, min_size=min_size_threshold)
+
             graph_partitioned_map = refine_elliptical_regions_with_graph(label(filtered_segment_map), image_np)
-            preprocessed_centroid_map = preprocess_centroid_map(
-                centroid_map_np, graph_partitioned_map, sigma=sigma_value
-            )
-            refined_centroid_map = refine_centroid_map(graph_partitioned_map, preprocessed_centroid_map)
+
+            sigma_value = 5
+            preprocessed_centroid_map = preprocess_centroid_map(centroid_map_np, graph_partitioned_map, sigma=sigma_value)
+
+            refined_centroid_map = refine_centroid_map(graph_partitioned_map > 0, preprocessed_centroid_map)
+
             multiple_peaks = detect_multiple_peaks(refined_centroid_map, min_distance=5, threshold_abs=0.2)
-            watershed_segmented_map = segment_using_watershed(
-                graph_partitioned_map, refined_centroid_map, multiple_peaks
+
+            watershed_segmented_map = segment_using_watershed(graph_partitioned_map, refined_centroid_map, multiple_peaks)
+
+            smoothed_segment_map = smooth_segment_contours(watershed_segmented_map, dilation_size=1)
+
+            refined_segment_map = refine_segments(smoothed_segment_map, image_np)
+            refined_segment_map = refine_dead_tree_segments_adaptive(
+                smoothed_segment_map,
+                image_np,
+                intensity_threshold=0.05
             )
-            smoothed_segment_map = smooth_segment_contours(watershed_segmented_map, dilation_size=2)
             
             '''
             filtered_segment_map = filter_segment_map(refined_mask_np, min_size=min_size_threshold)
@@ -123,7 +132,7 @@ def process_image(
             # )
 
             save_labels_as_geojson(
-                smoothed_segment_map,
+                refined_segment_map,
                 transform,
                 crs,
                 geojson_path,

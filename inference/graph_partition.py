@@ -224,26 +224,34 @@ def refine_elliptical_regions_with_graph(labels, intensity_image):
         raise ValueError(f"Shape mismatch: labels {labels.shape} and intensity_image {intensity_image.shape}")
 
     refined_labels = labels.copy()
-
     regions = measure.regionprops(labels, intensity_image=intensity_image)
+
     G = nx.Graph()
-
     for region in regions:
-        G.add_node(region.label, centroid=(0, 0), mean_intensity=0)  # Default attributes
-        if region.area >= 16:
-            G.nodes[region.label]['centroid'] = region.centroid
-            G.nodes[region.label]['mean_intensity'] = region.mean_intensity
+        if region.area >= 16:  # Skip very small regions
+            G.add_node(
+                region.label,
+                centroid=region.centroid,
+                mean_intensity=region.mean_intensity,
+                area=region.area,
+            )
 
-    # Add edges based on proximity and intensity difference
+    avg_region_diameter = np.sqrt(np.mean([region.area for region in regions if region.area >= 16]))
+    global_intensity_range = np.ptp(intensity_image)
+
     for region1 in regions:
         for region2 in regions:
             if region1.label != region2.label:
                 dist = np.linalg.norm(np.array(region1.centroid) - np.array(region2.centroid))
                 intensity_diff = abs(region1.mean_intensity - region2.mean_intensity)
-                if dist < 10 and intensity_diff < 0.3:  # Thresholds for proximity and intensity
-                    G.add_edge(region1.label, region2.label, weight=1 / (dist + 1e-5))
 
-    # Add edges between disconnected components
+                normalized_dist = dist / avg_region_diameter
+                normalized_intensity_diff = intensity_diff / global_intensity_range
+
+                if normalized_dist < 1.5 and normalized_intensity_diff < 0.2:
+                    weight = 1 / (normalized_dist + normalized_intensity_diff + 1e-5)
+                    G.add_edge(region1.label, region2.label, weight=weight)
+
     components = list(nx.connected_components(G))
     for i in range(len(components) - 1):
         node1 = list(components[i])[0]
@@ -254,15 +262,15 @@ def refine_elliptical_regions_with_graph(labels, intensity_image):
         G.add_edge(node1, node2, weight=1 / (dist + 1e-5))
 
     num_nodes = len(G.nodes)
-    n_clusters = min(num_nodes - 1, 10)
+    n_clusters = min(max(2, num_nodes // 2), 10)  # Dynamically adjust clusters
 
     if num_nodes < 2:
         for node in G.nodes:
-            refined_labels[labels == node] = node  # Assign unique label
+            refined_labels[labels == node] = node
         return refined_labels
 
     adjacency_matrix = nx.to_numpy_array(G)
-    clustering = SpectralClustering(n_clusters=n_clusters, affinity='precomputed').fit(adjacency_matrix)
+    clustering = SpectralClustering(n_clusters=n_clusters, affinity='precomputed', random_state=42).fit(adjacency_matrix)
 
     for i, region in enumerate(regions):
         refined_labels[labels == region.label] = clustering.labels_[i] + 1
