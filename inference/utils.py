@@ -796,92 +796,29 @@ def filter_segment_map(segment_map, min_size=50):
     return filtered_segment_map
 
 
-def refine_elliptical_regions_with_graph(labels, intensity_image):
-    intensity_image = intensity_image.mean(axis=0) if intensity_image.ndim == 3 else intensity_image
-
-    if labels.shape != intensity_image.shape:
-        raise ValueError(f"Shape mismatch: labels {labels.shape} and intensity_image {intensity_image.shape}")
-
-    refined_labels = labels.copy()
-    regions = measure.regionprops(labels, intensity_image=intensity_image)
-
-    # Create graph with regions as nodes
-    G = nx.Graph()
-    for region in regions:
-        if region.area >= 16:  # Skip very small regions
-            G.add_node(
-                region.label,
-                centroid=region.centroid,
-                mean_intensity=region.mean_intensity,
-                area=region.area,
-            )
-
-    # Add edges based on proximity and intensity difference
-    avg_region_diameter = np.sqrt(np.mean([region.area for region in regions if region.area >= 16]))
-    global_intensity_range = np.ptp(intensity_image)
-
-    for region1 in regions:
-        for region2 in regions:
-            if region1.label != region2.label:
-                dist = np.linalg.norm(np.array(region1.centroid) - np.array(region2.centroid))
-                intensity_diff = abs(region1.mean_intensity - region2.mean_intensity)
-
-                normalized_dist = dist / avg_region_diameter
-                normalized_intensity_diff = intensity_diff / global_intensity_range
-
-                if normalized_dist < 1.5 and normalized_intensity_diff < 0.2:
-                    weight = 1 / (normalized_dist + normalized_intensity_diff + 1e-5)
-                    G.add_edge(region1.label, region2.label, weight=weight)
-
-    components = list(nx.connected_components(G))
-    for i in range(len(components) - 1):
-        node1 = list(components[i])[0]
-        node2 = list(components[i + 1])[0]
-        centroid1 = G.nodes[node1]['centroid']
-        centroid2 = G.nodes[node2]['centroid']
-        dist = np.linalg.norm(np.array(centroid1) - np.array(centroid2))
-        G.add_edge(node1, node2, weight=1 / (dist + 1e-5))
-
-    num_nodes = len(G.nodes)
-    n_clusters = min(max(2, num_nodes // 2), 10)  # Dynamically adjust clusters
-
-    if num_nodes < 2:
-        for node in G.nodes:
-            refined_labels[labels == node] = node
-        return refined_labels
-
-    adjacency_matrix = nx.to_numpy_array(G)
-    clustering = SpectralClustering(n_clusters=n_clusters, affinity='precomputed', random_state=42).fit(
-        adjacency_matrix
-    )
-
-    for i, region in enumerate(regions):
-        refined_labels[labels == region.label] = clustering.labels_[i] + 1
-
-    return refined_labels
-
-
 def preprocess_centroid_map(centroid_map, segment_map, sigma=5):
-    smoothed_centroid_map = centroid_map
-
-    normalized_centroid_map = smoothed_centroid_map / smoothed_centroid_map.max()
-
+    normalized_centroid_map = centroid_map / centroid_map.max()
+    
     binary_mask = segment_map > 0  # Mask for valid regions
     masked_centroid_map = normalized_centroid_map * binary_mask
-
+    
     return masked_centroid_map
 
 
 def refine_centroid_map(segment_map, centroid_map):
     distance_map = distance_transform_edt(segment_map > 0)
-
+    
     refined_centroid_map = distance_map * centroid_map
-
+    
     return refined_centroid_map
 
 
 def detect_multiple_peaks(refined_centroid_map, min_distance=5, threshold_abs=0.2):
-    coordinates = peak_local_max(refined_centroid_map, min_distance=min_distance, threshold_abs=threshold_abs)
+    coordinates = peak_local_max(
+        refined_centroid_map,
+        min_distance=min_distance,
+        threshold_abs=threshold_abs
+    )
     return coordinates
 
 
@@ -889,9 +826,9 @@ def segment_using_watershed(segment_map, refined_centroid_map, peak_coords):
     markers = np.zeros_like(segment_map, dtype=int)
     for i, (row, col) in enumerate(peak_coords, start=1):
         markers[row, col] = i
-
+    
     segmented_map = watershed(-refined_centroid_map, markers, mask=segment_map)
-
+    
     return segmented_map
 
 
@@ -899,7 +836,7 @@ def compute_orientation_with_pca(contour_points):
     contour_points = np.squeeze(contour_points)
     if len(contour_points.shape) < 2 or contour_points.shape[0] < 2:
         return None  # Insufficient points for PCA
-
+    
     pca = PCA(n_components=2)
     pca.fit(contour_points)
 
@@ -916,23 +853,27 @@ def smooth_segment_contours(segment_map, dilation_size=2, min_area=28, min_axes_
             continue
 
         segment_mask = segment_map == label
-
+        
         if segment_mask.sum() < min_area:
-            segment_mask = binary_dilation(segment_mask, structure=np.ones((dilation_size, dilation_size)))
-
-        contours, _ = cv2.findContours(segment_mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
+            segment_mask = binary_dilation(
+                segment_mask,
+                structure=np.ones((dilation_size, dilation_size))
+            )
+        
+        contours, _ = cv2.findContours(
+            segment_mask.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+        )
+        
         if contours and len(contours[0]) >= 5:  # Minimum points for ellipse fitting
             orientation_angle_pca = compute_orientation_with_pca(contours[0])
+
             ellipse_params = cv2.fitEllipse(contours[0])
 
-            if np.isnan(ellipse_params[1][0]) or np.isnan(ellipse_params[1][1]):
-                print(f"Invalid ellipse parameters for label {label}: {ellipse_params}")
-                refined_segment_map[segment_mask] = label
-                continue
-
             ellipse_angle_cv = np.deg2rad(ellipse_params[2])
-            corrected_angle = orientation_angle_pca if abs(orientation_angle_pca - ellipse_angle_cv) > np.pi / 4 else ellipse_angle_cv
+            if abs(orientation_angle_pca - ellipse_angle_cv) > np.pi / 4:
+                corrected_angle = orientation_angle_pca
+            else:
+                corrected_angle = ellipse_angle_cv
 
             axes = (
                 max(ellipse_params[1][0], min_axes_length * 2),  # Semi-minor axis
@@ -942,16 +883,9 @@ def smooth_segment_contours(segment_map, dilation_size=2, min_area=28, min_axes_
                 axes = (axes[1], axes[0])
                 corrected_angle += np.pi / 2
 
-            if np.isnan(axes[1] / 2) or np.isnan(axes[0] / 2):
-                print(f"NaN detected in axis computation for label {label}.")
-                refined_segment_map[segment_mask] = label
-                continue
-
             rr, cc = ellipse(
-                int(ellipse_params[0][1]),  # Center Y
-                int(ellipse_params[0][0]),  # Center X
-                int(axes[1] / 2),  # Semi-major
-                int(axes[0] / 2),  # Semi-minor
+                int(ellipse_params[0][1]), int(ellipse_params[0][0]),  # Center
+                int(axes[1] / 2), int(axes[0] / 2),  # Axes
                 rotation=corrected_angle, shape=segment_map.shape
             )
             refined_segment_map[rr, cc] = label
@@ -962,7 +896,83 @@ def smooth_segment_contours(segment_map, dilation_size=2, min_area=28, min_axes_
     for label in unique_labels:
         if label == 0:  # Background
             continue
-        dilated_label = binary_dilation(refined_segment_map == label, structure=np.ones((dilation_size, dilation_size)))
+        dilated_label = binary_dilation(
+            refined_segment_map == label,
+            structure=np.ones((dilation_size, dilation_size))
+        )
         final_segment_map[dilated_label] = label
-
+    
     return final_segment_map
+
+
+def refine_dead_tree_segments_adaptive(segment_map, intensity_image, intensity_threshold=0.1, erosion_iterations=10, dilation_iterations=10):
+    refined_segment_map = np.copy(segment_map)
+    unique_labels = np.unique(segment_map)
+
+    # Calculate NDVI
+    # nir = intensity_image[3, :, :]  # Assuming NIR is the 4th channel
+    # red = intensity_image[2, :, :]  # Assuming Red is the 3rd channel
+    # ndvi = (nir - red) / (nir + red + 1e-6)  # Adding a small epsilon to avoid division by zero
+    # intensity_image_2d = ndvi
+    intensity_image_2d = intensity_image.mean(axis=0) if intensity_image.ndim == 3 else intensity_image
+
+    for label in unique_labels:
+        if label == 0:  # Skip background
+            continue
+
+        segment_mask = (segment_map == label).astype(np.uint8)
+
+        segment_intensity = intensity_image_2d[segment_mask == 1]
+        mean_intensity = float(np.mean(segment_intensity))
+
+        erosion_kernel = np.ones((3, 3), np.uint8)
+        segment_core = cv2.erode(segment_mask, erosion_kernel, iterations=2)
+
+        core_intensity = intensity_image_2d[segment_core == 1]
+
+        if core_intensity.size == 0:
+            core_intensity = segment_intensity  # Fallback to entire segment intensity
+            print(f"Warning: Erosion removed segment {label}, using full segment intensity.")
+
+        lower_bound = np.percentile(core_intensity, 20)
+        upper_bound = np.percentile(core_intensity, 90)
+
+        filtered_intensity = core_intensity[
+            (core_intensity >= lower_bound) & (core_intensity <= upper_bound)
+        ]
+        core_mean_intensity = float(np.mean(filtered_intensity))
+
+        upper_threshold = mean_intensity + intensity_threshold  # More tolerant range
+        lower_threshold = mean_intensity - intensity_threshold
+
+        for _ in range(erosion_iterations):
+            contours, _ = cv2.findContours(segment_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+            for contour in contours:
+                for point in contour:
+                    x, y = point[0]
+
+                    contour_intensity = intensity_image_2d[y, x]
+
+                    if contour_intensity > upper_threshold or contour_intensity < lower_threshold:
+                        segment_mask[y, x] = 0
+        
+        for _ in range(dilation_iterations):
+            contours, _ = cv2.findContours(segment_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+            for contour in contours:
+                for point in contour:
+                    x, y = point[0]
+
+                    contour_intensity = intensity_image_2d[y, x]
+
+                    if abs(contour_intensity - mean_intensity) <= intensity_threshold:
+                        for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:  # 4-connected neighbors
+                            nx, ny = x + dx, y + dy
+                            if 0 <= nx < intensity_image_2d.shape[1] and 0 <= ny < intensity_image_2d.shape[0]:
+                                if segment_mask[ny, nx] == 0 and abs(intensity_image_2d[ny, nx] - mean_intensity) <= intensity_threshold:
+                                    segment_mask[ny, nx] = 1
+                                        
+        refined_segment_map[segment_mask == 1] = label
+
+    return refined_segment_map
