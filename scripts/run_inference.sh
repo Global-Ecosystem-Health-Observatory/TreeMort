@@ -1,13 +1,14 @@
 #!/bin/bash
-#SBATCH --job-name=treemort-inference              # Job name
-#SBATCH --account=project_2004205                  # Project account
-#SBATCH --output=output/stdout/%A_%a.out           # Output log
-#SBATCH --error=output/stderr/%A_%a.err            # Error log
-#SBATCH --ntasks=1                                 # Number of tasks (1 process)
-#SBATCH --cpus-per-task=2                          # Number of CPU cores per task
-#SBATCH --time=05:00:00                            # Time limit (hh:mm:ss)
-#SBATCH --partition=small                          # Partition to submit to
-#SBATCH --mem-per-cpu=24000                        # Memory per CPU in MB (6GB per CPU)
+#SBATCH --job-name=treemort-inference
+#SBATCH --account=project_2004205
+#SBATCH --output=output/stdout/%A_%a.out
+#SBATCH --error=output/stderr/%A_%a.err
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=2
+#SBATCH --time=05:00:00
+#SBATCH --partition=gpu
+#SBATCH --mem-per-cpu=24000
+#SBATCH --gres=gpu:v100:1
 
 # Usage:
 # export TREEMORT_VENV_PATH="/custom/path/to/venv"
