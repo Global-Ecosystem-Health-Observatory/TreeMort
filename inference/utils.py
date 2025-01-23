@@ -1,5 +1,4 @@
 import os
-import gc
 import cv2
 import torch
 import geojson
@@ -7,7 +6,6 @@ import rasterio
 import rasterio.features
 
 import numpy as np
-import networkx as nx
 import geopandas as gpd
 
 from affine import Affine
@@ -16,17 +14,16 @@ from typing import Optional, List, Tuple, Generator, Dict
 from rasterio.crs import CRS
 from shapely.geometry import Polygon, shape
 
-from sklearn.cluster import SpectralClustering
 from sklearn.decomposition import PCA
 
 from scipy import ndimage
 from scipy.ndimage import gaussian_filter, distance_transform_edt, binary_dilation, binary_erosion
 
-from skimage import measure
+from skimage import exposure
 from skimage.draw import ellipse
 from skimage.feature import peak_local_max
 from skimage.filters import gaussian
-from skimage.morphology import disk, square, remove_small_objects, label
+from skimage.morphology import disk, square, remove_small_objects
 from skimage.segmentation import watershed, relabel_sequential, find_boundaries
 
 from treemort.modeling.builder import build_model
@@ -217,7 +214,7 @@ def _finalize_prediction(
     no_contribution_mask = count_map == 0
     count_map[no_contribution_mask] = 1
 
-    final_prediction = prediction_map / count_map
+    final_prediction = prediction_map / count_map.unsqueeze(0)
     final_prediction[:, no_contribution_mask] = 0
     final_prediction = torch.clamp(final_prediction, 0, 1)
 
@@ -282,6 +279,7 @@ def _update_maps(
     prediction_map[:, y : y + binary_confidence.shape[0], x : x + binary_confidence.shape[1]] += torch.stack(
         [binary_confidence, centroid_confidence]
     )
+    
     count_map[y : y + binary_confidence.shape[0], x : x + binary_confidence.shape[1]] += binary_mask
 
 
@@ -785,13 +783,11 @@ def refine_segments(
     return refined_labels
 
 
-def filter_segment_map(segment_map, min_size=50):
-    if segment_map.dtype != bool:
-        binary_segment_map = segment_map > 0
-    else:
-        binary_segment_map = segment_map
+def filter_segment_map(segment_map, threshold=0.5, min_size=50):
+    binary_segment_map = segment_map > threshold
 
-    filtered_segment_map = remove_small_objects(binary_segment_map, min_size=min_size)
+    filtered_binary_map = remove_small_objects(binary_segment_map, min_size=min_size)
+    filtered_segment_map = np.where(filtered_binary_map, segment_map, 0.0)
 
     return filtered_segment_map
 
@@ -805,29 +801,45 @@ def preprocess_centroid_map(centroid_map, segment_map, sigma=5):
     return masked_centroid_map
 
 
-def refine_centroid_map(segment_map, centroid_map):
-    distance_map = distance_transform_edt(segment_map > 0)
-    
-    refined_centroid_map = distance_map * centroid_map
-    
+def contrast_stretch_segment(segment_mask, intensity_image, p_low=10, p_high=60):
+    segment_pixels = intensity_image[segment_mask == 1]
+
+    if segment_pixels.size == 0:
+        return intensity_image  # Return original image if no segment pixels
+
+    p_min, p_max = np.percentile(segment_pixels, (p_low, p_high))
+
+    stretched = exposure.rescale_intensity(intensity_image, in_range=(p_min, p_max), out_range=(0, 1))
+
+    return stretched
+
+
+def refine_centroid_map(segment_map, centroid_map, threshold=0.5):
+    distance_map = distance_transform_edt(centroid_map > threshold)
+
+    refined_centroid_map = distance_map * centroid_map    
+    refined_centroid_map = refined_centroid_map / refined_centroid_map.max()
+
     return refined_centroid_map
 
 
-def detect_multiple_peaks(refined_centroid_map, min_distance=5, threshold_abs=0.2):
+def detect_multiple_peaks(segment_map, min_distance=5, threshold_abs=0.1):
     coordinates = peak_local_max(
-        refined_centroid_map,
+        segment_map,
         min_distance=min_distance,
         threshold_abs=threshold_abs
     )
     return coordinates
 
 
-def segment_using_watershed(segment_map, refined_centroid_map, peak_coords):
+def segment_using_watershed(segment_map, refined_centroid_map, peak_coords, threshold=0.5):
+    binary_mask = segment_map > threshold
+
     markers = np.zeros_like(segment_map, dtype=int)
     for i, (row, col) in enumerate(peak_coords, start=1):
         markers[row, col] = i
     
-    segmented_map = watershed(-refined_centroid_map, markers, mask=segment_map)
+    segmented_map = watershed(-refined_centroid_map, markers, mask=binary_mask)
     
     return segmented_map
 

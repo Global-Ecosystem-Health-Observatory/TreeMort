@@ -5,7 +5,6 @@ stride = 128
 nir-rgb-order = [3, 0, 1, 2]
 
 best-model = ./output/flair_unet_dual/best.weights.pth
-refine-model = ./output/refine/best.weights.finland.pth
 
 model-config = ${TREEMORT_REPO_PATH}/configs/flair_unet_bs8_cs256.txt
 
@@ -18,4 +17,4 @@ centroid-threshold=0.7
 dilation-radius=1
 blur-sigma=1.0
 
-threshold=0.5
+threshold=0.4
