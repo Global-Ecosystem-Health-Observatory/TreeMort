@@ -41,7 +41,6 @@ from inference.graph_partition import perform_graph_partitioning, refine_ellipti
 
 def process_image(
     model: torch.nn.Module,
-    refine_model: torch.nn.Module,
     image_path: str,
     geojson_path: str,
     conf: object,
@@ -52,8 +51,6 @@ def process_image(
     logger.debug(f"Processing image: {os.path.basename(image_path)}")
 
     try:
-        device = next(model.parameters()).device
-
         image, transform, crs = load_and_preprocess_image(image_path, conf.nir_rgb_order)
         logger.debug(f"Loaded and preprocessed image: {os.path.basename(image_path)}")
 
@@ -63,84 +60,21 @@ def process_image(
         segment_map, centroid_map = prediction_maps
 
         if post_process:
-            # refined_mask = refine_mask(segment_map, refine_model, device)
-
-            # refined_mask_np = refined_mask.cpu().numpy().astype(bool)
             image_np = image.cpu().numpy()
             segment_map_np = segment_map.cpu().numpy()
             centroid_map_np = centroid_map.cpu().numpy()
 
             min_size_threshold = 30  # 1.5 meters in crown diameter
-            filtered_segment_map = filter_segment_map(segment_map_np, min_size=min_size_threshold)
+            filtered_segment_map = filter_segment_map(segment_map_np, threshold=conf.threshold, min_size=min_size_threshold)
 
-            graph_partitioned_map = refine_elliptical_regions_with_graph(label(filtered_segment_map), image_np)
+            refined_centroid_map = refine_centroid_map(filtered_segment_map, centroid_map_np, threshold=0.2)
 
-            sigma_value = 5
-            preprocessed_centroid_map = preprocess_centroid_map(centroid_map_np, graph_partitioned_map, sigma=sigma_value)
+            multiple_peaks = detect_multiple_peaks(refined_centroid_map, min_distance=5, threshold_abs=0.1)
 
-            refined_centroid_map = refine_centroid_map(graph_partitioned_map > 0, preprocessed_centroid_map)
-
-            multiple_peaks = detect_multiple_peaks(refined_centroid_map, min_distance=5, threshold_abs=0.2)
-
-            watershed_segmented_map = segment_using_watershed(graph_partitioned_map, refined_centroid_map, multiple_peaks)
-
-            smoothed_segment_map = smooth_segment_contours(watershed_segmented_map, dilation_size=1)
-
-            refined_segment_map = refine_segments(smoothed_segment_map, image_np)
-            # refined_segment_map = refine_dead_tree_segments_adaptive(
-            #     smoothed_segment_map,
-            #     image_np,
-            #     intensity_threshold=0.05
-            # )
-
-            refined_segment_map = refine_segments_irregular_shape(
-                segment_map=smoothed_segment_map,
-                intensity_image=image_np,
-                intensity_threshold=0.03,
-                max_growth_radius=40
-            )
-            
-            '''
-            filtered_segment_map = filter_segment_map(refined_mask_np, min_size=min_size_threshold)
-            graph_partitioned_map = refine_elliptical_regions_with_graph(label(filtered_segment_map), image_np)
-            preprocessed_centroid_map = preprocess_centroid_map(
-                centroid_map_np, filtered_segment_map, sigma=sigma_value
-            )
-            refined_centroid_map = refine_centroid_map(filtered_segment_map, preprocessed_centroid_map)
-            multiple_peaks = detect_multiple_peaks(refined_centroid_map, min_distance=5, threshold_abs=0.2)
-            watershed_segmented_map = segment_using_watershed(
-                graph_partitioned_map, refined_centroid_map, multiple_peaks
-            )
-            smoothed_segment_map = smooth_segment_contours(watershed_segmented_map, dilation_size=1)
-            '''
-
-            # partitioned_labels = decompose_elliptical_regions(
-            #     refined_mask_np,
-            #     intensity_image=image_np,
-            #     centroid_map=centroid_map_np,
-            #     min_distance=conf.min_distance,
-            #     sigma=conf.blur_sigma,
-            #     peak_threshold=conf.centroid_threshold
-            # )
-
-            # refined_partitioned_labels = refine_elliptical_regions_with_graph(partitioned_labels, image_np)
-
-            # refined_labels = refine_segments(refined_partitioned_labels, image_np)
-
-            # partitioned_labels = perform_graph_partitioning(image_np, refined_mask_np)
-
-            # refined_labels = generate_watershed_labels(
-            #     segment_map_np,
-            #     refined_partitioned_labels,
-            #     centroid_map=centroid_map_np,
-            #     min_distance=conf.min_distance,
-            #     blur_sigma=conf.blur_sigma,
-            #     dilation_radius=conf.dilation_radius,
-            #     centroid_threshold=conf.centroid_threshold,
-            # )
+            watershed_segmented_map = segment_using_watershed(filtered_segment_map, refined_centroid_map, multiple_peaks, threshold=conf.threshold)
 
             save_labels_as_geojson(
-                refined_segment_map,
+                watershed_segmented_map,
                 transform,
                 crs,
                 geojson_path,
@@ -177,12 +111,11 @@ def process_single_image(
         logger.info(f"Processing image: {os.path.basename(image_path)}")
 
         model = load_model(conf.model_config, conf.best_model, id2label, device)
-        refine_model = load_refine_model(conf.refine_model, device)
 
         geojson_path = os.path.join(output_dir, f"{os.path.splitext(os.path.basename(image_path))[0]}.geojson")
         os.makedirs(os.path.dirname(geojson_path), exist_ok=True)
 
-        process_image(model, refine_model, image_path, geojson_path, conf, post_process)
+        process_image(model, image_path, geojson_path, conf, post_process)
     except Exception as e:
         log_and_raise(logger, RuntimeError(f"Error processing image {os.path.basename(image_path)}: {e}"))
 
@@ -240,61 +173,19 @@ def parse_config(config_file_path: str) -> argparse.Namespace:
 
     parser = configargparse.ArgParser(default_config_files=[config_file_path])
 
-    parser.add(
-        "--model-config",
-        type=str,
-        required=True,
-        help="Path to the model configuration file (e.g., architecture, hyperparameters).",
-    )
+    parser.add("--model-config", type=str, required=True, help="Path to the model configuration file (e.g., architecture, hyperparameters).",)
     parser.add("--best-model", type=str, required=True, help="Path to the file containing the best model weights.")
-    parser.add("--refine-model", type=str, required=True, help="Path to the file containing the refine model weights.")
-    parser.add(
-        "--window-size", type=int, default=256, help="Size of the sliding window for inference (default: 256 pixels)."
-    )
-    parser.add(
-        "--stride",
-        type=int,
-        default=128,
-        help="Stride length for sliding window during inference (default: 128 pixels).",
-    )
-    parser.add(
-        "--threshold",
-        type=float,
-        default=0.5,
-        help="Threshold for binary classification during inference (default: 0.5).",
-    )
-    parser.add(
-        "--min-area-threshold",
-        type=float,
-        default=1.0,
-        help="Minimum area (in pixels) for retaining a detected region.",
-    )
-    parser.add(
-        "--max-aspect-ratio", type=float, default=3.0, help="Maximum allowable aspect ratio for detected regions."
-    )
-    parser.add(
-        "--min-solidity",
-        type=float,
-        default=0.85,
-        help="Minimum solidity for retaining a detected region (solidity = area/convex hull).",
-    )
+    parser.add("--window-size", type=int, default=256, help="Size of the sliding window for inference (default: 256 pixels).")
+    parser.add("--stride", type=int, default=128, help="Stride length for sliding window during inference (default: 128 pixels).",)
+    parser.add("--threshold", type=float, default=0.5, help="Threshold for binary classification during inference (default: 0.5).",)
+    parser.add("--min-area-threshold", type=float, default=1.0, help="Minimum area (in pixels) for retaining a detected region.",)
+    parser.add("--max-aspect-ratio", type=float, default=3.0, help="Maximum allowable aspect ratio for detected regions.")
+    parser.add("--min-solidity", type=float, default=0.85, help="Minimum solidity for retaining a detected region (solidity = area/convex hull).",)
     parser.add("--min-distance", type=int, default=7, help="Minimum distance between peaks for watershed segmentation.")
-    parser.add(
-        "--dilation-radius", type=int, default=0, help="Radius of the structuring element for dilating binary masks."
-    )
-    parser.add(
-        "--blur-sigma", type=float, default=1.0, help="Standard deviation for Gaussian blur applied to prediction maps."
-    )
-    parser.add(
-        "--centroid-threshold", type=float, default=0.5, help="Threshold for filtering peaks based on the centroid map."
-    )
-    parser.add(
-        "--nir-rgb-order",
-        type=int,
-        nargs='+',
-        default=[3, 0, 1, 2],
-        help="Order of NIR, Red, Green, and Blue channels in the input imagery.",
-    )
+    parser.add("--dilation-radius", type=int, default=0, help="Radius of the structuring element for dilating binary masks.")
+    parser.add("--blur-sigma", type=float, default=1.0, help="Standard deviation for Gaussian blur applied to prediction maps.")
+    parser.add("--centroid-threshold", type=float, default=0.5, help="Threshold for filtering peaks based on the centroid map.")
+    parser.add("--nir-rgb-order", type=int, nargs='+', default=[3, 0, 1, 2], help="Order of NIR, Red, Green, and Blue channels in the input imagery.",)
 
     conf, _ = parser.parse_known_args()
 
