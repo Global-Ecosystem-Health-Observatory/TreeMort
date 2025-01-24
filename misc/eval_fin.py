@@ -120,6 +120,8 @@ def calculate_mean_ious(data_folder: str, predictions_folder: str = None, output
         "recall": [],
         "f1_score": [],
         "centroid_err": [],
+        "pred_count": [],
+        "gt_count": []
     }
     detailed_results = []
 
@@ -134,8 +136,12 @@ def calculate_mean_ious(data_folder: str, predictions_folder: str = None, output
         for future in tqdm(as_completed(futures), total=len(futures), desc="Processing File Pairs"):
             try:
                 pixel_iou, tree_iou, tp, fp, fn, p, r, f1, cerr, lat, lon, pred_count, gt_count = future.result()
-                metrics["pixel_iou"].append(pixel_iou)
-                metrics["tree_iou"].append(tree_iou)
+
+                # Accumulate metrics
+                metrics["pixel_iou"].append(pixel_iou * pred_count)
+                metrics["tree_iou"].append(tree_iou * gt_count)
+                metrics["pred_count"].append(pred_count)
+                metrics["gt_count"].append(gt_count)
                 metrics["tp"] += tp
                 metrics["fp"] += fp
                 metrics["fn"] += fn
@@ -165,16 +171,46 @@ def calculate_mean_ious(data_folder: str, predictions_folder: str = None, output
             except Exception as e:
                 print(f"Error in processing: {e}")
 
+    # Compute final mean IoU using total counts
+    total_pred_count = sum(metrics["pred_count"])
+    total_gt_count = sum(metrics["gt_count"])
+
+    # Compute the overall mean IoU (direct mean over all segments)
+    mean_pixel_iou = sum(metrics["pixel_iou"]) / total_pred_count if total_pred_count > 0 else 0
+    mean_tree_iou = sum(metrics["tree_iou"]) / total_gt_count if total_gt_count > 0 else 0
+
+    # Calculate the standard deviation of individual IoU values
+    std_pixel_iou = np.sqrt(
+        sum([(iou / count - mean_pixel_iou) ** 2 for iou, count in zip(metrics["pixel_iou"], metrics["pred_count"])])
+        / total_pred_count
+    ) if total_pred_count > 0 else 0
+
+    std_tree_iou = np.sqrt(
+        sum([(iou / count - mean_tree_iou) ** 2 for iou, count in zip(metrics["tree_iou"], metrics["gt_count"]) if count > 0])
+        / total_gt_count
+    ) if total_gt_count > 0 else 0
+
+    # Compute confidence intervals using segment-level IoU values
+    ci_pixel_iou = compute_confidence_interval(
+        [iou / count for iou, count in zip(metrics["pixel_iou"], metrics["pred_count"])] if total_pred_count > 0 else [0]
+    )
+
+    ci_tree_iou = compute_confidence_interval(
+        [iou / count for iou, count in zip(metrics["tree_iou"], metrics["gt_count"]) if count > 0] 
+        if total_gt_count > 0 else [0]
+    )
+
     if output_csv:
         save_results_to_csv(detailed_results, output_csv)
 
+    # Compute final evaluation statistics
     results = {
-        "mean_pixel_iou": np.mean(metrics["pixel_iou"]),
-        "std_pixel_iou": np.std(metrics["pixel_iou"]),
-        "ci_pixel_iou": compute_confidence_interval(metrics["pixel_iou"]),
-        "mean_tree_iou": np.mean(metrics["tree_iou"]),
-        "std_tree_iou": np.std(metrics["tree_iou"]),
-        "ci_tree_iou": compute_confidence_interval(metrics["tree_iou"]),
+        "mean_pixel_iou": mean_pixel_iou,
+        "std_pixel_iou": std_pixel_iou,
+        "ci_pixel_iou": ci_pixel_iou,
+        "mean_tree_iou": mean_tree_iou,
+        "std_tree_iou": std_tree_iou,
+        "ci_tree_iou": ci_tree_iou,
         "mean_precision": np.mean(metrics["precision"]),
         "std_precision": np.std(metrics["precision"]),
         "ci_precision": compute_confidence_interval(metrics["precision"]),
