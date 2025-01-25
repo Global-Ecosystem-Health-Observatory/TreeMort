@@ -18,7 +18,61 @@ from misc.utils import (
 )
 
 
-test_keys = ['L2344D_2022_1_ITD.geojson','L3211A_2022_1_ITD.geojson','L3211A_2022_2_ITD.geojson','L4134A_2013_1.geojson','L4134E_2013_1.geojson','L5242G_2017_1_ITD.geojson','L5244D_2017_1_ITD.geojson','M3442B_2011_1.geojson','N4242H_2019_1_ITD.geojson','N5132F_2022_1_ITD.geojson','N5412A_tile_0_2023_ITD.geojson','N5412A_tile_1_2023_ITD.geojson','N5412A_tile_3_2023_ITD.geojson','N5412B_tile_0_2023_ITD.geojson','N5412B_tile_2_2023_ITD.geojson','N5412C_tile_2_2023_ITD.geojson','N5412D_tile_1_2023_ITD.geojson','N5412E_tile_1_2023_ITD.geojson','N5412F_tile_1_2023_ITD.geojson','N5442C_2014_1.geojson','P4131H_2019_1_ITD.geojson','P4131H_2019_2_ITD.geojson','P4341G_2022_1_ITD.geojson','P4343H_2022_1_ITD.geojson','P5322F_2_1.geojson','Q3334C_2019_1_ITD.geojson','Q3334C_2019_2_ITD.geojson','Q4211E_2019_1_ITD.geojson','Q4323B_2022_1_ITD.geojson','Q5422F_2022_1_ITD.geojson','Q5422H_2022_1_ITD.geojson','R4234D_2019_1_ITD.geojson','R4414E_tile_0_2023_ITD.geojson','R4414E_tile_3_2023_ITD.geojson','R4414F_tile_0_2023_ITD.geojson','R4414F_tile_1_2023_ITD.geojson','R4414F_tile_3_2023_ITD.geojson','R4423E_tile_1_2023_ITD.geojson','R4423E_tile_2_2023_ITD.geojson','S5112B_2022_1_ITD.geojson','T4123G_2022_1_ITD.geojson','U4324B_2022_1_ITD.geojson','U5224D_2022_1_ITD.geojson','U5242A_2022_1_ITD.geojson','V4311C_2022_1_ITD.geojson','V4314G_2022_1_ITD.geojson','V4314G_2022_2_ITD.geojson','V4314H_2022_1_ITD.geojson','V4323C_2022_1_ITD.geojson','V4331A_2022_1_ITD.geojson','V4331A_2022_2_ITD.geojson','V4341C_2022_1_ITD.geojson']
+test_keys = [
+    'L2344D_2022_1_ITD.geojson',
+    'L3211A_2022_1_ITD.geojson',
+    'L3211A_2022_2_ITD.geojson',
+    'L4134A_2013_1.geojson',
+    'L4134E_2013_1.geojson',
+    'L5242G_2017_1_ITD.geojson',
+    'L5244D_2017_1_ITD.geojson',
+    'M3442B_2011_1.geojson',
+    'N4242H_2019_1_ITD.geojson',
+    'N5132F_2022_1_ITD.geojson',
+    'N5412A_tile_0_2023_ITD.geojson',
+    'N5412A_tile_1_2023_ITD.geojson',
+    'N5412A_tile_3_2023_ITD.geojson',
+    'N5412B_tile_0_2023_ITD.geojson',
+    'N5412B_tile_2_2023_ITD.geojson',
+    'N5412C_tile_2_2023_ITD.geojson',
+    'N5412D_tile_1_2023_ITD.geojson',
+    'N5412E_tile_1_2023_ITD.geojson',
+    'N5412F_tile_1_2023_ITD.geojson',
+    'N5442C_2014_1.geojson',
+    'P4131H_2019_1_ITD.geojson',
+    'P4131H_2019_2_ITD.geojson',
+    'P4341G_2022_1_ITD.geojson',
+    'P4343H_2022_1_ITD.geojson',
+    'P5322F_2_1.geojson',
+    'Q3334C_2019_1_ITD.geojson',
+    'Q3334C_2019_2_ITD.geojson',
+    'Q4211E_2019_1_ITD.geojson',
+    'Q4323B_2022_1_ITD.geojson',
+    'Q5422F_2022_1_ITD.geojson',
+    'Q5422H_2022_1_ITD.geojson',
+    'R4234D_2019_1_ITD.geojson',
+    'R4414E_tile_0_2023_ITD.geojson',
+    'R4414E_tile_3_2023_ITD.geojson',
+    'R4414F_tile_0_2023_ITD.geojson',
+    'R4414F_tile_1_2023_ITD.geojson',
+    'R4414F_tile_3_2023_ITD.geojson',
+    'R4423E_tile_1_2023_ITD.geojson',
+    'R4423E_tile_2_2023_ITD.geojson',
+    'S5112B_2022_1_ITD.geojson',
+    'T4123G_2022_1_ITD.geojson',
+    'U4324B_2022_1_ITD.geojson',
+    'U5224D_2022_1_ITD.geojson',
+    'U5242A_2022_1_ITD.geojson',
+    'V4311C_2022_1_ITD.geojson',
+    'V4314G_2022_1_ITD.geojson',
+    'V4314G_2022_2_ITD.geojson',
+    'V4314H_2022_1_ITD.geojson',
+    'V4323C_2022_1_ITD.geojson',
+    'V4331A_2022_1_ITD.geojson',
+    'V4331A_2022_2_ITD.geojson',
+    'V4341C_2022_1_ITD.geojson',
+]
+
 
 def process_prediction_file(
     image_path: str, prediction_path: str, ground_truth_path: str
@@ -92,7 +146,7 @@ def save_results_to_csv(results, output_file):
 
 def compute_confidence_interval(data: List[float], confidence: float = 0.95) -> Tuple[float, float]:
     clean_data = [x for x in data if not np.isnan(x)]
-    
+
     if len(clean_data) == 0:
         return float('nan'), float('nan')
 
@@ -121,7 +175,7 @@ def calculate_mean_ious(data_folder: str, predictions_folder: str = None, output
         "f1_score": [],
         "centroid_err": [],
         "pred_count": [],
-        "gt_count": []
+        "gt_count": [],
     }
     detailed_results = []
 
@@ -137,7 +191,6 @@ def calculate_mean_ious(data_folder: str, predictions_folder: str = None, output
             try:
                 pixel_iou, tree_iou, tp, fp, fn, p, r, f1, cerr, lat, lon, pred_count, gt_count = future.result()
 
-                # Accumulate metrics
                 metrics["pixel_iou"].append(pixel_iou * pred_count)
                 metrics["tree_iou"].append(tree_iou * gt_count)
                 metrics["pred_count"].append(pred_count)
@@ -171,39 +224,51 @@ def calculate_mean_ious(data_folder: str, predictions_folder: str = None, output
             except Exception as e:
                 print(f"Error in processing: {e}")
 
-    # Compute final mean IoU using total counts
     total_pred_count = sum(metrics["pred_count"])
     total_gt_count = sum(metrics["gt_count"])
 
-    # Compute the overall mean IoU (direct mean over all segments)
     mean_pixel_iou = sum(metrics["pixel_iou"]) / total_pred_count if total_pred_count > 0 else 0
     mean_tree_iou = sum(metrics["tree_iou"]) / total_gt_count if total_gt_count > 0 else 0
 
-    # Calculate the standard deviation of individual IoU values
-    std_pixel_iou = np.sqrt(
-        sum([(iou / count - mean_pixel_iou) ** 2 for iou, count in zip(metrics["pixel_iou"], metrics["pred_count"])])
-        / total_pred_count
-    ) if total_pred_count > 0 else 0
+    std_pixel_iou = (
+        np.sqrt(
+            sum([(iou / count - mean_pixel_iou) ** 2 for iou, count in zip(metrics["pixel_iou"], metrics["pred_count"])])
+            / total_pred_count
+        )
+        if total_pred_count > 0
+        else 0
+    )
 
-    std_tree_iou = np.sqrt(
-        sum([(iou / count - mean_tree_iou) ** 2 for iou, count in zip(metrics["tree_iou"], metrics["gt_count"]) if count > 0])
-        / total_gt_count
-    ) if total_gt_count > 0 else 0
+    std_tree_iou = (
+        np.sqrt(
+            sum(
+                [
+                    (iou / count - mean_tree_iou) ** 2
+                    for iou, count in zip(metrics["tree_iou"], metrics["gt_count"])
+                    if count > 0
+                ]
+            )
+            / total_gt_count
+        )
+        if total_gt_count > 0
+        else 0
+    )
 
-    # Compute confidence intervals using segment-level IoU values
     ci_pixel_iou = compute_confidence_interval(
-        [iou / count for iou, count in zip(metrics["pixel_iou"], metrics["pred_count"])] if total_pred_count > 0 else [0]
+        [iou / count for iou, count in zip(metrics["pixel_iou"], metrics["pred_count"])]
+        if total_pred_count > 0
+        else [0]
     )
 
     ci_tree_iou = compute_confidence_interval(
-        [iou / count for iou, count in zip(metrics["tree_iou"], metrics["gt_count"]) if count > 0] 
-        if total_gt_count > 0 else [0]
+        [iou / count for iou, count in zip(metrics["tree_iou"], metrics["gt_count"]) if count > 0]
+        if total_gt_count > 0
+        else [0]
     )
 
     if output_csv:
         save_results_to_csv(detailed_results, output_csv)
 
-    # Compute final evaluation statistics
     results = {
         "mean_pixel_iou": mean_pixel_iou,
         "std_pixel_iou": std_pixel_iou,
