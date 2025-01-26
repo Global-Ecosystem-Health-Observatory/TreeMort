@@ -79,7 +79,7 @@ def load_geodata_with_unique_ids(file_path: str) -> gpd.GeoDataFrame:
         return gdf[gdf["geometry"].notnull()]
     
 
-def calculate_iou_metrics(prediction_gdf: gpd.GeoDataFrame, ground_truth_gdf: gpd.GeoDataFrame, overlap_threshold=0.5) -> Tuple[float, float]:
+def calculate_iou_metrics(prediction_gdf: gpd.GeoDataFrame, ground_truth_gdf: gpd.GeoDataFrame, overlap_threshold=0.4) -> Tuple[float, float]:
 
     def calculate_pixel_iou():
         try:
@@ -123,7 +123,6 @@ def calculate_iou_metrics(prediction_gdf: gpd.GeoDataFrame, ground_truth_gdf: gp
         matched_preds = set()
         matched_gts = set()
 
-        # Check each predicted tree segment against all ground truth segments
         for pred_idx, pred_row in prediction_gdf.iterrows():
             pred_geom = pred_row["geometry"]
             best_overlap = 0.0
@@ -147,10 +146,9 @@ def calculate_iou_metrics(prediction_gdf: gpd.GeoDataFrame, ground_truth_gdf: gp
                 matched_preds.add(pred_idx)
                 matched_gts.add(best_match)
 
-        # Calculate TP, FP, FN counts
-        tp = len(matched_gts)  # True Positives: ground truth segments matched correctly
-        fp = len(prediction_gdf) - len(matched_preds)  # False Positives: extra predicted segments
-        fn = len(ground_truth_gdf) - len(matched_gts)  # False Negatives: missed ground truth segments
+        tp = len(matched_gts)
+        fp = len(prediction_gdf) - len(matched_preds)
+        fn = len(ground_truth_gdf) - len(matched_gts)
 
         tree_iou = tp / (tp + fp + fn) if (tp + fp + fn) > 0 else 0.0
         

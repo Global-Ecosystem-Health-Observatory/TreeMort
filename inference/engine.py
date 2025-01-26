@@ -67,14 +67,14 @@ def process_image(
             min_size_threshold = 30  # 1.5 meters in crown diameter
             filtered_segment_map = filter_segment_map(segment_map_np, threshold=conf.threshold, min_size=min_size_threshold)
 
-            refined_centroid_map = refine_centroid_map(filtered_segment_map, centroid_map_np, threshold=0.2)
+            # refined_centroid_map = refine_centroid_map(filtered_segment_map, centroid_map_np, threshold=0.2)
 
-            multiple_peaks = detect_multiple_peaks(refined_centroid_map, min_distance=5, threshold_abs=0.1)
+            # multiple_peaks = detect_multiple_peaks(refined_centroid_map, min_distance=5, threshold_abs=0.1)
 
-            watershed_segmented_map = segment_using_watershed(filtered_segment_map, refined_centroid_map, multiple_peaks, threshold=conf.threshold)
+            # watershed_segmented_map = segment_using_watershed(filtered_segment_map, refined_centroid_map, multiple_peaks, threshold=conf.threshold)
 
             save_labels_as_geojson(
-                watershed_segmented_map,
+                filtered_segment_map,
                 transform,
                 crs,
                 geojson_path,
