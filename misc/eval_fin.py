@@ -159,10 +159,13 @@ def compute_confidence_interval(data: List[float], confidence: float = 0.95) -> 
     return mean - margin_of_error, mean + margin_of_error
 
 
-def calculate_mean_ious(data_folder: str, predictions_folder: str = None, output_csv: str = None) -> Dict[str, float]:
+def calculate_mean_ious(data_folder: str, predictions_folder: str = None, output_csv: str = None, eval_test_only: bool = True) -> Dict[str, float]:
     file_pairs = find_file_pairs(data_folder, predictions_folder)
 
-    filtered_file_pairs = filter_file_pairs(file_pairs, test_keys)
+    if eval_test_only:
+        filtered_file_pairs = filter_file_pairs(file_pairs, test_keys)
+    else:
+        filtered_file_pairs = file_pairs
 
     metrics = {
         "pixel_iou": [],
@@ -302,12 +305,14 @@ if __name__ == "__main__":
         # "/Users/anisr/Documents/dead_trees/Finland/Predictions_r",
         "/Users/anisr/Documents/dead_trees/Finland/Predictions_r_filtering_only",
         "/Users/anisr/Documents/dead_trees/Finland/Predictions_r_watershed_only",
+        # "/Users/anisr/Documents/dead_trees/Finland/Predictions",
     ]
     output_csvs = [  
         # "./output/eval/eval_fin.csv",
         # "./output/eval/eval_fin_r.csv",
         "./output/eval/eval_fin_r_filtering_only.csv",
         "./output/eval/eval_fin_r_watershed_only.csv",
+        # "./output/eval/eval_fin_full.csv", # remember to pass eval_test_only = False
     ]
 
     for predictions_folder, output_csv in zip(predictions_folders, output_csvs):

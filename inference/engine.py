@@ -67,21 +67,28 @@ def process_image(
             min_size_threshold = 30  # 1.5 meters in crown diameter
             filtered_segment_map = filter_segment_map(segment_map_np, threshold=conf.threshold, min_size=min_size_threshold)
 
+            contours = extract_contours(filtered_segment_map)
+
+            geojson_data = contours_to_geojson(
+                contours, transform, crs, os.path.splitext(os.path.basename(image_path))[0]
+            )
+            save_geojson(geojson_data, geojson_path)
+
             # refined_centroid_map = refine_centroid_map(filtered_segment_map, centroid_map_np, threshold=0.2)
 
             # multiple_peaks = detect_multiple_peaks(refined_centroid_map, min_distance=5, threshold_abs=0.1)
 
             # watershed_segmented_map = segment_using_watershed(filtered_segment_map, refined_centroid_map, multiple_peaks, threshold=conf.threshold)
 
-            save_labels_as_geojson(
-                filtered_segment_map,
-                transform,
-                crs,
-                geojson_path,
-                min_area_threshold=conf.min_area_threshold,
-                max_aspect_ratio=conf.max_aspect_ratio,
-                min_solidity=conf.min_solidity,
-            )
+            # save_labels_as_geojson(
+            #     watershed_segmented_map,
+            #     transform,
+            #     crs,
+            #     geojson_path,
+            #     min_area_threshold=conf.min_area_threshold,
+            #     max_aspect_ratio=conf.max_aspect_ratio,
+            #     min_solidity=conf.min_solidity,
+            # )
         else:
             binary_mask = threshold_prediction_map(segment_map, conf.threshold)
 
@@ -153,7 +160,7 @@ def run_inference(
     tasks = [
         (image_path, conf, output_dir, id2label, post_process)
         for image_path in image_paths
-        if not os.path.exists(os.path.join(output_dir, f"{os.path.splitext(os.path.basename(image_path))[0]}.geojson"))
+        #if not os.path.exists(os.path.join(output_dir, f"{os.path.splitext(os.path.basename(image_path))[0]}.geojson"))
     ]
 
     try:
