@@ -301,17 +301,17 @@ def calculate_mean_ious(data_folder: str, predictions_folder: str = None, output
 if __name__ == "__main__":
     data_folder = "/Users/anisr/Documents/dead_trees/Finland"
     predictions_folders = [
-        # "/Users/anisr/Documents/dead_trees/Finland/Predictions",
-        # "/Users/anisr/Documents/dead_trees/Finland/Predictions_r",
-        "/Users/anisr/Documents/dead_trees/Finland/Predictions_r_filtering_only",
-        "/Users/anisr/Documents/dead_trees/Finland/Predictions_r_watershed_only",
+        "/Users/anisr/Documents/dead_trees/Finland/Predictions",
+        "/Users/anisr/Documents/dead_trees/Finland/Predictions_r_with_filtering",
+        # "/Users/anisr/Documents/dead_trees/Finland/Predictions_r_filtering_only",
+        # "/Users/anisr/Documents/dead_trees/Finland/Predictions_r_watershed_only",
         # "/Users/anisr/Documents/dead_trees/Finland/Predictions",
     ]
     output_csvs = [  
-        # "./output/eval/eval_fin.csv",
-        # "./output/eval/eval_fin_r.csv",
-        "./output/eval/eval_fin_r_filtering_only.csv",
-        "./output/eval/eval_fin_r_watershed_only.csv",
+        "./output/eval/eval_fin.csv",
+        "./output/eval/eval_fin_r.csv",
+        # "./output/eval/eval_fin_r_filtering_only.csv",
+        # "./output/eval/eval_fin_r_watershed_only.csv",
         # "./output/eval/eval_fin_full.csv", # remember to pass eval_test_only = False
     ]
 
