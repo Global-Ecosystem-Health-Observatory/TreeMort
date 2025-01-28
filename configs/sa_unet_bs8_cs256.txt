@@ -1,19 +1,19 @@
 # settings for self attention unet
 
-data-folder = /scratch/project_2008436/rahmanan/dead_trees/Finland/RGBNIR/25cm
+data-folder = ${TREEMORT_DATA_PATH}/Finland/RGBNIR/25cm
 
-hdf5-file = Finland_RGBNIR_25cm.h5
+hdf5-file = Finland_RGBNIR_25cm_dual.h5
 
 model = sa_unet
 
-output-dir = output/sa_unet
+output-dir = ./output/sa_unet_dual
 
 train-crop-size = 256
 val-crop-size = 256
 test-crop-size = 256
 
 input-channels = 4
-output-channels = 1
+output-channels = 2
 
 train-batch-size = 8
 val-batch-size = 8
@@ -31,7 +31,7 @@ threshold = 0.5
 
 # activation = sigmoid # available options [tanh, sigmoid]
 
-loss = hybrid # available options [mse, hybrid, weighted_dice_loss]
+loss = hybrid # available options [mse, hybrid]
 
 val-size = 0.2
 test-size = 0.1
