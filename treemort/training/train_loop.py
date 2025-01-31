@@ -2,6 +2,7 @@ import torch
 
 from tqdm import tqdm
 from collections import defaultdict
+
 from treemort.training.output_processing import process_model_output
 
 
@@ -14,28 +15,39 @@ def train_one_epoch(model, optimizer, criterion, metrics, train_loader, conf, de
 
     for batch_idx, (images, labels) in enumerate(train_progress_bar):
         images, labels = images.to(device), labels.to(device)
-
+        
+        buffer_mask = labels[:, 3, :, :].unsqueeze(1)  # [B,1,H,W]
+        _, _, h, w = buffer_mask.shape
+        
         optimizer.zero_grad()
 
-        logits = process_model_output(model, images, conf)
+        logits = model(images)  # [B,3,H,W]
+        
+        cropped_logits = torch.cat([
+            center_crop(logits[:, 0:1, :, :], (h, w)),  # Mask
+            center_crop(logits[:, 1:2, :, :], (h, w)),  # Centroid
+            center_crop(logits[:, 2:3, :, :], (h, w))   # Hybrid
+        ], dim=1)  # [B,3,h,w]
 
-        loss = criterion(logits, labels)
-
+        cropped_labels = center_crop(labels, (h, w))  # [B,4,h,w]
+        
+        loss = criterion(cropped_logits, cropped_labels)
+        
         loss.backward()
         optimizer.step()
 
+        with torch.no_grad():
+            pred_probs = torch.sigmoid(cropped_logits)
+            batch_metrics = metrics(pred_probs, cropped_labels)
+
         train_loss += loss.item()
-
-        pred_probs = torch.sigmoid(logits)
-        batch_metrics = metrics(pred_probs, labels)
-
         for key, value in batch_metrics.items():
-            train_metrics[key] += value.item() if isinstance(value, torch.Tensor) else value
+            train_metrics[key] += value.item() if torch.is_tensor(value) else value
 
         train_progress_bar.set_postfix({
-            "Train Loss": train_loss / (batch_idx + 1),
-            "IOU": train_metrics.get("iou_segments", 0.0) / (batch_idx + 1),
-            "F1": train_metrics.get("f_score_segments", 0.0) / (batch_idx + 1),
+            "Loss": f"{train_loss/(batch_idx+1):.4f}",
+            "IOU": f"{train_metrics.get('iou_segments',0)/(batch_idx+1):.4f}",
+            "F1": f"{train_metrics.get('f_score_segments',0)/(batch_idx+1):.4f}"
         })
 
     train_loss /= len(train_loader)
@@ -43,3 +55,11 @@ def train_one_epoch(model, optimizer, criterion, metrics, train_loader, conf, de
         train_metrics[key] /= len(train_loader)
 
     return train_loss, dict(train_metrics)
+
+
+def center_crop(tensor, target_size):
+    _, _, h, w = tensor.size()
+    th, tw = target_size
+    i = (h - th) // 2
+    j = (w - tw) // 2
+    return tensor[..., i:i+th, j:j+tw]

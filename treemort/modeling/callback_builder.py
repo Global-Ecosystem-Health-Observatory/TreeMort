@@ -5,8 +5,7 @@ from treemort.utils.callbacks import ModelCheckpoint, ReduceLROnPlateau, EarlySt
 
 def build_callbacks(n_batches, output_dir, optimizer):
     checkpoint_dir = os.path.join(output_dir, "Checkpoints")
-    if not os.path.exists(checkpoint_dir):
-        os.makedirs(checkpoint_dir)
+    os.makedirs(checkpoint_dir, exist_ok=True)
 
     checkpoint_cb = ModelCheckpoint(
         filepath=os.path.join(checkpoint_dir, "cp-{epoch:04d}.weights.pth"),
@@ -25,19 +24,17 @@ def build_callbacks(n_batches, output_dir, optimizer):
     reduce_lr_cb = ReduceLROnPlateau(
         optimizer=optimizer,
         monitor="val_loss",
+        mode="min",
         factor=0.7,
         patience=6,
         min_lr=8e-6,
         verbose=1,
     )
 
-    early_stop_cb = EarlyStopping(patience=25, verbose=1)
+    early_stop_cb = EarlyStopping(
+        patience=25,
+        mode="min",
+        verbose=1
+    )
 
-    callbacks = [
-        checkpoint_cb,
-        best_checkpoint_cb,
-        reduce_lr_cb,
-        early_stop_cb,
-    ]
-
-    return callbacks
+    return [checkpoint_cb, best_checkpoint_cb, reduce_lr_cb, early_stop_cb]

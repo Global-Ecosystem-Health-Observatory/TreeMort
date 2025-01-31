@@ -1,9 +1,15 @@
-import json
-
+import os
 import cv2
-import numpy as np
+import json
 import rasterio
+
+import numpy as np
+
 from tqdm import tqdm
+
+
+def expand_path(path):
+    return os.path.expandvars(path)
 
 
 def create_label_mask(img_arr: np.ndarray, polys: list[np.ndarray]):
@@ -45,6 +51,48 @@ def create_label_mask_with_centroids(
     return label_mask, centroid_mask, dead_tree_count
 
 
+def create_hybrid_sdt_boundary_labels(
+    img_arr: np.ndarray, 
+    polys: list[np.ndarray], 
+    sigma: float = 2.0,
+    boundary_width: int = 2
+):
+    h, w = img_arr.shape[:2]
+    
+    binary_mask = np.zeros((h, w), dtype=np.float32)
+    centroid_mask = np.zeros((h, w), dtype=np.float32)
+    sdt_max = np.zeros((h, w), dtype=np.float32)
+    boundary_mask = np.zeros((h, w), dtype=np.uint8)
+
+    for poly in tqdm(polys, desc="Processing trees"):
+        instance_mask = np.zeros((h, w), dtype=np.uint8)
+        cv2.fillPoly(instance_mask, [poly], 1)
+        
+        binary_mask = np.clip(binary_mask + instance_mask, 0, 1)
+        
+        M = cv2.moments(poly)
+        if M["m00"] > 0:
+            cx = int(M["m10"]/M["m00"])
+            cy = int(M["m01"]/M["m00"])
+            y, x = np.ogrid[:h, :w]
+            centroid_mask += np.exp(-((x-cx)**2 + (y-cy)**2)/(2*sigma**2))
+        
+        dist = cv2.distanceTransform(instance_mask, cv2.DIST_L2, 3)
+        if np.max(dist) > 0:
+            dist_normalized = dist / np.max(dist)
+            sdt_max = np.maximum(sdt_max, dist_normalized)
+        
+        contours, _ = cv2.findContours(instance_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        cv2.drawContours(boundary_mask, contours, -1, 1, boundary_width)
+
+    hybrid_channel = np.where(boundary_mask > 0, -1.0, sdt_max)
+    hybrid_channel = np.where(binary_mask == 0, 0.0, hybrid_channel)  # Zero background
+    
+    centroid_mask = np.clip(centroid_mask, 0, 1)
+    
+    return binary_mask, centroid_mask, hybrid_channel
+
+
 def segmap_to_topo(img_arr: np.ndarray, contours: list) -> np.ndarray:
     image_h, image_w = img_arr.shape[:2]
     topolabel = np.zeros((image_h, image_w), dtype=np.float32)
@@ -82,10 +130,8 @@ def get_image_and_polygons(
     min_xy = bounds[:2]
     n_rows = img_arr.shape[0]
     
-    # Polygons in georeferenced coordinates
     label_polygons = load_geojson_labels(geojson_filepath)
 
-    # Transform polygons into image coordinates
     adjusted_polygons = []
     for polygon in label_polygons:
         adjusted_polygon = []
@@ -122,14 +168,10 @@ def load_geotiff(
 ) -> tuple[np.ndarray, tuple[float], tuple[float]]:
            
     with rasterio.open(filename) as img:
-
-        # Read pixel values and move channels last
         img_arr = np.moveaxis(img.read(), 0, -1).astype(np.float32)
 
-        # Reorder channels
         img_arr = img_arr[:,:,nir_rgb_order]
 
-        # Set missing values to zero
         if img.nodata is not None:
             img_arr[img.nodata] = 0
         else:
@@ -157,8 +199,6 @@ def load_geojson_labels(geojson_path: str) -> list[list[list[float]]]:
     for multipoly in samples_json.get("features", []):
         geometry = multipoly.get("geometry")
         if geometry and geometry.get("coordinates"):
-            # Inner loop ensures that all polygons in single multipolygon are
-            # stored separately
             for poly in geometry["coordinates"]:
                 try:
                     coordinates = poly[0]
