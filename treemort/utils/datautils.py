@@ -15,11 +15,13 @@ def load_and_organize_data(hdf5_file_path):
 
     with h5py.File(hdf5_file_path, "r") as hf:
         for key in hf.keys():
-            dead_tree_count = hf[key].attrs.get("dead_tree_count", 0)
+            num_trees = hf[key].attrs.get("num_trees", 0)
             latitude = hf[key].attrs.get("latitude", None)
             longitude = hf[key].attrs.get("longitude", None)
-            filename = hf[key].attrs.get("source_image", "")
-            image_patch_map[filename].append((key, dead_tree_count, latitude, longitude))
+            pixel_x = hf[key].attrs.get("pixel_x", None)
+            pixel_y = hf[key].attrs.get("pixel_y", None)
+            source_image = hf[key].attrs.get("source_image", "")
+            image_patch_map[source_image].append((key, num_trees, latitude, longitude, pixel_x, pixel_y))
 
     return image_patch_map
 
@@ -78,7 +80,7 @@ def stratify_images_by_region(image_patch_map, val_ratio=0.2, test_ratio=0.1, la
     rows = []
 
     for filename, patches in image_patch_map.items():
-        for key, dead_tree_count, latitude, longitude in patches:
+        for key, dead_tree_count, latitude, longitude, _, _ in patches:
             rows.append({
                 "Key": key,
                 "Filename": filename,

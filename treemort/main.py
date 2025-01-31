@@ -27,19 +27,19 @@ def run(conf, eval_only):
     logger.info(f"Using device: {device}")
 
     logger.info("Preparing datasets...")
-    train_dataset, val_dataset, test_dataset = prepare_datasets(conf)
-    logger.info(f"Datasets prepared: Train({len(train_dataset)}), Val({len(val_dataset)}), Test({len(test_dataset)})")
+    train_loader, val_loader, test_loader = prepare_datasets(conf)
+    logger.info(f"Datasets prepared: Train({len(train_loader)}), Val({len(val_loader)}), Test({len(test_loader)})")
 
     logger.info("Loading or resuming model...")
-    model, optimizer, criterion, metrics, callbacks = resume_or_load(conf, id2label, len(train_dataset), device)
+    model, optimizer, criterion, metrics, callbacks = resume_or_load(conf, id2label, len(train_loader), device)
     logger.info("Model, optimizer, criterion, metrics, and callbacks are set up.")
 
     if eval_only:
         logger.info("Evaluation-only mode started.")
         evaluator(
             model,
-            dataset=test_dataset,
-            num_samples=len(test_dataset),
+            dataset=test_loader,
+            num_samples=len(test_loader),
             batch_size=conf.test_batch_size,
             threshold=conf.threshold,
             model_name=conf.model,
@@ -53,8 +53,8 @@ def run(conf, eval_only):
             optimizer=optimizer,
             criterion=criterion,
             metrics=metrics,
-            train_loader=train_dataset,
-            val_loader=val_dataset,
+            train_loader=train_loader,
+            val_loader=val_loader,
             conf=conf,
             callbacks=callbacks,
         )
