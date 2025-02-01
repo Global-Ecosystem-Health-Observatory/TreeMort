@@ -35,8 +35,7 @@ def masked_mse(pred, target, mask):
     return ((pred - target)**2 * mask).sum() / (mask.sum() + 1e-8)
 
 
-def masked_iou(pred_logits, target, buffer_mask, threshold=0.5):
-    pred_probs = torch.sigmoid(pred_logits)
+def masked_iou(pred_probs, target, buffer_mask, threshold=0.5):
     pred = (pred_probs > threshold).float()
     
     pred = pred * buffer_mask
@@ -50,8 +49,7 @@ def masked_iou(pred_logits, target, buffer_mask, threshold=0.5):
     
     return intersection / union
 
-def masked_f1(pred_logits, target, buffer_mask, threshold=0.5):
-    pred_probs = torch.sigmoid(pred_logits)
+def masked_f1(pred_probs, target, buffer_mask, threshold=0.5):
     pred = (pred_probs > threshold).float()
     
     pred = pred * buffer_mask
