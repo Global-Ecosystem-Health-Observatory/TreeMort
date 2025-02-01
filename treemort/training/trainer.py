@@ -11,6 +11,7 @@ logger = get_logger(__name__)
 def trainer(
     model,
     optimizer,
+    schedular,
     criterion,
     metrics,
     train_loader,
@@ -26,7 +27,7 @@ def trainer(
         logger.info("-------------------------------")
         
         train_loss, train_metrics = train_one_epoch(
-            model, optimizer, criterion, metrics, 
+            model, optimizer, schedular, criterion, metrics, 
             train_loader, conf, device
         )
 

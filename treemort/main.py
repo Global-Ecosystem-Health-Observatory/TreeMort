@@ -31,14 +31,14 @@ def run(conf, eval_only):
     logger.info(f"Datasets prepared: Train({len(train_loader)}), Val({len(val_loader)}), Test({len(test_loader)})")
 
     logger.info("Loading or resuming model...")
-    model, optimizer, criterion, metrics, callbacks = resume_or_load(conf, id2label, len(train_loader), device)
+    model, optimizer, schedular, criterion, metrics, callbacks = resume_or_load(conf, id2label, len(train_loader), device)
     logger.info("Model, optimizer, criterion, metrics, and callbacks are set up.")
 
     if eval_only:
         logger.info("Evaluation-only mode started.")
         evaluator(
             model,
-            dataset=test_loader,
+            dataloader=test_loader,
             num_samples=len(test_loader),
             batch_size=conf.test_batch_size,
             threshold=conf.threshold,
@@ -51,6 +51,7 @@ def run(conf, eval_only):
         trainer(
             model,
             optimizer=optimizer,
+            schedular=schedular,
             criterion=criterion,
             metrics=metrics,
             train_loader=train_loader,

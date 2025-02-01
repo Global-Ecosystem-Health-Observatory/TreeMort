@@ -68,38 +68,52 @@ def masked_f1(pred_logits, target, buffer_mask, threshold=0.5):
     return f1
 
 
+import torch
+import numpy as np
+from scipy.ndimage import maximum_filter
+
 def extract_centroids_from_heatmap(heatmap, threshold=0.5, min_distance=5):
-    footprint_shape = tuple([min_distance] * heatmap.ndim)
-    peaks = (heatmap == maximum_filter(heatmap, footprint=np.ones(footprint_shape)))
+    if isinstance(heatmap, torch.Tensor):
+        heatmap = heatmap.cpu().numpy()
+    else:
+        heatmap = np.asarray(heatmap)
     
-    peaks = peaks & (heatmap > threshold)
+    if heatmap.ndim != 3:
+        raise ValueError(f"Expected input with shape (batch, height, width), but got {heatmap.shape}")
+
+    B, H, W = heatmap.shape
+    footprint = np.ones((min_distance, min_distance), dtype=bool)
     
-    centroids = np.argwhere(peaks)
-    return [tuple(coord) for coord in centroids]
+    all_centroids = []
+    for i in range(B):
+        max_filter = maximum_filter(heatmap[i], footprint=footprint, mode='constant')
+        peaks = (heatmap[i] == max_filter) & (heatmap[i] > threshold)
+        centroids = np.column_stack(np.where(peaks))
+        all_centroids.append(centroids.astype(np.float32) if centroids.size > 0 else np.empty((0, 2), dtype=np.float32))
+
+    return all_centroids
 
 
-def proximity_metrics(pred_centroids_map, true_centroids_map, buffer_mask=None, 
-                     proximity_threshold=5, threshold=0.1, min_distance=5):
-    pred_centroids_map = pred_centroids_map.detach().cpu().numpy() if isinstance(pred_centroids_map, torch.Tensor) else pred_centroids_map
-    true_centroids_map = true_centroids_map.detach().cpu().numpy() if isinstance(true_centroids_map, torch.Tensor) else true_centroids_map
-    buffer_mask = buffer_mask.detach().cpu().numpy() if isinstance(buffer_mask, torch.Tensor) else buffer_mask
-
+def proximity_metrics(pred_centroid_map, true_centroid_map, buffer_mask=None,
+                      proximity_threshold=5, threshold=0.1, min_distance=5):
+    
+    pred_centroid_map = pred_centroid_map.detach().cpu().numpy() if isinstance(pred_centroid_map, torch.Tensor) else np.asarray(pred_centroid_map)
+    true_centroid_map = true_centroid_map.detach().cpu().numpy() if isinstance(true_centroid_map, torch.Tensor) else np.asarray(true_centroid_map)
+    
     if buffer_mask is not None:
-        pred_centroids_map = pred_centroids_map * buffer_mask
-        true_centroids_map = true_centroids_map * buffer_mask
+        buffer_mask = buffer_mask.detach().cpu().numpy() if isinstance(buffer_mask, torch.Tensor) else np.asarray(buffer_mask)
+        pred_centroid_map *= buffer_mask
+        true_centroid_map *= buffer_mask
 
-    pred_centroids = extract_centroids_from_heatmap(pred_centroids_map, threshold, min_distance)
-    true_centroids = extract_centroids_from_heatmap(true_centroids_map, threshold, min_distance)
+    def safe_extract(heatmap):
+        centroids_list = extract_centroids_from_heatmap(heatmap, threshold, min_distance)  # List of (N_i, 2) arrays
+        centroids = np.concatenate(centroids_list, axis=0) if centroids_list else np.empty((0, 2), dtype=np.float32)        
+        return centroids
 
-    if len(pred_centroids) == 0 and len(true_centroids) == 0:
-        return {
-            "precision": 1.0,
-            "recall": 1.0,
-            "f1_score": 1.0,
-            "localization_error": 0.0
-        }
+    pred_centroids = safe_extract(pred_centroid_map)
+    true_centroids = safe_extract(true_centroid_map)
 
-    if len(pred_centroids) == 0 or len(true_centroids) == 0:
+    if pred_centroids.shape[0] == 0 or true_centroids.shape[0] == 0:
         return {
             "precision": 0.0,
             "recall": 0.0,
@@ -107,15 +121,18 @@ def proximity_metrics(pred_centroids_map, true_centroids_map, buffer_mask=None,
             "localization_error": float("inf")
         }
 
-    distances = cdist(pred_centroids, true_centroids)
+    assert pred_centroids.shape[1] == 2, f"Pred centroids shape: {pred_centroids.shape}"
+    assert true_centroids.shape[1] == 2, f"True centroids shape: {true_centroids.shape}"
     
+    distances = cdist(pred_centroids, true_centroids)
+
     matches = distances <= proximity_threshold
     matched_pred = set()
     matched_true = set()
 
-    for p_idx, row in enumerate(matches):
-        for t_idx, match in enumerate(row):
-            if match and p_idx not in matched_pred and t_idx not in matched_true:
+    for p_idx, p_row in enumerate(matches):
+        for t_idx, is_match in enumerate(p_row):
+            if is_match and p_idx not in matched_pred and t_idx not in matched_true:
                 matched_pred.add(p_idx)
                 matched_true.add(t_idx)
 
@@ -127,12 +144,12 @@ def proximity_metrics(pred_centroids_map, true_centroids_map, buffer_mask=None,
     recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
     f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
 
-    matched_distances = [distances[p,t] for p,t in zip(matched_pred, matched_true)]
-    loc_error = np.mean(matched_distances) if matched_distances else float('inf')
+    matched_dists = [distances[p, t] for p, t in zip(matched_pred, matched_true)]
+    loc_error = np.mean(matched_dists) if matched_dists else float('inf')
 
     return {
-        "precision_points": precision,
-        "recall_points": recall,
-        "f1_score_points": f1,
+        "precision": precision,
+        "recall": recall,
+        "f1_score": f1,
         "localization_error": loc_error
     }
