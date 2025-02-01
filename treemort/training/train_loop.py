@@ -6,7 +6,7 @@ from collections import defaultdict
 from treemort.training.output_processing import process_model_output
 
 
-def train_one_epoch(model, optimizer, criterion, metrics, train_loader, conf, device):
+def train_one_epoch(model, optimizer, scheduler, criterion, metrics, train_loader, conf, device):
     model.train()
     train_loss = 0.0
     train_metrics = defaultdict(float)
@@ -32,9 +32,10 @@ def train_one_epoch(model, optimizer, criterion, metrics, train_loader, conf, de
         cropped_labels = center_crop(labels, (h, w))  # [B,4,h,w]
         
         loss = criterion(cropped_logits, cropped_labels)
-        
         loss.backward()
         optimizer.step()
+        
+        scheduler.step()
 
         with torch.no_grad():
             pred_probs = torch.sigmoid(cropped_logits)

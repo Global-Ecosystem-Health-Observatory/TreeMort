@@ -1,46 +1,75 @@
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 
 from typing import Optional, List, Tuple
 
 
-def _hybrid_loss(
-    logits: torch.Tensor,
-    target: torch.Tensor,
-    buffer_mask: Optional[torch.Tensor] = None,
-    class_weights: Optional[List[float]] = None,
-    dice_weight: float = 0.5,
-    focal_alpha: float = 0.25,
-    focal_gamma: float = 2.0,
-    sdt_weight: float = 0.3,  # New weight for SDT-boundary component
-    smooth: float = 1e-8,
-) -> torch.Tensor:
-    if logits.dim() == 3:
-        logits = logits.unsqueeze(1)
-    if target.dim() == 3:
-        target = target.unsqueeze(1)
+class TreeMortalityLoss(nn.Module):
+    def __init__(self, 
+                 mask_weight=1.0,
+                 centroid_weight=0.7,
+                 sdt_weight=0.5,
+                 boundary_weight=0.3,
+                 buffer_margin=16):
+        super().__init__()
+        self.mask_weight = mask_weight
+        self.centroid_weight = centroid_weight
+        self.sdt_weight = sdt_weight
+        self.boundary_weight = boundary_weight
+        self.buffer_margin = buffer_margin
 
-    pred_mask = logits[:, 0, :, :].unsqueeze(1)
-    pred_sdt = logits[:, 2, :, :].unsqueeze(1)
-    target_mask = target[:, 0, :, :].unsqueeze(1)
-    target_sdt = target[:, 2, :, :].unsqueeze(1)
+    def forward(self, pred, target):
+        buffer_mask = self._create_buffer_mask(target[:, 3])
+        
+        mask_loss = self._mask_loss(pred[:, 0], target[:, 0], buffer_mask)
+        centroid_loss = self._centroid_loss(pred[:, 1], target[:, 1], buffer_mask)
+        sdt_loss, boundary_loss = self._sdt_boundary_loss(pred[:, 2], target[:, 2], buffer_mask)
+        
+        return (
+            self.mask_weight * mask_loss +
+            self.centroid_weight * centroid_loss +
+            self.sdt_weight * sdt_loss +
+            self.boundary_weight * boundary_loss
+        )
 
-    if buffer_mask is not None:
-        pred_mask = pred_mask * buffer_mask
-        target_mask = target_mask * buffer_mask
-        pred_sdt = pred_sdt * buffer_mask
-        target_sdt = target_sdt * buffer_mask
+    def _create_buffer_mask(self, buffer_channel):
+        if self.buffer_margin > 0:
+            return F.max_pool2d(buffer_channel, 2*self.buffer_margin+1, 
+                              stride=1, padding=self.buffer_margin)
+        return buffer_channel
 
-    mask_loss = basic_hybrid_loss(
-        pred_mask, target_mask, 
-        buffer_mask, class_weights,
-        dice_weight, focal_alpha, focal_gamma, smooth
-    )
+    def _mask_loss(self, pred, target, buffer_mask):
+        valid = buffer_mask.bool()
+        pred = pred[valid]
+        target = target[valid]
+        
+        bce = F.binary_cross_entropy_with_logits(pred, target)
+        dice = 1 - (2 * (pred.sigmoid() * target).sum() + 1e-8) / (
+            pred.sigmoid().sum() + target.sum() + 1e-8)
+        return 0.5 * bce + 0.5 * dice
 
-    sdt_loss = F.mse_loss(pred_sdt, target_sdt)
+    def _centroid_loss(self, pred, target, buffer_mask):
+        valid_mask = (target > 0.01) & buffer_mask.bool()
+        if valid_mask.sum() == 0:  # Handle empty masks
+            return torch.tensor(0.0, device=pred.device)
+        return F.mse_loss(pred[valid_mask], target[valid_mask])
 
-    return mask_loss + sdt_weight * sdt_loss
+    def _sdt_boundary_loss(self, pred, target, buffer_mask):
+        """Separated SDT and boundary losses"""
+        buffer_mask = buffer_mask.bool()
+        sdt_mask = (target != -1) & buffer_mask
+        boundary_mask = (target == -1) & buffer_mask
 
+        sdt_loss = F.smooth_l1_loss(pred[sdt_mask], target[sdt_mask])
+
+        if boundary_mask.sum() > 0:
+            boundary_loss = torch.exp(pred[boundary_mask] + 1).mean()
+        else:
+            boundary_loss = torch.tensor(0.0, device=pred.device)
+
+        return sdt_loss, boundary_loss
+    
 
 def hybrid_loss(
     logits: torch.Tensor,

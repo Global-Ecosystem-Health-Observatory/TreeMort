@@ -13,7 +13,7 @@ logger = get_logger(__name__)
 def resume_or_load(conf, id2label, n_batches, device):
     logger.info("Building model...")
 
-    model, optimizer, criterion, metrics = build_model(conf, id2label, device)
+    model, optimizer, schedular, criterion, metrics = build_model(conf, id2label, device, conf.epochs * n_batches)
 
     callbacks = build_callbacks(n_batches, conf.output_dir, optimizer)
 
@@ -22,7 +22,7 @@ def resume_or_load(conf, id2label, n_batches, device):
     else:
         logger.info("Training model from scratch.")
 
-    return model, optimizer, criterion, metrics, callbacks
+    return model, optimizer, schedular, criterion, metrics, callbacks
 
 
 def load_checkpoint_if_available(model, conf):
@@ -36,12 +36,12 @@ def load_checkpoint_if_available(model, conf):
         logger.info("No checkpoint found. Training from scratch.")
 
 
-def build_model(conf, id2label, device):
+def build_model(conf, id2label, device, total_steps):
     model = configure_model(conf, id2label)
     model.to(device)
     logger.info(f"Model successfully moved to {device}.")
 
-    optimizer = configure_optimizer(model, conf.learning_rate)
+    optimizer, scheduler = configure_optimizer(model, conf.learning_rate, total_steps)
     criterion, metrics = configure_loss_and_metrics(conf)
 
-    return model, optimizer, criterion, metrics
+    return model, optimizer, scheduler, criterion, metrics
