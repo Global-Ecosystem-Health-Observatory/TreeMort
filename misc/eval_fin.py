@@ -73,6 +73,7 @@ test_keys = [
     'V4341C_2022_1_ITD.geojson',
 ]
 
+# test_keys = ['N5442C_2014_1.geojson']
 
 def process_prediction_file(
     image_path: str, prediction_path: str, ground_truth_path: str
@@ -313,13 +314,14 @@ if __name__ == "__main__":
         # "./output/eval/eval_fin_r_filtering_only.csv",
         # "./output/eval/eval_fin_r_watershed_only.csv",
         # "./output/eval/eval_fin_full.csv", # remember to pass eval_test_only = False
+        # "./output/eval/tmp.csv", # remember to pass eval_test_only = False
     ]
 
     for predictions_folder, output_csv in zip(predictions_folders, output_csvs):
         print(f"\nProcessing Predictions Folder: {predictions_folder}")
         os.makedirs(os.path.dirname(output_csv), exist_ok=True)
 
-        results = calculate_mean_ious(data_folder, predictions_folder, output_csv)
+        results = calculate_mean_ious(data_folder, predictions_folder, output_csv, eval_test_only=True)
 
         print("\nEvaluation Results:")
         print("=" * 50)

@@ -15,9 +15,10 @@ from rasterio.transform import xy
 
 
 from dataset.preprocessutils import (
-    get_image_and_polygons,
-    create_hybrid_sdt_boundary_labels,
     expand_path,
+    get_image_and_polygons,
+    create_partial_segment_mask,
+    create_hybrid_sdt_boundary_labels,
 )
 
 
@@ -51,11 +52,10 @@ def extract_patches(image, label, window_size, stride, buffer=32):
 
     for y in range(pad, h - window_size - pad + 1, stride):
         for x in range(pad, w - window_size - pad + 1, stride):
-            img_patch = image[y-pad:y+window_size+pad, x-pad:x+window_size+pad]
+            img_patch = image[y:y+window_size, x:x+window_size]
             lbl_patch = label[y:y+window_size, x:x+window_size]
             
-            buffer_mask = np.zeros_like(lbl_patch[..., 0])
-            buffer_mask[buffer:-buffer, buffer:-buffer] = 1
+            buffer_mask = create_partial_segment_mask(lbl_patch[..., 0])
             
             _, num_trees = nd_label(lbl_patch[:, :, 0])
 

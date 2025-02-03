@@ -45,9 +45,10 @@ def masked_iou(pred_probs, target, buffer_mask, threshold=0.5):
     union = (pred + target).clamp(0, 1).sum()
     
     if union < 1e-8:
-        return torch.tensor(0.0, device=pred.device)
+        return torch.tensor(0.0, device=pred_probs.device)
     
     return intersection / union
+
 
 def masked_f1(pred_probs, target, buffer_mask, threshold=0.5):
     pred = (pred_probs > threshold).float()

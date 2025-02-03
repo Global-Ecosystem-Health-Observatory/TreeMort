@@ -57,7 +57,7 @@ def process_image(
         prediction_maps = sliding_window_inference(
             model, image, window_size=conf.window_size, stride=conf.stride, threshold=conf.threshold
         )
-        segment_map, centroid_map = prediction_maps
+        segment_map, centroid_map, hybrid_map = prediction_maps
 
         if post_process:
             image_np = image.cpu().numpy()
@@ -223,6 +223,11 @@ if __name__ == "__main__":
 
 ''' Usage:
 
+export TREEMORT_DATA_PATH="/Users/anisr/Documents/dead_trees"
+ export TREEMORT_REPO_PATH="/Users/anisr/Documents/TreeSeg"
+
+scp -O -r rahmanan@puhti.csc.fi:/scratch/project_2008436/rahmanan/output/flair_unet_sdt output
+
 - For single file:
 
 1) save geojsons in a 'Predictions' folder alongside Images and Geojsons
@@ -236,7 +241,12 @@ python -m inference.engine \
 python -m inference.engine \
     ${TREEMORT_DATA_PATH}/Finland/RGBNIR/25cm/2011/Images/M3442B_2011_1.tiff \
     --config ${TREEMORT_REPO_PATH}/configs/Finland_RGBNIR_25cm_inference.txt \
-    --outdir ${TREEMORT_DATA_PATH}/Finland/Predictions_r \
+    --outdir ${TREEMORT_DATA_PATH}/Finland/Predictions_sdt
+
+python -m inference.engine \
+    ${TREEMORT_DATA_PATH}/Finland/RGBNIR/25cm/2011/Images/M3442B_2011_1.tiff \
+    --config ${TREEMORT_REPO_PATH}/configs/Finland_RGBNIR_25cm_inference.txt \
+    --outdir ${TREEMORT_DATA_PATH}/Finland/Predictions_sdt \
     --post-process --verbosity debug
 
 - For entire folder
