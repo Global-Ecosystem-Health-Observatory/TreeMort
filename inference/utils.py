@@ -183,7 +183,7 @@ def _validate_inference_params(window_size: int, stride: int, threshold: float) 
 
 def _initialize_maps(image_shape: Tuple[int, int], device: torch.device) -> Tuple[torch.Tensor, torch.Tensor]:
     h, w = image_shape
-    prediction_map = torch.zeros((2, h, w), dtype=torch.float32, device=device)
+    prediction_map = torch.zeros((3, h, w), dtype=torch.float32, device=device) # 3 channels for binary, centroid, hybrid
     count_map = torch.zeros((h, w), dtype=torch.float32, device=device)
     return prediction_map, count_map
 
@@ -240,8 +240,9 @@ def process_batch(
     for i, (y, x) in enumerate(coords):
         binary_confidence = predictions[i, 0]
         centroid_confidence = predictions[i, 1]
+        hybrid_confidence = predictions[i, 1]
 
-        _update_maps(prediction_map, count_map, binary_confidence, centroid_confidence, threshold, y, x)
+        _update_maps(prediction_map, count_map, binary_confidence, centroid_confidence, hybrid_confidence, threshold, y, x)
 
     return prediction_map, count_map
 
@@ -270,6 +271,7 @@ def _update_maps(
     count_map: torch.Tensor,
     binary_confidence: torch.Tensor,
     centroid_confidence: torch.Tensor,
+    hybrid_confidence: torch.Tensor,
     threshold: float,
     y: int,
     x: int,
@@ -277,7 +279,7 @@ def _update_maps(
     binary_mask = (binary_confidence >= threshold).float()
 
     prediction_map[:, y : y + binary_confidence.shape[0], x : x + binary_confidence.shape[1]] += torch.stack(
-        [binary_confidence, centroid_confidence]
+        [binary_confidence, centroid_confidence, hybrid_confidence]
     )
     
     count_map[y : y + binary_confidence.shape[0], x : x + binary_confidence.shape[1]] += binary_mask
@@ -588,7 +590,7 @@ def save_geojson(geojson_data: dict, output_path: str) -> None:
     try:
         with open(output_path, "w") as f:
             geojson.dump(geojson_data, f, indent=2, ensure_ascii=False)
-        logger.info(f"GeoJSON successfully saved to {output_path}.")
+        logger.debug(f"GeoJSON successfully saved to {os.path.basename(output_path)}.")
     except OSError as e:
         log_and_raise(logger, RuntimeError(f"Error saving GeoJSON to {os.path.basename(output_path)}: {e}"))
 

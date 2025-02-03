@@ -6,6 +6,7 @@ import rasterio
 import numpy as np
 
 from tqdm import tqdm
+from scipy.ndimage import label, find_objects
 
 
 def expand_path(path):
@@ -245,3 +246,29 @@ def get_nonzero_percentiles(input_array: np.ndarray, percentages: float) -> floa
         return 0
 
     return np.percentile(all_nonzero_values, percentages)
+
+
+def create_partial_segment_mask(binary_mask):
+    height, width = binary_mask.shape
+
+    valid_mask = np.ones_like(binary_mask, dtype=np.uint8)
+    
+    structure = np.ones((3, 3))  # 8-connectivity
+    labeled_array, num_features = label(binary_mask, structure=structure)
+    
+    slices = find_objects(labeled_array)
+    
+    for comp_id, bbox in enumerate(slices, start=1):
+        if bbox is None:
+            continue
+        y_slice, x_slice = bbox
+        
+        touches_top    = y_slice.start == 0
+        touches_bottom = y_slice.stop == height
+        touches_left   = x_slice.start == 0
+        touches_right  = x_slice.stop == width
+        
+        if touches_top or touches_bottom or touches_left or touches_right:
+            valid_mask[labeled_array == comp_id] = 0
+    
+    return valid_mask

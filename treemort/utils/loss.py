@@ -6,57 +6,43 @@ from typing import Optional, List, Tuple
 
 
 class TreeMortalityLoss(nn.Module):
-    def __init__(self, 
-                 mask_weight=1.0,
-                 centroid_weight=0.7,
-                 sdt_weight=0.5,
-                 boundary_weight=0.3,
-                 buffer_margin=16):
+    def __init__(self, mask_weight=1.0, centroid_weight=0.7, sdt_weight=0.5, boundary_weight=0.3):
         super().__init__()
         self.mask_weight = mask_weight
         self.centroid_weight = centroid_weight
         self.sdt_weight = sdt_weight
         self.boundary_weight = boundary_weight
-        self.buffer_margin = buffer_margin
 
     def forward(self, pred, target):
-        buffer_mask = self._create_buffer_mask(target[:, 3])
-        
+        buffer_mask = target[:, 3]
+
         mask_loss = self._mask_loss(pred[:, 0], target[:, 0], buffer_mask)
         centroid_loss = self._centroid_loss(pred[:, 1], target[:, 1], buffer_mask)
         sdt_loss, boundary_loss = self._sdt_boundary_loss(pred[:, 2], target[:, 2], buffer_mask)
-        
-        return (
-            self.mask_weight * mask_loss +
-            self.centroid_weight * centroid_loss +
-            self.sdt_weight * sdt_loss +
-            self.boundary_weight * boundary_loss
-        )
 
-    def _create_buffer_mask(self, buffer_channel):
-        if self.buffer_margin > 0:
-            return F.max_pool2d(buffer_channel, 2*self.buffer_margin+1, 
-                              stride=1, padding=self.buffer_margin)
-        return buffer_channel
+        return (
+            self.mask_weight * mask_loss
+            + self.centroid_weight * centroid_loss
+            + self.sdt_weight * sdt_loss
+            + self.boundary_weight * boundary_loss
+        )
 
     def _mask_loss(self, pred, target, buffer_mask):
         valid = buffer_mask.bool()
         pred = pred[valid]
         target = target[valid]
-        
+
         bce = F.binary_cross_entropy_with_logits(pred, target)
-        dice = 1 - (2 * (pred.sigmoid() * target).sum() + 1e-8) / (
-            pred.sigmoid().sum() + target.sum() + 1e-8)
+        dice = 1 - (2 * (pred.sigmoid() * target).sum() + 1e-8) / (pred.sigmoid().sum() + target.sum() + 1e-8)
         return 0.5 * bce + 0.5 * dice
 
     def _centroid_loss(self, pred, target, buffer_mask):
         valid_mask = (target > 0.01) & buffer_mask.bool()
-        if valid_mask.sum() == 0:  # Handle empty masks
+        if valid_mask.sum() == 0:
             return torch.tensor(0.0, device=pred.device)
         return F.mse_loss(pred[valid_mask], target[valid_mask])
 
     def _sdt_boundary_loss(self, pred, target, buffer_mask):
-        """Separated SDT and boundary losses"""
         buffer_mask = buffer_mask.bool()
         sdt_mask = (target != -1) & buffer_mask
         boundary_mask = (target == -1) & buffer_mask
@@ -69,7 +55,7 @@ class TreeMortalityLoss(nn.Module):
             boundary_loss = torch.tensor(0.0, device=pred.device)
 
         return sdt_loss, boundary_loss
-    
+
 
 def hybrid_loss(
     logits: torch.Tensor,
@@ -90,30 +76,25 @@ def hybrid_loss(
 
     if class_weights is not None:
         assert len(class_weights) == 2, "Class weights must be [background, foreground]"
-        weights = torch.where(target > 0.5, 
-                            torch.tensor(class_weights[1], device=target.device),
-                            torch.tensor(class_weights[0], device=target.device))
+        weights = torch.where(
+            target > 0.5,
+            torch.tensor(class_weights[1], device=target.device),
+            torch.tensor(class_weights[0], device=target.device),
+        )
     else:
-        weights = torch.ones_like(target)  # Create tensor instead of scalar
+        weights = torch.ones_like(target)
 
     if buffer_mask is not None:
         weights = weights * buffer_mask
 
-    bce_loss = F.binary_cross_entropy_with_logits(
-        logits, 
-        target, 
-        weight=weights,
-        reduction='mean'
-    )
+    bce_loss = F.binary_cross_entropy_with_logits(logits, target, weight=weights, reduction='mean')
 
     pred = torch.sigmoid(logits)
     intersection = (pred * target * weights).sum()
     union = (pred * weights).sum() + (target * weights).sum()
     dice_loss = 1 - (2.0 * intersection + smooth) / (union + smooth)
 
-    focal_loss = focal_loss_fn(
-        logits, target, focal_alpha, focal_gamma, weights, buffer_mask, smooth
-    )
+    focal_loss = focal_loss_fn(logits, target, focal_alpha, focal_gamma, weights, buffer_mask, smooth)
 
     return dice_weight * dice_loss + (1 - dice_weight) * focal_loss + bce_loss
 

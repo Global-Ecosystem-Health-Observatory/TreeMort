@@ -87,17 +87,19 @@ def calculate_iou_metrics(prediction_gdf: gpd.GeoDataFrame, ground_truth_gdf: gp
                 return 0.0
 
             ious = []
+            matched_gt_ids = set()
+
             for _, pred_row in prediction_gdf.iterrows():
                 pred_geom = pred_row["geometry"]
-
                 intersecting_gts = ground_truth_gdf[ground_truth_gdf.intersects(pred_geom)]
 
                 if intersecting_gts.empty:
+                    ious.append(0.0)
                     continue
 
-                best_match = None
                 best_iou = 0.0
-                for _, gt_row in intersecting_gts.iterrows():
+                best_gt_id = None
+                for gt_idx, gt_row in intersecting_gts.iterrows():
                     gt_geom = gt_row["geometry"]
                     intersect_area = pred_geom.intersection(gt_geom).area
                     union_area = pred_geom.area + gt_geom.area - intersect_area
@@ -105,10 +107,14 @@ def calculate_iou_metrics(prediction_gdf: gpd.GeoDataFrame, ground_truth_gdf: gp
 
                     if iou > best_iou:
                         best_iou = iou
-                        best_match = gt_geom
+                        best_gt_id = gt_idx
 
-                if best_iou > 0.0:
-                    ious.append(best_iou)
+                ious.append(best_iou)
+                if best_gt_id is not None:
+                    matched_gt_ids.add(best_gt_id)
+
+            unmatched_gt_count = len(ground_truth_gdf) - len(matched_gt_ids)
+            ious.extend([0.0] * unmatched_gt_count)
 
             return np.mean(ious) if ious else 0.0
 
@@ -157,7 +163,11 @@ def calculate_iou_metrics(prediction_gdf: gpd.GeoDataFrame, ground_truth_gdf: gp
     return calculate_pixel_iou(), calculate_tree_iou()
 
 
-def calculate_centroid_errors(prediction_gdf: gpd.GeoDataFrame, ground_truth_gdf: gpd.GeoDataFrame) -> Tuple[int, int, int, float]:
+def calculate_centroid_errors(
+    prediction_gdf: gpd.GeoDataFrame, 
+    ground_truth_gdf: gpd.GeoDataFrame,
+    max_distance: float = 50.0
+) -> Tuple[int, int, int, float]:
     if prediction_gdf.empty or ground_truth_gdf.empty:
         tp = 0
         fp = len(prediction_gdf) if not prediction_gdf.empty else 0
@@ -175,17 +185,20 @@ def calculate_centroid_errors(prediction_gdf: gpd.GeoDataFrame, ground_truth_gdf
         distances = prediction_gdf["centroid"].distance(gt_row["centroid"])
         if distances.empty:
             continue
+        
         nearest_idx = distances.idxmin()
-        if nearest_idx not in matched_preds:
+        nearest_distance = distances.loc[nearest_idx]
+        
+        if nearest_distance <= max_distance and nearest_idx not in matched_preds:
             matched_preds.add(nearest_idx)
             matched_gts.add(gt_idx)
-            total_error += sqrt((prediction_gdf.loc[nearest_idx, "centroid"].x - gt_row["centroid"].x)**2 +
-                                (prediction_gdf.loc[nearest_idx, "centroid"].y - gt_row["centroid"].y)**2)
+            total_error += nearest_distance
 
     tp = len(matched_gts)
     fp = len(prediction_gdf) - len(matched_preds)
     fn = len(ground_truth_gdf) - len(matched_gts)
     centroid_error = total_error / tp if tp > 0 else float('nan')
+
     return tp, fp, fn, centroid_error
 
 
