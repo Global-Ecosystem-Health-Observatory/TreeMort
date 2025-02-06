@@ -183,7 +183,7 @@ def _validate_inference_params(window_size: int, stride: int, threshold: float) 
 
 def _initialize_maps(image_shape: Tuple[int, int], device: torch.device) -> Tuple[torch.Tensor, torch.Tensor]:
     h, w = image_shape
-    prediction_map = torch.zeros((3, h, w), dtype=torch.float32, device=device) # 3 channels for binary, centroid, hybrid
+    prediction_map = torch.zeros((3, h, w), dtype=torch.float32, device=device) # 3 channels for binary, centroid and hybrid
     count_map = torch.zeros((h, w), dtype=torch.float32, device=device)
     return prediction_map, count_map
 
@@ -240,7 +240,7 @@ def process_batch(
     for i, (y, x) in enumerate(coords):
         binary_confidence = predictions[i, 0]
         centroid_confidence = predictions[i, 1]
-        hybrid_confidence = predictions[i, 1]
+        hybrid_confidence = predictions[i, 2]
 
         _update_maps(prediction_map, count_map, binary_confidence, centroid_confidence, hybrid_confidence, threshold, y, x)
 

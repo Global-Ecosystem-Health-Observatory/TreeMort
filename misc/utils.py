@@ -177,6 +177,8 @@ def calculate_centroid_errors(
 
     prediction_gdf["centroid"] = prediction_gdf["geometry"].centroid
     ground_truth_gdf["centroid"] = ground_truth_gdf["geometry"].centroid
+    
+    ground_truth_gdf = ground_truth_gdf[~ground_truth_gdf["centroid"].is_empty] 
 
     matched_preds, matched_gts = set(), set()
     total_error = 0.0

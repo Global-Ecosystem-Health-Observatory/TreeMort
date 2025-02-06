@@ -73,10 +73,10 @@ test_keys = [
     'V4341C_2022_1_ITD.geojson',
 ]
 
-# test_keys = ['N5442C_2014_1.geojson']
+# test_keys = ['N5412E_tile_1_2023_ITD.geojson', 'N5442C_2014_1.geojson']
 
 def process_prediction_file(
-    image_path: str, prediction_path: str, ground_truth_path: str
+    image_path: str, ground_truth_path: str, prediction_path: str
 ) -> Tuple[float, float, int, int, int, float, float, float, float, float, float, float]:
     try:
         prediction_gdf = load_geodata_with_unique_ids(prediction_path)
@@ -185,11 +185,11 @@ def calculate_mean_ious(data_folder: str, predictions_folder: str = None, output
 
     with ThreadPoolExecutor() as executor:
         futures = {
-            executor.submit(process_prediction_file, image_path, pred_path, gt_path): (
-                pred_path,
+            executor.submit(process_prediction_file, image_path, gt_path, pred_path): (
                 gt_path,
+                pred_path,
             )
-            for image_path, pred_path, gt_path in filtered_file_pairs
+            for image_path, gt_path, pred_path in filtered_file_pairs
         }
         for future in tqdm(as_completed(futures), total=len(futures), desc="Processing File Pairs"):
             try:
@@ -236,7 +236,8 @@ def calculate_mean_ious(data_folder: str, predictions_folder: str = None, output
 
     std_pixel_iou = (
         np.sqrt(
-            sum([(iou / count - mean_pixel_iou) ** 2 for iou, count in zip(metrics["pixel_iou"], metrics["pred_count"])])
+            sum([(iou / count - mean_pixel_iou) ** 2 
+                for iou, count in zip(metrics["pixel_iou"], metrics["pred_count"]) if count > 0])
             / total_pred_count
         )
         if total_pred_count > 0
@@ -259,11 +260,11 @@ def calculate_mean_ious(data_folder: str, predictions_folder: str = None, output
     )
 
     ci_pixel_iou = compute_confidence_interval(
-        [iou / count for iou, count in zip(metrics["pixel_iou"], metrics["pred_count"])]
+        [iou / count for iou, count in zip(metrics["pixel_iou"], metrics["pred_count"]) if count > 0]
         if total_pred_count > 0
         else [0]
     )
-
+        
     ci_tree_iou = compute_confidence_interval(
         [iou / count for iou, count in zip(metrics["tree_iou"], metrics["gt_count"]) if count > 0]
         if total_gt_count > 0
@@ -302,17 +303,17 @@ def calculate_mean_ious(data_folder: str, predictions_folder: str = None, output
 if __name__ == "__main__":
     data_folder = "/Users/anisr/Documents/dead_trees/Finland"
     predictions_folders = [
-        "/Users/anisr/Documents/dead_trees/Finland/Predictions",
-        "/Users/anisr/Documents/dead_trees/Finland/Predictions_r_with_filtering",
-        # "/Users/anisr/Documents/dead_trees/Finland/Predictions_r_filtering_only",
-        # "/Users/anisr/Documents/dead_trees/Finland/Predictions_r_watershed_only",
+        # "/Users/anisr/Documents/dead_trees/Finland/Predictions",
+        # "/Users/anisr/Documents/dead_trees/Finland/Predictions_r_with_filtering",
+        "/Users/anisr/Documents/dead_trees/Finland/Predictions_r_filtering_only",
+        "/Users/anisr/Documents/dead_trees/Finland/Predictions_r_watershed_only",
         # "/Users/anisr/Documents/dead_trees/Finland/Predictions",
     ]
     output_csvs = [  
-        "./output/eval/eval_fin.csv",
-        "./output/eval/eval_fin_r.csv",
-        # "./output/eval/eval_fin_r_filtering_only.csv",
-        # "./output/eval/eval_fin_r_watershed_only.csv",
+        # "./output/eval/eval_fin.csv",
+        # "./output/eval/eval_fin_r.csv",
+        "./output/eval/eval_fin_r_filtering_only.csv",
+        "./output/eval/eval_fin_r_watershed_only.csv",
         # "./output/eval/eval_fin_full.csv", # remember to pass eval_test_only = False
         # "./output/eval/tmp.csv", # remember to pass eval_test_only = False
     ]
