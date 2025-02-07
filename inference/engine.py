@@ -1,11 +1,16 @@
 import os
+import cv2
 import torch
 import argparse
 import configargparse
 
+import numpy as np
+import geopandas as gpd
+
 from pathlib import Path
 from multiprocessing import Pool, cpu_count
 from skimage.morphology import label
+from shapely.geometry import Point
 
 from treemort.utils.logger import configure_logger, get_logger
 
@@ -35,6 +40,9 @@ from inference.utils import (
     smooth_segment_contours,
     refine_dead_tree_segments_adaptive,
     refine_segments_irregular_shape,
+    extract_centroid_points,
+    hybrid_contours_to_geojson, 
+    extract_hybrid_contours,
 )
 from inference.graph_partition import perform_graph_partitioning, refine_elliptical_regions_with_graph
 
@@ -99,6 +107,34 @@ def process_image(
                 contours, transform, crs, os.path.splitext(os.path.basename(image_path))[0]
             )
             save_geojson(geojson_data, geojson_path)
+
+
+            centroid_points = extract_centroid_points(centroid_map, threshold=0.5)
+
+            from rasterio.transform import xy
+            from shapely.geometry import Point
+
+            geoms = []
+            for x, y in centroid_points:
+                lon, lat = xy(transform, int(y), int(x))  # Convert pixel (row=y, col=x) to geographic coords.
+                geoms.append(Point(lon, lat))
+            
+            gdf = gpd.GeoDataFrame(geometry=geoms, crs=crs)  # Replace EPSG:XXXX with your CRS
+
+            gdf.to_file(geojson_path, driver="GeoJSON")
+
+
+            hybrid_np = hybrid_map.cpu().numpy().squeeze()  # shape: (H, W)
+            binary_hybrid = (hybrid_np < -0.5).astype(np.uint8) * 255
+
+            contours, _ = cv2.findContours(binary_hybrid, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+            min_area = 10  # adjust as needed
+            contours = [cnt for cnt in contours if cv2.contourArea(cnt) >= min_area]
+
+            hybrid_contours_to_geojson(contours, transform, crs, geojson_path)
+
+
 
         logger.info(f"Successfully processed and saved GeoJSON for: {os.path.basename(image_path)}")
     except Exception as e:

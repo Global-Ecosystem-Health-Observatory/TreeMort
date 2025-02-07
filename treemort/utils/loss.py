@@ -6,7 +6,7 @@ from typing import Optional, List, Tuple
 
 
 class TreeMortalityLoss(nn.Module):
-    def __init__(self, mask_weight=1.0, centroid_weight=0.7, sdt_weight=0.5, boundary_weight=0.3):
+    def __init__(self, mask_weight=1.0, centroid_weight=0.7, sdt_weight=0.5, boundary_weight=1.0):
         super().__init__()
         self.mask_weight = mask_weight
         self.centroid_weight = centroid_weight
@@ -50,7 +50,8 @@ class TreeMortalityLoss(nn.Module):
         sdt_loss = F.smooth_l1_loss(pred[sdt_mask], target[sdt_mask])
 
         if boundary_mask.sum() > 0:
-            boundary_loss = torch.exp(pred[boundary_mask] + 1).mean()
+            # boundary_loss = torch.exp(pred[boundary_mask] + 1).mean()
+            boundary_loss = F.l1_loss(pred[boundary_mask], target[boundary_mask])
         else:
             boundary_loss = torch.tensor(0.0, device=pred.device)
 
