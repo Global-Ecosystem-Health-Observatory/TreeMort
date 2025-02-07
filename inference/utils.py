@@ -12,6 +12,8 @@ from affine import Affine
 from typing import Optional, List, Tuple, Generator, Dict
 
 from rasterio.crs import CRS
+from rasterio.transform import xy
+
 from shapely.geometry import Polygon, shape
 
 from sklearn.decomposition import PCA
@@ -261,7 +263,13 @@ def _infer_patches(patches: list[torch.Tensor], model: torch.nn.Module, device: 
 
     with torch.no_grad():
         outputs = model(batch_tensor)
-        predictions = torch.sigmoid(outputs)
+
+        seg_predictions = torch.sigmoid(outputs[:, 0:1, ...])
+        centroid_predictions = outputs[:, 1:2, ...]
+        # hybrid_predictions = torch.tanh(outputs[:, 2:3, ...])
+        hybrid_predictions = outputs[:, 2:3, ...]
+        
+        predictions = torch.cat([seg_predictions, centroid_predictions, hybrid_predictions], dim=1)
 
     return predictions
 
@@ -1045,3 +1053,50 @@ def refine_segments_irregular_shape(segment_map, intensity_image, intensity_thre
             growth_radius += 1
 
     return refined_segment_map
+
+
+def extract_centroid_points(centroid_map, threshold=0.5):
+    binary_map = (centroid_map > threshold).cpu().numpy().astype(np.uint8)
+    
+    num_labels, labels_im = cv2.connectedComponents(binary_map)
+    
+    points = []
+    for label in range(1, num_labels):  # Skip background label 0.
+        mask = labels_im == label
+
+        if mask.sum() > 0:
+            y, x = np.unravel_index(np.argmax(mask), mask.shape)
+            points.append((x, y))
+
+    return points
+
+
+def extract_hybrid_contours(hybrid_map, threshold_value=0.0, min_area=10):
+    _, binary_map = cv2.threshold(hybrid_map.astype(np.float32), threshold_value, 255, cv2.THRESH_BINARY)
+    binary_map = binary_map.astype(np.uint8)
+    
+    contours, _ = cv2.findContours(binary_map, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    
+    filtered_contours = [cnt for cnt in contours if cv2.contourArea(cnt) >= min_area]
+    return filtered_contours
+
+
+def hybrid_contours_to_geojson(contours, transform, crs, output_geojson):
+    geoms = []
+    for cnt in contours:
+        pts = cnt.squeeze()  # shape becomes (N,2)
+        if pts.ndim != 2 or pts.shape[0] < 3:
+            continue  # Not enough points to form a polygon.
+        
+        geo_pts = [xy(transform, int(pt[1]), int(pt[0])) for pt in pts]
+        
+        poly = Polygon(geo_pts)
+        if poly.is_valid:
+            geoms.append(poly)
+    
+    if geoms:
+        gdf = gpd.GeoDataFrame(geometry=geoms, crs=crs)
+        gdf.to_file(output_geojson, driver="GeoJSON")
+        print(f"Saved GeoJSON with {len(geoms)} features to {output_geojson}")
+    else:
+        print("No valid contours to save as GeoJSON.")
