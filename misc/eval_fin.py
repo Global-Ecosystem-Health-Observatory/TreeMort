@@ -73,7 +73,7 @@ test_keys = [
     'V4341C_2022_1_ITD.geojson',
 ]
 
-# test_keys = ['N5412E_tile_1_2023_ITD.geojson', 'N5442C_2014_1.geojson']
+test_keys = ['L2344D_2022_1_ITD.geojson']
 
 def process_prediction_file(
     image_path: str, ground_truth_path: str, prediction_path: str
@@ -305,17 +305,19 @@ if __name__ == "__main__":
     predictions_folders = [
         # "/Users/anisr/Documents/dead_trees/Finland/Predictions",
         # "/Users/anisr/Documents/dead_trees/Finland/Predictions_r_with_filtering",
-        "/Users/anisr/Documents/dead_trees/Finland/Predictions_r_filtering_only",
-        "/Users/anisr/Documents/dead_trees/Finland/Predictions_r_watershed_only",
+        # "/Users/anisr/Documents/dead_trees/Finland/Predictions_r_filtering_only",
+        # "/Users/anisr/Documents/dead_trees/Finland/Predictions_r_watershed_only",
         # "/Users/anisr/Documents/dead_trees/Finland/Predictions",
+        "/Users/anisr/Documents/dead_trees/Finland/Predictions_sdt",
     ]
     output_csvs = [  
         # "./output/eval/eval_fin.csv",
         # "./output/eval/eval_fin_r.csv",
-        "./output/eval/eval_fin_r_filtering_only.csv",
-        "./output/eval/eval_fin_r_watershed_only.csv",
+        # "./output/eval/eval_fin_r_filtering_only.csv",
+        # "./output/eval/eval_fin_r_watershed_only.csv",
         # "./output/eval/eval_fin_full.csv", # remember to pass eval_test_only = False
         # "./output/eval/tmp.csv", # remember to pass eval_test_only = False
+        "./output/eval/eval_fin_sdt.csv",
     ]
 
     for predictions_folder, output_csv in zip(predictions_folders, output_csvs):

@@ -18,7 +18,7 @@ from shapely.geometry import Polygon, shape
 
 from sklearn.decomposition import PCA
 
-from scipy import ndimage
+from scipy import ndimage as ndi
 from scipy.ndimage import gaussian_filter, distance_transform_edt, binary_dilation, binary_erosion
 
 from skimage import exposure
@@ -218,7 +218,10 @@ def _finalize_prediction(
 
     final_prediction = prediction_map / count_map.unsqueeze(0)
     final_prediction[:, no_contribution_mask] = 0
-    final_prediction = torch.clamp(final_prediction, 0, 1)
+
+    final_prediction[0] = torch.clamp(final_prediction[0], 0, 1)
+    final_prediction[1] = torch.clamp(final_prediction[1], 0, 1)
+    final_prediction[2] = torch.clamp(final_prediction[2], -1, 1)
 
     _, original_h, original_w = original_shape
     return final_prediction[:, :original_h, :original_w]
@@ -266,8 +269,8 @@ def _infer_patches(patches: list[torch.Tensor], model: torch.nn.Module, device: 
 
         seg_predictions = torch.sigmoid(outputs[:, 0:1, ...])
         centroid_predictions = outputs[:, 1:2, ...]
-        # hybrid_predictions = torch.tanh(outputs[:, 2:3, ...])
-        hybrid_predictions = outputs[:, 2:3, ...]
+        hybrid_predictions = torch.tanh(outputs[:, 2:3, ...])
+        # hybrid_predictions = outputs[:, 2:3, ...]
         
         predictions = torch.cat([seg_predictions, centroid_predictions, hybrid_predictions], dim=1)
 
@@ -727,7 +730,7 @@ def calculate_iou(geojson_path: str, predictions_path: str) -> Optional[float]:
 def decompose_elliptical_regions(
     binary_mask, intensity_image, centroid_map, min_distance=5, sigma=2, peak_threshold=0.7
 ):
-    distance = ndimage.distance_transform_edt(binary_mask)
+    distance = ndi.distance_transform_edt(binary_mask)
 
     smoothed_distance = gaussian(distance, sigma=sigma)
     smoothed_intensity = gaussian(intensity_image, sigma=sigma)
@@ -1100,3 +1103,49 @@ def hybrid_contours_to_geojson(contours, transform, crs, output_geojson):
         print(f"Saved GeoJSON with {len(geoms)} features to {output_geojson}")
     else:
         print("No valid contours to save as GeoJSON.")
+
+
+def get_binary_segmentation(seg_map, threshold=0.5):
+    seg_prob = seg_map.cpu().numpy()  # shape (H, W)
+    binary_seg = (seg_prob > threshold).astype(np.uint8)
+    return binary_seg
+
+
+def get_centroid_markers(centroid_map, min_distance=5, threshold_abs=0.5):
+    centroid_np = centroid_map.cpu().numpy()  # shape (H, W)
+    coordinates = peak_local_max(centroid_np, min_distance=min_distance, threshold_abs=threshold_abs)
+    
+    markers = np.zeros_like(centroid_np, dtype=np.int32)
+    for i, (row, col) in enumerate(coordinates, 1):
+        markers[row, col] = i
+
+    markers = ndi.label(markers)[0]
+    return markers
+
+
+def get_hybrid_gradient(hybrid_map):
+    hybrid_np = hybrid_map.cpu().numpy()  # shape (H, W)
+    gradient = np.abs(hybrid_np)
+    return gradient
+
+
+def compute_final_segmentation(seg_map, centroid_map, hybrid_map, 
+                               seg_threshold=0.5, centroid_params=None, hybrid_threshold=-0.5):
+    if centroid_params is None:
+        centroid_params = {'min_distance': 5, 'threshold_abs': 0.5}
+    
+    binary_seg = get_binary_segmentation(seg_map, threshold=seg_threshold)
+    
+    markers = get_centroid_markers(centroid_map,
+                                   min_distance=centroid_params['min_distance'],
+                                   threshold_abs=centroid_params['threshold_abs'])
+    
+    gradient = get_hybrid_gradient(hybrid_map)
+    
+    # Optionally, if you wish to remove areas with weak boundary evidence:
+    # binary_hybrid = (hybrid_map.cpu().numpy() < hybrid_threshold).astype(np.uint8)
+    # binary_seg[binary_hybrid == 1] = 0  # remove these regions from seg mask
+
+    final_segmentation = watershed(gradient, markers, mask=binary_seg)
+    
+    return final_segmentation
