@@ -15,13 +15,10 @@ from shapely.geometry import Point
 from treemort.utils.logger import configure_logger, get_logger
 from inference.utils import (
     load_model,
-    load_refine_model,
     sliding_window_inference,
-    refine_mask,
     initialize_logger,
     save_labels_as_geojson,
     load_and_preprocess_image,
-    generate_watershed_labels,
     threshold_prediction_map,
     extract_contours,
     contours_to_geojson,
@@ -29,22 +26,8 @@ from inference.utils import (
     log_and_raise,
     validate_path,
     expand_path,
-    decompose_elliptical_regions,
-    refine_segments,
-    filter_segment_map,
-    preprocess_centroid_map,
-    refine_centroid_map,
-    detect_multiple_peaks,
-    segment_using_watershed,
-    smooth_segment_contours,
-    refine_dead_tree_segments_adaptive,
-    refine_segments_irregular_shape,
-    extract_centroid_points,
-    hybrid_contours_to_geojson, 
-    extract_hybrid_contours,
     compute_final_segmentation,
 )
-from inference.graph_partition import perform_graph_partitioning, refine_elliptical_regions_with_graph
 
 
 def process_image(
@@ -58,31 +41,22 @@ def process_image(
     logger.debug(f"Processing image: {os.path.basename(image_path)}")
 
     try:
-        # Load and preprocess the image
         image, transform, crs = load_and_preprocess_image(image_path, conf.nir_rgb_order)
         logger.debug(f"Loaded and preprocessed image: {os.path.basename(image_path)}")
 
-        # Run sliding window inference; expects three output channels:
-        # Channel 0: segmentation logits (post-processed with sigmoid)
-        # Channel 1: centroid map (raw)
-        # Channel 2: hybrid map (raw)
         prediction_maps = sliding_window_inference(
             model, image, window_size=conf.window_size, stride=conf.stride, threshold=conf.threshold
         )
         segment_map, centroid_map, hybrid_map = prediction_maps
 
         if post_process:
-            segment_map_np = segment_map.cpu().squeeze()  # assume shape (H, W)
-            centroid_map_np = centroid_map.cpu().squeeze()
-            hybrid_map_np = hybrid_map.cpu().squeeze()
-
             final_segmentation = compute_final_segmentation(
                 seg_map=segment_map, 
                 centroid_map=centroid_map, 
                 hybrid_map=hybrid_map,
                 seg_threshold=conf.threshold,
-                centroid_params={'min_distance': 5, 'threshold_abs': conf.centroid_threshold},
-                hybrid_threshold=-0.5  # adjust as needed
+                centroid_params={'min_distance': conf.min_distance, 'threshold_abs': conf.centroid_threshold},
+                hybrid_threshold=conf.hybrid_threshold
             )
 
             save_labels_as_geojson(
@@ -247,6 +221,7 @@ def parse_config(config_file_path: str) -> argparse.Namespace:
     parser.add("--dilation-radius", type=int, default=0, help="Radius of the structuring element for dilating binary masks.")
     parser.add("--blur-sigma", type=float, default=1.0, help="Standard deviation for Gaussian blur applied to prediction maps.")
     parser.add("--centroid-threshold", type=float, default=0.5, help="Threshold for filtering peaks based on the centroid map.")
+    parser.add("--hybrid-threshold", type=float, default=-0.5, help="Threshold for filtering contours based on the hybrid map.")
     parser.add("--nir-rgb-order", type=int, nargs='+', default=[3, 0, 1, 2], help="Order of NIR, Red, Green, and Blue channels in the input imagery.")
 
     conf, _ = parser.parse_known_args()
