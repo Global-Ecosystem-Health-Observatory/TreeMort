@@ -1,0 +1,9 @@
+# settings for self attention unet
+
+include = base_config.txt
+
+model = sa_unet
+
+output-dir = ./output/sa_unet
+
+resume = True

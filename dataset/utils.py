@@ -1,9 +1,16 @@
-import json
-
+import os
 import cv2
-import numpy as np
+import json
 import rasterio
+
+import numpy as np
+
 from tqdm import tqdm
+from scipy.ndimage import label, find_objects
+
+
+def expand_path(path):
+    return os.path.expandvars(path)
 
 
 def create_label_mask(img_arr: np.ndarray, polys: list[np.ndarray]):
@@ -15,6 +22,76 @@ def create_label_mask(img_arr: np.ndarray, polys: list[np.ndarray]):
         cv2.fillPoly(label_mask, pts=[poly], color=1)
 
     return label_mask
+
+
+def create_label_mask_with_centroids(
+    img_arr: np.ndarray, polys: list[np.ndarray], sigma: float = 2.0
+):
+    image_h, image_w = img_arr.shape[:2]
+
+    label_mask = np.zeros((image_h, image_w), dtype=np.float32)
+    centroid_mask = np.zeros((image_h, image_w), dtype=np.float32)
+    dead_tree_count = 0
+
+    for poly in tqdm(polys, desc="Creating label masks and centroids"):
+        cv2.fillPoly(label_mask, pts=[poly], color=1)
+
+        moments = cv2.moments(poly)
+        if moments["m00"] != 0:  # Avoid division by zero
+            centroid_x = int(moments["m10"] / moments["m00"])
+            centroid_y = int(moments["m01"] / moments["m00"])
+
+            dead_tree_count += 1
+
+            y, x = np.meshgrid(np.arange(image_h), np.arange(image_w), indexing="ij")
+            gaussian = np.exp(-((x - centroid_x) ** 2 + (y - centroid_y) ** 2) / (2 * sigma ** 2))
+            centroid_mask += gaussian
+
+    centroid_mask = np.clip(centroid_mask, 0, 1)
+
+    return label_mask, centroid_mask, dead_tree_count
+
+
+def create_hybrid_sdt_boundary_labels(
+    img_arr: np.ndarray, 
+    polys: list[np.ndarray], 
+    sigma: float = 2.0,
+    boundary_width: int = 2
+):
+    h, w = img_arr.shape[:2]
+    
+    binary_mask = np.zeros((h, w), dtype=np.float32)
+    centroid_mask = np.zeros((h, w), dtype=np.float32)
+    sdt_max = np.zeros((h, w), dtype=np.float32)
+    boundary_mask = np.zeros((h, w), dtype=np.uint8)
+
+    for poly in tqdm(polys, desc="Processing trees"):
+        instance_mask = np.zeros((h, w), dtype=np.uint8)
+        cv2.fillPoly(instance_mask, [poly], 1)
+        
+        binary_mask = np.clip(binary_mask + instance_mask, 0, 1)
+        
+        M = cv2.moments(poly)
+        if M["m00"] > 0:
+            cx = int(M["m10"]/M["m00"])
+            cy = int(M["m01"]/M["m00"])
+            y, x = np.ogrid[:h, :w]
+            centroid_mask += np.exp(-((x-cx)**2 + (y-cy)**2)/(2*sigma**2))
+        
+        dist = cv2.distanceTransform(instance_mask, cv2.DIST_L2, 3)
+        if np.max(dist) > 0:
+            dist_normalized = dist / np.max(dist)
+            sdt_max = np.maximum(sdt_max, dist_normalized)
+        
+        contours, _ = cv2.findContours(instance_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        cv2.drawContours(boundary_mask, contours, -1, 1, boundary_width)
+
+    hybrid_channel = np.where(boundary_mask > 0, -1.0, sdt_max)
+    hybrid_channel = np.where(binary_mask == 0, 0.0, hybrid_channel)  # Zero background
+    
+    centroid_mask = np.clip(centroid_mask, 0, 1)
+    
+    return binary_mask, centroid_mask, hybrid_channel
 
 
 def segmap_to_topo(img_arr: np.ndarray, contours: list) -> np.ndarray:
@@ -54,10 +131,8 @@ def get_image_and_polygons(
     min_xy = bounds[:2]
     n_rows = img_arr.shape[0]
     
-    # Polygons in georeferenced coordinates
     label_polygons = load_geojson_labels(geojson_filepath)
 
-    # Transform polygons into image coordinates
     adjusted_polygons = []
     for polygon in label_polygons:
         adjusted_polygon = []
@@ -94,14 +169,10 @@ def load_geotiff(
 ) -> tuple[np.ndarray, tuple[float], tuple[float]]:
            
     with rasterio.open(filename) as img:
-
-        # Read pixel values and move channels last
         img_arr = np.moveaxis(img.read(), 0, -1).astype(np.float32)
 
-        # Reorder channels
         img_arr = img_arr[:,:,nir_rgb_order]
 
-        # Set missing values to zero
         if img.nodata is not None:
             img_arr[img.nodata] = 0
         else:
@@ -129,8 +200,6 @@ def load_geojson_labels(geojson_path: str) -> list[list[list[float]]]:
     for multipoly in samples_json.get("features", []):
         geometry = multipoly.get("geometry")
         if geometry and geometry.get("coordinates"):
-            # Inner loop ensures that all polygons in single multipolygon are
-            # stored separately
             for poly in geometry["coordinates"]:
                 try:
                     coordinates = poly[0]
@@ -177,3 +246,29 @@ def get_nonzero_percentiles(input_array: np.ndarray, percentages: float) -> floa
         return 0
 
     return np.percentile(all_nonzero_values, percentages)
+
+
+def create_partial_segment_mask(binary_mask):
+    height, width = binary_mask.shape
+
+    valid_mask = np.ones_like(binary_mask, dtype=np.uint8)
+    
+    structure = np.ones((3, 3))  # 8-connectivity
+    labeled_array, num_features = label(binary_mask, structure=structure)
+    
+    slices = find_objects(labeled_array)
+    
+    for comp_id, bbox in enumerate(slices, start=1):
+        if bbox is None:
+            continue
+        y_slice, x_slice = bbox
+        
+        touches_top    = y_slice.start == 0
+        touches_bottom = y_slice.stop == height
+        touches_left   = x_slice.start == 0
+        touches_right  = x_slice.stop == width
+        
+        if touches_top or touches_bottom or touches_left or touches_right:
+            valid_mask[labeled_array == comp_id] = 0
+    
+    return valid_mask

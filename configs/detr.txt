@@ -1,0 +1,15 @@
+# settings for DETR (DEtection TRansformer)
+
+include = base_config.txt
+
+model = detr
+
+backbone = facebook/detr-resnet-50-panoptic
+
+output-dir = ./output/detr
+
+train-batch-size = 4
+val-batch-size = 4
+test-batch-size = 4
+
+resume = True

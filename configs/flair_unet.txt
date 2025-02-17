@@ -1,0 +1,9 @@
+# settings for self attention unet with flair backbone
+
+include = base_config.txt
+
+model = flair_unet
+
+output-dir = ./output/flair_unet
+
+resume = True

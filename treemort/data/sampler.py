@@ -13,22 +13,24 @@ class BalancedSampler(Sampler):
 
         with h5py.File(self.hdf5_file, "r") as hf:
             for idx, key in enumerate(self.keys):
-                contains_dead_tree = hf[key].attrs.get("contains_dead_tree", 0)
-                if contains_dead_tree:
+                num_trees = hf[key].attrs.get("num_trees", 0)
+                if num_trees > 0:
                     self.dead_tree_indices.append(idx)
                 else:
                     self.no_dead_tree_indices.append(idx)
 
     def __iter__(self):
-        min_count = min(len(self.dead_tree_indices), len(self.no_dead_tree_indices))
-
-        dead_tree_sample = random.sample(self.dead_tree_indices, min_count)
-        no_dead_tree_sample = random.sample(self.no_dead_tree_indices, min_count)
-
-        balanced_indices = dead_tree_sample + no_dead_tree_sample
-        random.shuffle(balanced_indices)
-
-        return iter(balanced_indices)
+        min_count = min(len(self.dead_tree_indices), 
+                       len(self.no_dead_tree_indices))
+        
+        dead_sample = random.sample(self.dead_tree_indices, min_count)
+        no_dead_sample = random.sample(self.no_dead_tree_indices, min_count)
+        
+        balanced = dead_sample + no_dead_sample
+        random.shuffle(balanced)
+        
+        return iter(balanced)
 
     def __len__(self):
-        return 2 * min(len(self.dead_tree_indices), len(self.no_dead_tree_indices))
+        return 2 * min(len(self.dead_tree_indices),
+                      len(self.no_dead_tree_indices))

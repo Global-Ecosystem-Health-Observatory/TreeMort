@@ -1,0 +1,11 @@
+# settings for maskformer
+
+include = base_config.txt
+
+model = maskformer
+
+backbone = facebook/maskformer-swin-base-ade
+
+output-dir = ./output/maskformer
+
+resume = True

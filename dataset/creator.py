@@ -1,16 +1,23 @@
 import os
 import h5py
+import rasterio
 import argparse
 import configargparse
 import concurrent.futures
 
 import numpy as np
 
+from pyproj import Transformer
 from pathlib import Path
+from scipy.ndimage import label as nd_label  # Explicit import to avoid shadowing
+from skimage.feature import peak_local_max
+from rasterio.transform import xy
 
-from dataset.preprocessutils import (
+from dataset.utils import (
+    expand_path,
     get_image_and_polygons,
-    create_label_mask,
+    create_partial_segment_mask,
+    create_hybrid_sdt_boundary_labels,
 )
 
 
@@ -23,74 +30,140 @@ def pad_image(image, window_size):
 
 def pad_label(label, window_size):
     h, w = label.shape[:2]
+    channels = 1 if label.ndim == 2 else label.shape[2]
     pad_h = max(0, window_size - h)
     pad_w = max(0, window_size - w)
-    return np.pad(label, ((0, pad_h), (0, pad_w)), mode="constant")
+
+    return np.pad(
+        label,
+        ((0, pad_h), (0, pad_w), (0, 0)) if label.ndim == 3 else ((0, pad_h), (0, pad_w)),
+        mode="constant",
+    )
 
 
-def extract_patches(image, label, window_size, stride):
-    image = pad_image(image, window_size)
-    label = pad_label(label, window_size)
+def extract_patches(image, label, window_size, stride, buffer=32):
+    pad = (window_size - stride) // 2
+    image = np.pad(image, ((pad, pad), (pad, pad), (0, 0)), mode='reflect')
+    label = np.pad(label, ((pad, pad), (pad, pad), (0, 0)), mode='constant')
 
     h, w = image.shape[:2]
-
     patches = []
-    for y in range(0, h - window_size + 1, stride):
-        for x in range(0, w - window_size + 1, stride):
-            image_patch = image[y : y + window_size, x : x + window_size]
-            
-            label_patch = label[y : y + window_size, x : x + window_size]
-            label_patch = (label_patch > 0).astype(np.float32)
 
-            patches.append((image_patch, label_patch))
+    for y in range(pad, h - window_size - pad + 1, stride):
+        for x in range(pad, w - window_size - pad + 1, stride):
+            img_patch = image[y:y+window_size, x:x+window_size]
+            lbl_patch = label[y:y+window_size, x:x+window_size]
+            
+            buffer_mask = create_partial_segment_mask(lbl_patch[..., 0])
+            
+            _, num_trees = nd_label(lbl_patch[:, :, 0])
+
+            patches.append((img_patch, lbl_patch, buffer_mask, num_trees))
+    
     return patches
 
 
-def process_image(
-    image_path,
-    label_path,
-    conf
-):
+def process_image(image_path, label_path, conf):
     image_name = os.path.basename(image_path)
 
     try:
+        with rasterio.open(image_path) as src:
+            transform = src.transform
+            crs = src.crs  # CRS of the raster
+            geographic_crs = "EPSG:4326"  # Geographic CRS (WGS84)
+
+            transformer = Transformer.from_crs(crs, geographic_crs, always_xy=True)
+
         img_arr, polygons = get_image_and_polygons(
-                image_path,
-                label_path,
-                conf.nir_rgb_order,
-                conf.normalize_channelwise,
-                conf.normalize_imagewise,
+            image_path,
+            label_path,
+            conf.nir_rgb_order,
+            conf.normalize_channelwise,
+            conf.normalize_imagewise,
+        )
+
+        binary_mask, centroid_mask, hybrid_channel = create_hybrid_sdt_boundary_labels(img_arr, polygons)
+        combined_mask = np.stack([binary_mask, centroid_mask, hybrid_channel], axis=-1)
+
+        patches = extract_patches(img_arr, combined_mask, conf.window_size, conf.stride)
+
+        labeled_patches = []
+        h, w = img_arr.shape[:2]
+        pad = (conf.window_size - conf.stride) // 2
+        num_patches_per_row = ((w - conf.window_size) // conf.stride) + 1
+
+        for idx, (img_patch, lbl_patch, buffer_mask, num_trees) in enumerate(patches):
+            patch_row = idx // num_patches_per_row
+            patch_col = idx % num_patches_per_row
+            
+            pixel_x = patch_col * conf.stride
+            pixel_y = patch_row * conf.stride
+            
+            center_x = pixel_x + conf.window_size // 2
+            center_y = pixel_y + conf.window_size // 2
+            
+            raster_lon, raster_lat = xy(transform, center_y, center_x)
+            centroid_lon, centroid_lat = transformer.transform(raster_lon, raster_lat)
+
+            labeled_patches.append(
+                (
+                    img_patch,          # Image patch with buffer context
+                    {
+                        'mask': lbl_patch[..., 0],        # Binary segmentation
+                        'centroid': lbl_patch[..., 1],    # Gaussian centroids  
+                        'hybrid': lbl_patch[..., 2],      # SDT-boundary channel
+                        'buffer_mask': buffer_mask        # Critical for training
+                    },
+                    num_trees,          # Precomputed tree count (buffer-masked)
+                    image_name,
+                    centroid_lat,
+                    centroid_lon,
+                    (pixel_x, pixel_y)  # Original coordinates
+                )
             )
 
-        label_mask = create_label_mask(img_arr, polygons)
-        
-        patches = extract_patches(img_arr, label_mask, conf.window_size, conf.stride)
-
-        labeled_patches = [(patch[0], patch[1], int(np.any(patch[1])), image_name) for patch in patches]
         return image_name, labeled_patches
-    
+
     except Exception as e:
         print(f"[ERROR] Failed to process {image_path}: {e}")
         return image_name, []
 
 
 def write_to_hdf5(hdf5_file, data):
-    with h5py.File(hdf5_file, "a") as hf:  # Open in append mode
-        if data:  # Ensure data is not empty
-            for file_stub, labeled_patches in data:
-                if labeled_patches:  # Only process if labeled_patches is not empty
-                    for idx, (image_patch, label_patch, contains_dead_tree, filename) in enumerate(labeled_patches):
-                        key = f"{file_stub}_{idx}"
-                        hf.create_group(key)
-                        hf[key].create_dataset("image", data=image_patch, compression="gzip")
-                        hf[key].create_dataset("label", data=label_patch, compression="gzip")
-                        hf[key].attrs["contains_dead_tree"] = contains_dead_tree
-                        hf[key].attrs["source_image"] = filename
-                else:
-                    print(f"[WARNING] No labeled patches for file: {file_stub}")
-        else:
-            print("[WARNING] No data provided to write.")
-
+    with h5py.File(hdf5_file, "a") as hf:
+        for image_name, labeled_patches in data:
+            if not labeled_patches:
+                print(f"[WARNING] No labeled patches for image: {image_name}")
+                continue
+                
+            for idx, patch in enumerate(labeled_patches):
+                (img_patch, label_dict, num_trees, 
+                 _, centroid_lat, centroid_lon, 
+                 (pixel_x, pixel_y)) = patch
+                
+                group_name = f"{image_name}_{idx}"
+                patch_group = hf.create_group(group_name)
+                
+                patch_group.create_dataset("image", data=img_patch, 
+                                         compression="gzip", dtype=np.float32)
+                
+                label_group = patch_group.create_group("labels")
+                label_group.create_dataset("mask", data=label_dict['mask'], 
+                                         compression="gzip", dtype=np.float32)
+                label_group.create_dataset("centroid", data=label_dict['centroid'], 
+                                         compression="gzip", dtype=np.float32)
+                label_group.create_dataset("hybrid", data=label_dict['hybrid'], 
+                                         compression="gzip", dtype=np.float32)
+                label_group.create_dataset("buffer_mask", data=label_dict['buffer_mask'], 
+                                         compression="gzip", dtype=np.uint8)
+                
+                patch_group.attrs["num_trees"] = int(num_trees)
+                patch_group.attrs["source_image"] = str(image_name)
+                patch_group.attrs["latitude"] = float(centroid_lat)
+                patch_group.attrs["longitude"] = float(centroid_lon)
+                patch_group.attrs["pixel_x"] = int(pixel_x)
+                patch_group.attrs["pixel_y"] = int(pixel_y)
+            
 
 def convert_to_hdf5(
     conf,
@@ -100,7 +173,7 @@ def convert_to_hdf5(
 ):
     data_path = Path(conf.data_folder)
     hdf5_path = Path(conf.data_folder).parent / conf.hdf5_file
-    
+ 
     assert not os.path.exists(hdf5_path), f"[ERROR] The HDF5 file '{hdf5_path}' already exists. Please provide a different file name or delete the existing file."
 
     image_list = []
@@ -108,7 +181,7 @@ def convert_to_hdf5(
 
     image_list = list(data_path.rglob("*.tiff")) + list(data_path.rglob("*.tif")) + list(data_path.rglob("*.jp2"))
 
-    for image_path in image_list[:]:  # Using image_list[:] to make a copy for safe removal
+    for image_path in image_list[:]:
         label_path = Path(str(image_path).replace("/Images/", "/Geojsons/"))
         label_path = label_path.with_suffix(".geojson")
 
@@ -172,6 +245,8 @@ def parse_config(config_file_path):
 
     conf, _ = parser.parse_known_args()
 
+    conf.data_folder = expand_path(conf.data_folder)
+
     return conf
 
 if __name__ == "__main__":
@@ -193,6 +268,8 @@ if __name__ == "__main__":
 
 '''
 Usage:
+
+export TREEMORT_DATA_PATH="/Users/anisr/Documents/dead_trees" 
 
 python3 -m dataset.creator ./configs/Finland_RGBNIR_25cm.txt
 

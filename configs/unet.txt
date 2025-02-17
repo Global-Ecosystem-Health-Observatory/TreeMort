@@ -1,0 +1,9 @@
+# settings for kokonet
+
+include = base_config.txt
+
+model = unet
+
+output-dir = ./output/unet
+
+resume = True
