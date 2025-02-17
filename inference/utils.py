@@ -157,13 +157,14 @@ def sliding_window_inference(
     stride: int = 128,
     batch_size: int = 1,
     threshold: float = 0.5,
+    output_channels: int = 1
 ) -> torch.Tensor:
     _validate_inference_params(window_size, stride, threshold)
 
     device = next(model.parameters()).device
     padded_image = pad_image(image, window_size)
 
-    prediction_map, count_map = _initialize_maps(padded_image.shape[1:], device)
+    prediction_map, count_map = _initialize_maps(padded_image.shape[1:], output_channels, device)
     patches, coords = _generate_patches(padded_image, window_size, stride)
 
     for batch in _batch_patches(patches, coords, batch_size):
@@ -183,9 +184,9 @@ def _validate_inference_params(window_size: int, stride: int, threshold: float) 
         log_and_raise(logger, ValueError("threshold must be between 0 and 1."))
 
 
-def _initialize_maps(image_shape: Tuple[int, int], device: torch.device) -> Tuple[torch.Tensor, torch.Tensor]:
+def _initialize_maps(image_shape: Tuple[int, int], output_channels: int, device: torch.device) -> Tuple[torch.Tensor, torch.Tensor]:
     h, w = image_shape
-    prediction_map = torch.zeros((3, h, w), dtype=torch.float32, device=device) # 3 channels for binary, centroid and hybrid
+    prediction_map = torch.zeros((output_channels, h, w), dtype=torch.float32, device=device)
     count_map = torch.zeros((h, w), dtype=torch.float32, device=device)
     return prediction_map, count_map
 
