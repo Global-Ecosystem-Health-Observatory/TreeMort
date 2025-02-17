@@ -45,7 +45,7 @@ def process_image(
         logger.debug(f"Loaded and preprocessed image: {os.path.basename(image_path)}")
 
         prediction_maps = sliding_window_inference(
-            model, image, window_size=conf.window_size, stride=conf.stride, threshold=conf.threshold
+            model, image, window_size=conf.window_size, stride=conf.stride, threshold=conf.threshold, conf.output_channels
         )
         segment_map, centroid_map, hybrid_map = prediction_maps
 
@@ -213,6 +213,8 @@ def parse_config(config_file_path: str) -> argparse.Namespace:
     parser.add("--best-model", type=str, required=True, help="Path to the file containing the best model weights.")
     parser.add("--window-size", type=int, default=256, help="Size of the sliding window for inference (default: 256 pixels).")
     parser.add("--stride", type=int, default=128, help="Stride length for sliding window during inference (default: 128 pixels).")
+    parser.add("--input-channels",  type=int, required=True, help="number of input channels")
+    parser.add("--output-channels", type=int, required=True, help="number of output channels")
     parser.add("--threshold", type=float, default=0.5, help="Threshold for binary classification during inference (default: 0.5).")
     parser.add("--min-area-threshold", type=float, default=1.0, help="Minimum area (in pixels) for retaining a detected region.")
     parser.add("--max-aspect-ratio", type=float, default=3.0, help="Maximum allowable aspect ratio for detected regions.")
@@ -244,3 +246,79 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+''' Usage:
+
+export TREEMORT_DATA_PATH="/Users/anisr/Documents/dead_trees"
+ export TREEMORT_REPO_PATH="/Users/anisr/Documents/TreeSeg"
+
+scp -O -r rahmanan@puhti.csc.fi:/scratch/project_2008436/rahmanan/output/flair_unet_sdt output
+
+- For single file:
+
+1) save geojsons in a 'Predictions' folder alongside Images and Geojsons
+
+python -m inference.engine \
+    /Users/anisr/Documents/copenhagen_data/Images/patches_3095_377.tif \
+    --config ./configs/USA_RGBNIR_60cm_inference.txt
+
+2) save geojsons to an output folder
+
+python -m inference.engine \
+    ${TREEMORT_DATA_PATH}/Finland/RGBNIR/25cm/2011/Images/M3442B_2011_1.tiff \
+    --config ${TREEMORT_REPO_PATH}/configs/Finland_RGBNIR_25cm_inference.txt \
+    --outdir ${TREEMORT_DATA_PATH}/Finland/Predictions_sdt
+
+python -m inference.engine \
+    ${TREEMORT_DATA_PATH}/Finland/RGBNIR/25cm/2011/Images/M3442B_2011_1.tiff \
+    --config ${TREEMORT_REPO_PATH}/configs/Finland_RGBNIR_25cm_inference.txt \
+    --outdir ${TREEMORT_DATA_PATH}/Finland/Predictions_sdt \
+    --post-process --verbosity debug
+
+- For entire folder
+
+1) save geojsons in a 'Predictions' folder alongside Images and Geojsons
+
+python -m inference.engine \
+    /Users/anisr/Documents/copenhagen_data \
+    --config ./configs/USA_RGBNIR_60cm_inference.txt
+
+2) save geojsons to output folder
+
+python -m inference.engine \
+    ${TREEMORT_DATA_PATH}/Finland/RGBNIR/25cm \
+    --config ${TREEMORT_REPO_PATH}/configs/Finland_RGBNIR_25cm_inference.txt \
+    --outdir ${TREEMORT_DATA_PATH}/Finland/Predictions_r \
+    --post-process
+
+- Run viewer api service
+
+uvicorn treemort_api:app --reload
+
+- Run viewer application
+
+streamlit run treemort_app.py
+
+- For Puhti
+
+export TREEMORT_VENV_PATH="/projappl/project_2004205/rahmanan/venv"
+export TREEMORT_REPO_PATH="/users/rahmanan/TreeMort"
+export TREEMORT_DATA_PATH="/scratch/project_2008436/rahmanan/dead_trees"
+
+sbatch \
+    --export=ALL,CONFIG_PATH="$TREEMORT_REPO_PATH/configs/Finland_RGBNIR_25cm_inference.txt",\
+    DATA_PATH="$TREEMORT_DATA_PATH/Finland/RGBNIR/25cm",\
+    OUTPUT_PATH="$TREEMORT_DATA_PATH/Finland/Predictions" \
+    $TREEMORT_REPO_PATH/scripts/run_inference.sh
+
+sbatch \
+    --export=ALL,CONFIG_PATH="$TREEMORT_REPO_PATH/configs/Finland_RGBNIR_25cm_inference.txt",\
+    DATA_PATH="$TREEMORT_DATA_PATH/Finland/RGBNIR/25cm",\
+    OUTPUT_PATH="$TREEMORT_DATA_PATH/Finland/Predictions_r" \
+    $TREEMORT_REPO_PATH/scripts/run_inference.sh --post-process
+
+scp -O -r rahmanan@puhti.csc.fi:/scratch/project_2008436/rahmanan/dead_trees/Finland/Predictions ~/Documents/dead_trees/Finland
+scp -O -r rahmanan@puhti.csc.fi:/scratch/project_2008436/rahmanan/dead_trees/Finland/Predictions_r ~/Documents/dead_trees/Finland
+
+'''
