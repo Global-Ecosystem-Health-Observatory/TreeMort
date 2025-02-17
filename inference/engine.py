@@ -45,7 +45,7 @@ def process_image(
         logger.debug(f"Loaded and preprocessed image: {os.path.basename(image_path)}")
 
         prediction_maps = sliding_window_inference(
-            model, image, window_size=conf.window_size, stride=conf.stride, threshold=conf.threshold, conf.output_channels
+            model, image, window_size=conf.window_size, stride=conf.stride, threshold=conf.threshold, output_channels=conf.output_channels
         )
         segment_map, centroid_map, hybrid_map = prediction_maps
 
