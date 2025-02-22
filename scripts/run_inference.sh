@@ -1,18 +1,19 @@
 #!/bin/bash
-#SBATCH --job-name=treemort-inference           # Job name (default: treemort-inference)
-#SBATCH --account=project_2004205               # Project account (default: project_2004205)
-#SBATCH --output=output/stdout/%A_%a.out        # Output log path (default)
-#SBATCH --error=output/stderr/%A_%a.err         # Error log path (default)
-#SBATCH --ntasks=1                              # Number of tasks (1 process)
-#SBATCH --cpus-per-task=6                       # Number of CPU cores per task (default: 6)
-#SBATCH --time=05:00:00                         # Time limit (hh:mm:ss) (default: 05:00:00)
-#SBATCH --partition=small                       # Partition to submit to (default: small)
-#SBATCH --mem-per-cpu=6000                      # Memory per CPU in MB (default: 6000MB)
+#SBATCH --job-name=treemort-inference
+#SBATCH --account=project_2004205
+#SBATCH --output=output/stdout/%A_%a.out
+#SBATCH --error=output/stderr/%A_%a.err
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=2
+#SBATCH --time=05:00:00
+#SBATCH --partition=gpu
+#SBATCH --mem-per-cpu=24000
+#SBATCH --gres=gpu:v100:1
 
 # Usage:
 # export TREEMORT_VENV_PATH="/custom/path/to/venv"
 # export TREEMORT_REPO_PATH="/custom/path/to/treemort/repo"
-# sbatch --export=ALL,CONFIG_PATH="/custom/path/to/config",DATA_PATH="/custom/path/to/data" run_inference.sh
+# sbatch --export=ALL,CONFIG_PATH="/custom/path/to/config",DATA_PATH="/custom/path/to/data",OUTPUT_PATH="/custom/path/to/output" run_inference.sh
 
 MODULE_NAME="pytorch/2.3"
 module load $MODULE_NAME
@@ -51,19 +52,43 @@ if [ -z "$DATA_PATH" ]; then
     exit 1
 fi
 
+if [ -z "$OUTPUT_PATH" ]; then
+    echo "[ERROR] OUTPUT_PATH variable is not set. Please provide a data path using --export."
+    exit 1
+fi
+
 if [ ! -d "$DATA_PATH" ]; then
     echo "[ERROR] Data directory not found at $DATA_PATH"
     exit 1
 fi
 
+if [ ! -d "$OUTPUT_PATH" ]; then
+    echo "[WARNING] Output directory not found at $OUTPUT_PATH. Creating it now..."
+    mkdir -p "$OUTPUT_PATH" || { echo "[ERROR] Failed to create output directory at $OUTPUT_PATH"; exit 1; }
+fi
+
+POST_PROCESS=""
+
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --post-process) POST_PROCESS="--post-process"; shift ;;
+        *) echo "[ERROR] Unknown parameter passed: $1"; exit 1 ;;
+    esac
+done
+
+if [ -n "$POST_PROCESS" ]; then
+    echo "[INFO] Post-processing is enabled"
+fi
+
 echo "[INFO] Starting inference with the following settings:"
 echo "       Data path: $DATA_PATH"
+echo "       Output path: $OUTPUT_PATH"
 echo "       Config file: $CONFIG_PATH"
 echo "       Inference engine: $ENGINE_PATH"
 echo "       CPUs per task: $SLURM_CPUS_PER_TASK"
 echo "       Memory per CPU: $SLURM_MEM_PER_CPU MB"
 
-srun python3 "$ENGINE_PATH" "$DATA_PATH" --config "$CONFIG_PATH"
+srun python3 "$ENGINE_PATH" "$DATA_PATH" --config "$CONFIG_PATH" --outdir "$OUTPUT_PATH" $POST_PROCESS
 
 EXIT_STATUS=$?
 if [ $EXIT_STATUS -ne 0 ]; then
