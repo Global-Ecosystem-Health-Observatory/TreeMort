@@ -8,6 +8,7 @@ from math import sqrt
 from typing import Tuple, List, Dict
 from shapely.geometry import shape
 from rasterio.warp import transform
+from scipy.optimize import linear_sum_assignment
 
 
 def find_file_pairs(
@@ -77,10 +78,9 @@ def load_geodata_with_unique_ids(file_path: str) -> gpd.GeoDataFrame:
         gdf = gpd.GeoDataFrame(features, geometry=geometries, crs=src.crs)
         gdf["geometry"] = gdf["geometry"].apply(validate_geometry)
         return gdf[gdf["geometry"].notnull()]
-    
+
 
 def calculate_iou_metrics(prediction_gdf: gpd.GeoDataFrame, ground_truth_gdf: gpd.GeoDataFrame, overlap_threshold=0.4) -> Tuple[float, float]:
-
     def calculate_pixel_iou():
         try:
             if prediction_gdf.empty or ground_truth_gdf.empty:
@@ -124,7 +124,7 @@ def calculate_iou_metrics(prediction_gdf: gpd.GeoDataFrame, ground_truth_gdf: gp
 
     def calculate_tree_iou():
         if prediction_gdf.empty or ground_truth_gdf.empty:
-            return 0.0  # Return 0 IoU with all counts as 0
+            return 0.0
 
         matched_preds = set()
         matched_gts = set()
@@ -138,11 +138,7 @@ def calculate_iou_metrics(prediction_gdf: gpd.GeoDataFrame, ground_truth_gdf: gp
                 gt_geom = gt_row["geometry"]
                 intersect_area = pred_geom.intersection(gt_geom).area
                 pred_area = pred_geom.area
-
-                if pred_area > 0:
-                    overlap_ratio = intersect_area / pred_area
-                else:
-                    overlap_ratio = 0.0
+                overlap_ratio = intersect_area / pred_area if pred_area > 0 else 0.0
 
                 if overlap_ratio > best_overlap:
                     best_overlap = overlap_ratio
@@ -159,8 +155,53 @@ def calculate_iou_metrics(prediction_gdf: gpd.GeoDataFrame, ground_truth_gdf: gp
         tree_iou = tp / (tp + fp + fn) if (tp + fp + fn) > 0 else 0.0
         
         return tree_iou
-    
+
     return calculate_pixel_iou(), calculate_tree_iou()
+
+
+def iou_geometry(pred_geom, gt_geom):
+    if not pred_geom.is_valid or not gt_geom.is_valid:
+        return 0.0
+    intersection_area = pred_geom.intersection(gt_geom).area
+    union_area = pred_geom.area + gt_geom.area - intersection_area
+    return intersection_area / union_area if union_area > 0 else 0.0
+
+
+def calculate_tree_iou_hungarian(prediction_gdf, ground_truth_gdf, overlap_threshold=0.4):
+    if prediction_gdf.empty or ground_truth_gdf.empty:
+        return 0.0
+
+    preds = prediction_gdf["geometry"].tolist()
+    gts = ground_truth_gdf["geometry"].tolist()
+    
+    num_preds = len(preds)
+    num_gts = len(gts)
+    
+    cost_matrix = np.zeros((num_preds, num_gts))
+    for i, pred_geom in enumerate(preds):
+        for j, gt_geom in enumerate(gts):
+            iou = iou_geometry(pred_geom, gt_geom)
+            cost_matrix[i, j] = -iou  # negative because linear_sum_assignment minimizes cost
+
+    # Solve assignment using Hungarian algorithm.
+    row_ind, col_ind = linear_sum_assignment(cost_matrix)
+    
+    matched_preds = set()
+    matched_gts = set()
+    tp = 0
+    # For each matched pair, check if IoU exceeds threshold.
+    for i, j in zip(row_ind, col_ind):
+        iou = -cost_matrix[i, j]  # get original IoU
+        if iou >= overlap_threshold:
+            tp += 1
+            matched_preds.add(i)
+            matched_gts.add(j)
+    
+    fp = num_preds - len(matched_preds)
+    fn = num_gts - len(matched_gts)
+    
+    tree_iou = tp / (tp + fp + fn) if (tp + fp + fn) > 0 else 0.0
+    return tree_iou
 
 
 def calculate_centroid_errors(

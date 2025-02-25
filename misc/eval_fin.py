@@ -231,6 +231,8 @@ def calculate_mean_ious(data_folder: str, predictions_folder: str = None, output
     total_pred_count = sum(metrics["pred_count"])
     total_gt_count = sum(metrics["gt_count"])
 
+    print(total_pred_count, total_gt_count)
+
     mean_pixel_iou = sum(metrics["pixel_iou"]) / total_pred_count if total_pred_count > 0 else 0
     mean_tree_iou = sum(metrics["tree_iou"]) / total_gt_count if total_gt_count > 0 else 0
 
@@ -304,20 +306,26 @@ if __name__ == "__main__":
     data_folder = "/Users/anisr/Documents/dead_trees/Finland"
     predictions_folders = [
         # "/Users/anisr/Documents/dead_trees/Finland/Predictions",
-        "/Users/anisr/Documents/dead_trees/Finland/Predictions_r_with_filtering",
+        #"/Users/anisr/Documents/dead_trees/Finland/Predictions_r_with_filtering",
         # "/Users/anisr/Documents/dead_trees/Finland/Predictions_r_filtering_only",
         # "/Users/anisr/Documents/dead_trees/Finland/Predictions_r_watershed_only",
         # "/Users/anisr/Documents/dead_trees/Finland/Predictions",
-        "/Users/anisr/Documents/dead_trees/Finland/Predictions_sdt",
+        "/Users/anisr/Documents/dead_trees/Finland/Predictions_sdt_r",
+        "/Users/anisr/Documents/dead_trees/Finland/Predictions_sa_unet",
+        # "/Users/anisr/Documents/dead_trees/Finland/Predictions_flair_unet_r",
+        # "/Users/anisr/Documents/dead_trees/Finland/Predictions_deeplabv3plus_r",
     ]
     output_csvs = [  
         # "./output/eval/eval_fin.csv",
-        "./output/eval/eval_fin_r.csv",
+        # "./output/eval/eval_fin_r.csv",
         # "./output/eval/eval_fin_r_filtering_only.csv",
         # "./output/eval/eval_fin_r_watershed_only.csv",
         # "./output/eval/eval_fin_full.csv", # remember to pass eval_test_only = False
         # "./output/eval/tmp.csv", # remember to pass eval_test_only = False
-        "./output/eval/eval_fin_sdt.csv",
+        "./output/eval/eval_fin_sdt_r.csv",
+        "./output/eval/eval_fin_sa_unet.csv",
+        # "./output/eval/eval_fin_flair_unet_r.csv",
+        # "./output/eval/eval_fin_deeplabv3plus_r.csv",
     ]
 
     for predictions_folder, output_csv in zip(predictions_folders, output_csvs):
