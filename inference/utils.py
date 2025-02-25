@@ -270,8 +270,8 @@ def _infer_patches(patches: list[torch.Tensor], model: torch.nn.Module, device: 
 
         seg_predictions = torch.sigmoid(outputs[:, 0:1, ...])
         centroid_predictions = outputs[:, 1:2, ...]
-        hybrid_predictions = torch.tanh(outputs[:, 2:3, ...])
-        # hybrid_predictions = outputs[:, 2:3, ...]
+        # hybrid_predictions = torch.tanh(outputs[:, 2:3, ...])
+        hybrid_predictions = outputs[:, 2:3, ...]
         
         predictions = torch.cat([seg_predictions, centroid_predictions, hybrid_predictions], dim=1)
 
@@ -1144,8 +1144,8 @@ def compute_final_segmentation(seg_map, centroid_map, hybrid_map,
     gradient = get_hybrid_gradient(hybrid_map)
     
     # Optionally, if you wish to remove areas with weak boundary evidence:
-    # binary_hybrid = (hybrid_map.cpu().numpy() < hybrid_threshold).astype(np.uint8)
-    # binary_seg[binary_hybrid == 1] = 0  # remove these regions from seg mask
+    binary_hybrid = (hybrid_map.cpu().numpy() < hybrid_threshold).astype(np.uint8)
+    binary_seg[binary_hybrid == 1] = 0
 
     final_segmentation = watershed(gradient, markers, mask=binary_seg)
     
