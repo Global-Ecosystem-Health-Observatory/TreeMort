@@ -19,6 +19,6 @@ min-distance=5
 dilation-radius=1
 blur-sigma=1.0
 
-threshold=0.4
-centroid-threshold=0.7
+threshold=0.5
+centroid-threshold=0.5
 hybrid-threshold=-0.5
