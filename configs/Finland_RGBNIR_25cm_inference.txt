@@ -13,7 +13,7 @@ max-aspect-ratio=3.0    # Compact shapes expected for Finnish tree canopies
 min-solidity=0.85       # Focus on dense, contiguous canopies
 
 min-distance=5
-centroid-threshold=0.7
+centroid-threshold=0.5
 dilation-radius=1
 blur-sigma=1.0
 
