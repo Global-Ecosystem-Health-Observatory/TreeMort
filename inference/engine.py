@@ -251,7 +251,7 @@ if __name__ == "__main__":
 ''' Usage:
 
 export TREEMORT_DATA_PATH="/Users/anisr/Documents/dead_trees"
- export TREEMORT_REPO_PATH="/Users/anisr/Documents/TreeSeg"
+export TREEMORT_REPO_PATH="/Users/anisr/Documents/TreeSeg"
 
 scp -O -r rahmanan@puhti.csc.fi:/scratch/project_2008436/rahmanan/output/flair_unet_sdt output
 
@@ -266,9 +266,9 @@ python -m inference.engine \
 2) save geojsons to an output folder
 
 python -m inference.engine \
-    ${TREEMORT_DATA_PATH}/Finland/RGBNIR/25cm/2011/Images/M3442B_2011_1.tiff \
-    --config ${TREEMORT_REPO_PATH}/configs/Finland_RGBNIR_25cm_inference.txt \
-    --outdir ${TREEMORT_DATA_PATH}/Finland/Predictions_sdt
+    ${TREEMORT_DATA_PATH}/Finland/RGBNIR/25cm/2022/Images/L2344D_2022_1_ITD.tif \
+    --config ${TREEMORT_REPO_PATH}/configs/Finland_RGBNIR_25cm_inference_sdt.txt \
+    --outdir ${TREEMORT_DATA_PATH}/Finland/Predictions_sdt_r --post-process
 
 python -m inference.engine \
     ${TREEMORT_DATA_PATH}/Finland/RGBNIR/25cm/2011/Images/M3442B_2011_1.tiff \

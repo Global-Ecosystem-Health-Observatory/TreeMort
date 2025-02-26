@@ -1145,7 +1145,7 @@ def compute_final_segmentation(seg_map, centroid_map, hybrid_map,
     
     # Optionally, if you wish to remove areas with weak boundary evidence:
     binary_hybrid = (hybrid_map.cpu().numpy() < hybrid_threshold).astype(np.uint8)
-    binary_seg[binary_hybrid == 1] = 0
+    binary_seg[binary_hybrid == 0] = 0
 
     final_segmentation = watershed(gradient, markers, mask=binary_seg)
     
