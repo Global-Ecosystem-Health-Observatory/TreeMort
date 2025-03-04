@@ -1,5 +1,4 @@
 import os
-import cv2
 import torch
 import argparse
 import configargparse
@@ -17,7 +16,6 @@ from inference.utils import (
     load_model,
     sliding_window_inference,
     initialize_logger,
-    save_labels_as_geojson,
     load_and_preprocess_image,
     threshold_prediction_map,
     extract_contours,
@@ -26,7 +24,8 @@ from inference.utils import (
     log_and_raise,
     validate_path,
     expand_path,
-    compute_final_segmentation,
+    compute_watershed,
+    extract_ellipses,
 )
 
 
@@ -45,90 +44,39 @@ def process_image(
         logger.debug(f"Loaded and preprocessed image: {os.path.basename(image_path)}")
 
         prediction_maps = sliding_window_inference(
-            model, image, window_size=conf.window_size, stride=conf.stride, threshold=conf.threshold, output_channels=conf.output_channels
+            model,
+            image,
+            window_size=conf.window_size,
+            stride=conf.stride,
+            threshold=conf.segment_threshold,
+            output_channels=conf.output_channels,
         )
         segment_map, centroid_map, hybrid_map = prediction_maps
 
         if post_process:
-            final_segmentation = compute_final_segmentation(
-                seg_map=segment_map, 
-                centroid_map=centroid_map, 
-                hybrid_map=hybrid_map,
-                seg_threshold=conf.threshold,
-                centroid_params={'min_distance': conf.min_distance, 'threshold_abs': conf.centroid_threshold},
-                hybrid_threshold=conf.hybrid_threshold
-            )
+            image_np = image.cpu().numpy()
+            segment_map_np = segment_map.cpu().numpy()
+            centroid_map_np = centroid_map.cpu().numpy()
+            hybrid_map_np = hybrid_map.cpu().numpy()
 
-            save_labels_as_geojson(
-                final_segmentation,
+            labels_ws = compute_watershed(segment_map_np, centroid_map_np, hybrid_map_np, conf)
+
+            features = extract_ellipses(
+                labels_ws,
                 transform,
-                crs,
-                geojson_path,
-                min_area_threshold=conf.min_area_threshold,
-                max_aspect_ratio=conf.max_aspect_ratio,
-                min_solidity=conf.min_solidity,
+                conf,
+                num_points=100,
             )
 
-            # # Convert tensors to NumPy arrays for further processing.
-            # image_np = image.cpu().numpy()
-            # segment_map_np = segment_map.cpu().numpy()
-            # centroid_map_np = centroid_map.cpu().numpy()
-            # hybrid_map_np = hybrid_map.cpu().numpy()  # currently not used in post-processing
+            save_geojson(features, geojson_path, crs, transform, name="FittedEllipses")
 
-            # # Process the segmentation output.
-            # min_size_threshold = 30  # e.g., corresponding to 1.5m crown diameter
-            # filtered_segment_map = filter_segment_map(segment_map_np, threshold=conf.threshold, min_size=min_size_threshold)
-
-            # # Process the centroid branch.
-            # centroid_points = extract_centroid_points(centroid_map, threshold=conf.centroid_threshold)
-            # refined_centroid_map = refine_centroid_map(filtered_segment_map, centroid_map_np, threshold=0.2)
-            # multiple_peaks = detect_multiple_peaks(refined_centroid_map, min_distance=5, threshold_abs=0.1)
-
-            # # Use watershed segmentation to generate refined segments.
-            # watershed_segmented_map = segment_using_watershed(filtered_segment_map, refined_centroid_map, multiple_peaks, threshold=conf.threshold)
-
-            # # (Optional)
-            # # hybrid_np = hybrid_map.cpu().numpy().squeeze()
-            # # binary_hybrid = (hybrid_np < -0.5).astype(np.uint8) * 255
-            # # hybrid_contours, _ = cv2.findContours(binary_hybrid, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-            # # hybrid_geojson = hybrid_contours_to_geojson(
-            # #     hybrid_contours, transform, crs,
-            # #     os.path.splitext(os.path.basename(image_path))[0] + "_hybrid"
-            # # )
-            # # save_geojson(hybrid_geojson, geojson_path.replace(".geojson", "_hybrid.geojson"))
-
-            # # Save final watershed segmentation as GeoJSON.
-            # save_labels_as_geojson(
-            #     watershed_segmented_map,
-            #     transform,
-            #     crs,
-            #     geojson_path,
-            #     min_area_threshold=conf.min_area_threshold,
-            #     max_aspect_ratio=conf.max_aspect_ratio,
-            #     min_solidity=conf.min_solidity,
-            # )
         else:
-            # Without post-processing, threshold the segmentation map and extract contours.
-            binary_mask = threshold_prediction_map(segment_map, conf.threshold)
+            binary_mask = threshold_prediction_map(segment_map, conf.segment_threshold)
             contours = extract_contours(binary_mask)
             geojson_data = contours_to_geojson(
                 contours, transform, crs, os.path.splitext(os.path.basename(image_path))[0]
             )
             save_geojson(geojson_data, geojson_path)
-
-            # (Optional)
-            # For centroid:
-            # centroid_points = extract_centroid_points(centroid_map, threshold=conf.centroid_threshold)
-            # from rasterio.transform import xy
-            # from shapely.geometry import Point
-            # geoms = []
-            # for x, y in centroid_points:
-            #     lon, lat = xy(transform, int(y), int(x))
-            #     geoms.append(Point(lon, lat))
-            # gdf = gpd.GeoDataFrame(geometry=geoms, crs=crs)
-            # gdf.to_file(geojson_path.replace(".geojson", "_centroid.geojson"), driver="GeoJSON")
-            #
-            # For hybrid (if required), similar processing could be applied after proper thresholding.
 
         logger.info(f"Successfully processed and saved GeoJSON for: {os.path.basename(image_path)}")
     except Exception as e:
@@ -209,25 +157,69 @@ def parse_config(config_file_path: str) -> argparse.Namespace:
     validate_path(logger, config_file_path)
 
     parser = configargparse.ArgParser(default_config_files=[config_file_path])
-    parser.add("--model-config", type=str, required=True, help="Path to the model configuration file (e.g., architecture, hyperparameters).")
+    parser.add(
+        "--model-config",
+        type=str,
+        required=True,
+        help="Path to the model configuration file (e.g., architecture, hyperparameters).",
+    )
     parser.add("--best-model", type=str, required=True, help="Path to the file containing the best model weights.")
-    parser.add("--window-size", type=int, default=256, help="Size of the sliding window for inference (default: 256 pixels).")
-    parser.add("--stride", type=int, default=128, help="Stride length for sliding window during inference (default: 128 pixels).")
-    parser.add("--input-channels",  type=int, required=True, help="number of input channels")
+    parser.add(
+        "--window-size", type=int, default=256, help="Size of the sliding window for inference (default: 256 pixels)."
+    )
+    parser.add(
+        "--stride",
+        type=int,
+        default=128,
+        help="Stride length for sliding window during inference (default: 128 pixels).",
+    )
+    parser.add("--input-channels", type=int, required=True, help="number of input channels")
     parser.add("--output-channels", type=int, required=True, help="number of output channels")
-    parser.add("--threshold", type=float, default=0.5, help="Threshold for binary classification during inference (default: 0.5).")
-    parser.add("--min-area-threshold", type=float, default=1.0, help="Minimum area (in pixels) for retaining a detected region.")
-    parser.add("--max-aspect-ratio", type=float, default=3.0, help="Maximum allowable aspect ratio for detected regions.")
-    parser.add("--min-solidity", type=float, default=0.85, help="Minimum solidity for retaining a detected region (solidity = area/convex hull).")
+    parser.add("--min-area", type=float, default=1.0, help="Minimum area (in pixels) for retaining a detected region.")
+    parser.add(
+        "--max-aspect-ratio", type=float, default=3.0, help="Maximum allowable aspect ratio for detected regions."
+    )
+    parser.add(
+        "--min-solidity",
+        type=float,
+        default=0.85,
+        help="Minimum solidity for retaining a detected region (solidity = area/convex hull).",
+    )
     parser.add("--min-distance", type=int, default=7, help="Minimum distance between peaks for watershed segmentation.")
-    parser.add("--dilation-radius", type=int, default=0, help="Radius of the structuring element for dilating binary masks.")
-    parser.add("--blur-sigma", type=float, default=1.0, help="Standard deviation for Gaussian blur applied to prediction maps.")
-    parser.add("--centroid-threshold", type=float, default=0.5, help="Threshold for filtering peaks based on the centroid map.")
-    parser.add("--hybrid-threshold", type=float, default=-0.5, help="Threshold for filtering contours based on the hybrid map.")
-    parser.add("--nir-rgb-order", type=int, nargs='+', default=[3, 0, 1, 2], help="Order of NIR, Red, Green, and Blue channels in the input imagery.")
+    parser.add(
+        "--dilation-radius", type=int, default=0, help="Radius of the structuring element for dilating binary masks."
+    )
+    parser.add(
+        "--erosion-radius", type=int, default=0, help="Radius of the structuring element for eroding binary masks."
+    )
+    parser.add(
+        "--blur-sigma", type=float, default=1.0, help="Standard deviation for Gaussian blur applied to prediction maps."
+    )
+    parser.add(
+        "--segment-threshold",
+        type=float,
+        default=0.5,
+        help="Threshold for binary classification during inference (default: 0.5).",
+    )
+    parser.add(
+        "--centroid-threshold", type=float, default=0.5, help="Threshold for filtering peaks based on the centroid map."
+    )
+    parser.add(
+        "--hybrid-threshold", type=float, default=-0.5, help="Threshold for filtering contours based on the hybrid map."
+    )
+    parser.add("--tightness", type=float, default=0.1, help="Tightness parameter for ellipse fitting.")
+    parser.add(
+        "--nir-rgb-order",
+        type=int,
+        nargs='+',
+        default=[3, 0, 1, 2],
+        help="Order of NIR, Red, Green, and Blue channels in the input imagery.",
+    )
 
     conf, _ = parser.parse_known_args()
     conf.model_config = expand_path(conf.model_config)
+
+    conf.min_area_pixels = conf.min_area / 0.0625 # for 25cm pix resolution; (0.25*0.25) = 0.0625 sq. m per pixel ; 1/0.0625 = 16 pixels
     return conf
 
 
