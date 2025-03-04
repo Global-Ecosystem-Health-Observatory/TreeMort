@@ -8,12 +8,12 @@ best-model = ./output/flair_unet_dual/best.weights.pth
 
 model-config = ${TREEMORT_REPO_PATH}/configs/flair_unet_bs8_cs256.txt
 
-min-area-threshold=1.0  # Smaller canopies typical of boreal species
+min-area=1.0  # Smaller canopies typical of boreal species
 max-aspect-ratio=3.0    # Compact shapes expected for Finnish tree canopies
 min-solidity=0.85       # Focus on dense, contiguous canopies
 
 min-distance=5
-centroid-threshold=0.5
+centroid-threshold=0.4
 dilation-radius=1
 blur-sigma=1.0
 
