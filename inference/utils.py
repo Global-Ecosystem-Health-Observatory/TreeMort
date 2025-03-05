@@ -471,7 +471,6 @@ def save_geojson(features, filename, crs, transform, name="FittedEllipses"):
         json.dump(geojson, f, indent=2)
     logger.debug(f"GeoJSON saved to {filename}")
 
-
 '''
 Functions for Abulation study:
 '''
@@ -488,3 +487,36 @@ def segment_filtering_only(segment_map: np.ndarray, conf) -> np.ndarray:
 # Assuming 'segment_map' is a numpy array extracted from the model's segmentation output,
 # and 'conf' is a configuration object with required thresholds:
 # filtered_mask = segment_filtering_only(segment_map, conf)
+
+
+def watershed_segmentation_only(segment_map: np.ndarray, 
+                                centroid_map: np.ndarray, 
+                                hybrid_map: np.ndarray, 
+                                conf) -> np.ndarray:
+    binary_seg = (segment_map > conf.segment_threshold).astype(np.uint8)
+
+    binary_seg = remove_small_objects(binary_seg.astype(bool), min_size=conf.min_area_pixels).astype(np.uint8)
+    
+    binary_hybrid = (hybrid_map < conf.hybrid_threshold).astype(np.uint8)
+    binary_seg[binary_hybrid == 0] = 0
+    
+    centroid_map_smoothed = gaussian(centroid_map, sigma=conf.blur_sigma)
+    
+    local_max_coords = peak_local_max(
+        centroid_map_smoothed, 
+        min_distance=conf.min_distance, 
+        threshold_abs=conf.centroid_threshold
+    )
+    markers = np.zeros_like(centroid_map, dtype=np.int32)
+    for i, (row, col) in enumerate(local_max_coords, 1):
+        markers[row, col] = i
+    markers = ndi.label(markers)[0]
+    
+    labels_ws = watershed(-centroid_map_smoothed, markers, mask=binary_seg)
+    
+    return labels_ws
+
+# Example usage:
+# Assuming 'segment_map', 'centroid_map', and 'hybrid_map' are numpy arrays
+# extracted from the TreeMort-3T-UNet model outputs and 'conf' contains the required thresholds:
+# final_labels = watershed_segmentation_only(segment_map, centroid_map, hybrid_map, conf)
