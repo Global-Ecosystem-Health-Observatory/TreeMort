@@ -26,6 +26,7 @@ from inference.utils import (
     compute_watershed,
     extract_ellipses,
     segment_filtering_only,
+    watershed_segmentation_only,
 )
 
 
@@ -70,9 +71,15 @@ def process_image(
 
             # save_geojson(features, geojson_path, crs, transform, name="FittedEllipses")
 
-            filtered_mask = segment_filtering_only(segment_map_np, conf)
-            features = extract_contours(filtered_mask, transform)
-            save_geojson(features, geojson_path, crs, transform, name="FilteredContours")
+            # # Filtering-only variant
+            # filtered_mask = segment_filtering_only(segment_map_np, conf)
+            # features = extract_contours(filtered_mask, transform)
+            # save_geojson(features, geojson_path, crs, transform, name="FilteredContours")
+
+            # Watershed-only variant to fuse the outputs and obtain instance labels
+            labels_ws = watershed_segmentation_only(segment_map_np, centroid_map_np, hybrid_map_np, conf)
+            features = extract_contours(labels_ws, transform)
+            save_geojson(features, geojson_path, crs, transform, name="WatershedContours")
 
         else:
             binary_mask = threshold_prediction_map(segment_map, conf.segment_threshold)
