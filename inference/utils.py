@@ -284,79 +284,6 @@ def threshold_prediction_map(prediction_map: torch.Tensor, threshold: float = 0.
     return binary_mask
 
 
-def extract_contours(binary_mask: np.ndarray) -> List[np.ndarray]:
-    logger = get_logger()
-
-    if isinstance(binary_mask, torch.Tensor):
-        binary_mask = binary_mask.cpu().numpy()
-
-    if binary_mask.ndim == 3:  # (C, H, W) -> Take the first channel
-        binary_mask = binary_mask[0]
-    elif binary_mask.ndim > 3:  # (N, C, H, W) -> Take the first image and channel
-        binary_mask = binary_mask[0, 0]
-
-    binary_mask = (binary_mask > 0).astype(np.uint8)
-
-    if binary_mask.ndim != 2 or not np.issubdtype(binary_mask.dtype, np.integer):
-        log_and_raise(logger, ValueError("binary_mask must be a 2D binary integer array."))
-
-    contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-    reshaped_contours = [contour.reshape(-1, 2) for contour in contours]
-    logger.info(f"Extracted {len(reshaped_contours)} contours from the binary mask.")
-    return reshaped_contours
-
-
-def contours_to_geojson(contours: List[np.ndarray], transform: Affine, crs: CRS, name: str) -> dict:
-    logger = get_logger()
-
-    if not contours:
-        logger.warning("Contours list is empty. Returning an empty GeoJSON.")
-        return {
-            "type": "FeatureCollection",
-            "name": name,
-            "crs": (
-                None
-                if not crs
-                else {"type": "name", "properties": {"name": f"EPSG:{crs.to_epsg()}" if crs.is_epsg_code else str(crs)}}
-            ),
-            "features": [],
-        }
-
-    geojson_crs = None
-    if crs:
-        if crs.is_epsg_code:  # If CRS is an EPSG code
-            geojson_crs = {"type": "name", "properties": {"name": f"EPSG:{crs.to_epsg()}"}}
-        else:
-            logger.warning("CRS is not in EPSG format; setting CRS to null in GeoJSON.")
-
-    geojson = {"type": "FeatureCollection", "name": name, "crs": geojson_crs, "features": []}
-
-    skipped_contours = 0
-    for contour in contours:
-        if len(contour) >= 3:
-            transformed_contour = _apply_transform(contour, transform)
-            if not np.array_equal(transformed_contour[0], transformed_contour[-1]):
-                transformed_contour = np.vstack([transformed_contour, transformed_contour[0]])
-
-            polygon = Polygon(transformed_contour)
-            if polygon.is_valid and not polygon.is_empty:
-                geojson["features"].append(
-                    {
-                        "type": "Feature",
-                        "geometry": {"type": "Polygon", "coordinates": [transformed_contour.tolist()]},
-                        "properties": {},
-                    }
-                )
-            else:
-                skipped_contours += 1
-        else:
-            skipped_contours += 1
-
-    logger.info(f"Processed {len(geojson['features'])} features, skipped {skipped_contours} contours.")
-    return geojson
-
-
 def _pad_image(image: torch.Tensor, window_size: int) -> torch.Tensor:
     logger = get_logger()
 
@@ -471,6 +398,53 @@ def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
                 }
                 features.append(feature)
 
+    return features
+
+
+def extract_contours(binary_mask: np.ndarray, transform: Affine) -> List[Dict]:
+    logger = get_logger()
+
+    if isinstance(binary_mask, torch.Tensor):
+        binary_mask = binary_mask.cpu().numpy()
+
+    if binary_mask.ndim == 3:  # (C, H, W) -> Take the first channel
+        binary_mask = binary_mask[0]
+    elif binary_mask.ndim > 3:  # (N, C, H, W) -> Take the first image and channel
+        binary_mask = binary_mask[0, 0]
+
+    binary_mask = (binary_mask > 0).astype(np.uint8)
+
+    if binary_mask.ndim != 2 or not np.issubdtype(binary_mask.dtype, np.integer):
+        log_and_raise(logger, ValueError("binary_mask must be a 2D binary integer array."))
+
+    contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    reshaped_contours = [contour.reshape(-1, 2) for contour in contours]
+    logger.debug(f"Extracted {len(reshaped_contours)} contours from the binary mask.")
+    
+    features = []
+    skipped_contours = 0
+    for contour in reshaped_contours:
+        if len(contour) >= 3:
+            transformed_contour = _apply_transform(contour, transform)
+            if not np.array_equal(transformed_contour[0], transformed_contour[-1]):
+                transformed_contour = np.vstack([transformed_contour, transformed_contour[0]])
+
+            polygon = Polygon(transformed_contour)
+            if polygon.is_valid and not polygon.is_empty:
+                features.append(
+                    {
+                        "type": "Feature",
+                        "geometry": {"type": "Polygon", "coordinates": [transformed_contour.tolist()]},
+                        "properties": {},
+                    }
+                )
+            else:
+                skipped_contours += 1
+        else:
+            skipped_contours += 1
+
+    logger.debug(f"Processed {len(features)} features, skipped {skipped_contours} contours.")
     return features
 
 
