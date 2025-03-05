@@ -470,3 +470,21 @@ def save_geojson(features, filename, crs, transform, name="FittedEllipses"):
     with open(filename, "w") as f:
         json.dump(geojson, f, indent=2)
     logger.debug(f"GeoJSON saved to {filename}")
+
+
+'''
+Functions for Abulation study:
+'''
+
+def segment_filtering_only(segment_map: np.ndarray, conf) -> np.ndarray:
+    binary_mask = (segment_map > conf.segment_threshold).astype(np.uint8)
+    
+    binary_mask = remove_small_objects(binary_mask.astype(bool), min_size=conf.min_area_pixels)
+    binary_mask = binary_mask.astype(np.uint8)
+    
+    return binary_mask
+
+# Example usage:
+# Assuming 'segment_map' is a numpy array extracted from the model's segmentation output,
+# and 'conf' is a configuration object with required thresholds:
+# filtered_mask = segment_filtering_only(segment_map, conf)
