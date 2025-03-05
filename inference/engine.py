@@ -19,7 +19,6 @@ from inference.utils import (
     load_and_preprocess_image,
     threshold_prediction_map,
     extract_contours,
-    contours_to_geojson,
     save_geojson,
     log_and_raise,
     validate_path,
@@ -72,11 +71,8 @@ def process_image(
 
         else:
             binary_mask = threshold_prediction_map(segment_map, conf.segment_threshold)
-            contours = extract_contours(binary_mask)
-            geojson_data = contours_to_geojson(
-                contours, transform, crs, os.path.splitext(os.path.basename(image_path))[0]
-            )
-            save_geojson(geojson_data, geojson_path)
+            features = extract_contours(binary_mask, transform)
+            save_geojson(features, geojson_path, crs, transform, name="Contours")
 
         logger.info(f"Successfully processed and saved GeoJSON for: {os.path.basename(image_path)}")
     except Exception as e:
