@@ -401,50 +401,63 @@ def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
     return features
 
 
-def extract_contours(binary_mask: np.ndarray, transform: Affine) -> List[Dict]:
+def extract_contours_from_labels(label_map: np.ndarray, transform: Affine) -> List[Dict]:
     logger = get_logger()
-
-    if isinstance(binary_mask, torch.Tensor):
-        binary_mask = binary_mask.cpu().numpy()
-
-    if binary_mask.ndim == 3:  # (C, H, W) -> Take the first channel
-        binary_mask = binary_mask[0]
-    elif binary_mask.ndim > 3:  # (N, C, H, W) -> Take the first image and channel
-        binary_mask = binary_mask[0, 0]
-
-    binary_mask = (binary_mask > 0).astype(np.uint8)
-
-    if binary_mask.ndim != 2 or not np.issubdtype(binary_mask.dtype, np.integer):
-        log_and_raise(logger, ValueError("binary_mask must be a 2D binary integer array."))
-
-    contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
-    reshaped_contours = [contour.reshape(-1, 2) for contour in contours]
-    logger.debug(f"Extracted {len(reshaped_contours)} contours from the binary mask.")
     
+    if isinstance(label_map, torch.Tensor):
+        label_map = label_map.cpu().numpy()
+
+    # If label_map has more than 2 dimensions, assume it's in (C, H, W) or (N, C, H, W)
+    if label_map.ndim == 3:
+        logger.debug("Label map has 3 dimensions; selecting the first channel.")
+        label_map = label_map[0]
+    elif label_map.ndim > 3:
+        logger.debug("Label map has more than 3 dimensions; selecting the first image and channel.")
+        label_map = label_map[0, 0]
+
+    if label_map.ndim != 2 or not np.issubdtype(label_map.dtype, np.integer):
+        log_and_raise(logger, ValueError("label_map must be a 2D integer array representing labels."))
+
     features = []
-    skipped_contours = 0
-    for contour in reshaped_contours:
-        if len(contour) >= 3:
+    unique_labels = np.unique(label_map)
+    skipped_labels = 0
+
+    for label in unique_labels:
+        if label == 0:
+            continue
+
+        mask = (label_map == label).astype(np.uint8)
+
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        
+        if contours:
+            # Take the largest contour as representative
+            contour = max(contours, key=cv2.contourArea)
+            contour = contour.reshape(-1, 2)
+            
             transformed_contour = _apply_transform(contour, transform)
+            
+            # Ensure the contour is closed
             if not np.array_equal(transformed_contour[0], transformed_contour[-1]):
                 transformed_contour = np.vstack([transformed_contour, transformed_contour[0]])
-
+                
             polygon = Polygon(transformed_contour)
-            if polygon.is_valid and not polygon.is_empty:
-                features.append(
-                    {
-                        "type": "Feature",
-                        "geometry": {"type": "Polygon", "coordinates": [transformed_contour.tolist()]},
-                        "properties": {},
-                    }
-                )
-            else:
-                skipped_contours += 1
-        else:
-            skipped_contours += 1
 
-    logger.debug(f"Processed {len(features)} features, skipped {skipped_contours} contours.")
+            if not polygon.is_valid:
+                polygon = polygon.buffer(0)
+
+            if polygon.is_valid and not polygon.is_empty:
+                features.append({
+                    "type": "Feature",
+                    "geometry": {"type": "Polygon", "coordinates": [transformed_contour.tolist()]},
+                    "properties": {"label": int(label)}
+                })
+            else:
+                skipped_labels += 1
+        else:
+            skipped_labels += 1
+
+    logger.debug(f"Extracted {len(features)} features from {len(unique_labels)-1} segments, skipped {skipped_labels} labels.")
     return features
 
 
