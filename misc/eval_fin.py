@@ -310,8 +310,9 @@ if __name__ == "__main__":
         # "/Users/anisr/Documents/dead_trees/Finland/Predictions_r_filtering_only",
         # "/Users/anisr/Documents/dead_trees/Finland/Predictions_r_watershed_only",
         # "/Users/anisr/Documents/dead_trees/Finland/Predictions",
-        "/Users/anisr/Documents/dead_trees/Finland/Predictions_sdt",
-        "/Users/anisr/Documents/dead_trees/Finland/Predictions_sa_unet",
+        "/Users/anisr/Documents/dead_trees/Finland/Predictions_sdt_r_filter_only",
+        "/Users/anisr/Documents/dead_trees/Finland/Predictions_sdt_r_watershed_only",
+        # "/Users/anisr/Documents/dead_trees/Finland/Predictions_sa_unet",
         # "/Users/anisr/Documents/dead_trees/Finland/Predictions_flair_unet_r",
         # "/Users/anisr/Documents/dead_trees/Finland/Predictions_deeplabv3plus_r",
     ]
@@ -322,8 +323,9 @@ if __name__ == "__main__":
         # "./output/eval/eval_fin_r_watershed_only.csv",
         # "./output/eval/eval_fin_full.csv", # remember to pass eval_test_only = False
         # "./output/eval/tmp.csv", # remember to pass eval_test_only = False
-        "./output/eval/eval_fin_sdt.csv",
-        "./output/eval/eval_fin_sa_unet.csv",
+        "./output/eval/eval_fin_sdt_r_filter_only.csv",
+        "./output/eval/eval_fin_sdt_r_watershed_only.csv",
+        # "./output/eval/eval_fin_sa_unet.csv",
         # "./output/eval/eval_fin_flair_unet_r.csv",
         # "./output/eval/eval_fin_deeplabv3plus_r.csv",
     ]

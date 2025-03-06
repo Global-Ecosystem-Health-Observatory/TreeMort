@@ -80,7 +80,7 @@ def load_geodata_with_unique_ids(file_path: str) -> gpd.GeoDataFrame:
         return gdf[gdf["geometry"].notnull()]
 
 
-def calculate_iou_metrics(prediction_gdf: gpd.GeoDataFrame, ground_truth_gdf: gpd.GeoDataFrame, overlap_threshold=0.4) -> Tuple[float, float]:
+def calculate_iou_metrics(prediction_gdf: gpd.GeoDataFrame, ground_truth_gdf: gpd.GeoDataFrame, overlap_threshold=0.4):
     def calculate_pixel_iou():
         try:
             if prediction_gdf.empty or ground_truth_gdf.empty:
@@ -104,7 +104,7 @@ def calculate_iou_metrics(prediction_gdf: gpd.GeoDataFrame, ground_truth_gdf: gp
                     intersect_area = pred_geom.intersection(gt_geom).area
                     union_area = pred_geom.area + gt_geom.area - intersect_area
                     iou = intersect_area / union_area if union_area > 0 else 0.0
-
+                    
                     if iou > best_iou:
                         best_iou = iou
                         best_gt_id = gt_idx
@@ -124,7 +124,7 @@ def calculate_iou_metrics(prediction_gdf: gpd.GeoDataFrame, ground_truth_gdf: gp
 
     def calculate_tree_iou():
         if prediction_gdf.empty or ground_truth_gdf.empty:
-            return 0.0
+            return 0.0  # Return 0 IoU if either is empty
 
         matched_preds = set()
         matched_gts = set()
@@ -138,6 +138,7 @@ def calculate_iou_metrics(prediction_gdf: gpd.GeoDataFrame, ground_truth_gdf: gp
                 gt_geom = gt_row["geometry"]
                 intersect_area = pred_geom.intersection(gt_geom).area
                 pred_area = pred_geom.area
+
                 overlap_ratio = intersect_area / pred_area if pred_area > 0 else 0.0
 
                 if overlap_ratio > best_overlap:
@@ -155,7 +156,7 @@ def calculate_iou_metrics(prediction_gdf: gpd.GeoDataFrame, ground_truth_gdf: gp
         tree_iou = tp / (tp + fp + fn) if (tp + fp + fn) > 0 else 0.0
         
         return tree_iou
-
+    
     return calculate_pixel_iou(), calculate_tree_iou()
 
 
