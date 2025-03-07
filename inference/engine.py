@@ -18,6 +18,7 @@ from inference.utils import (
     initialize_logger,
     load_and_preprocess_image,
     threshold_prediction_map,
+    extract_contours,
     extract_contours_from_labels,
     save_geojson,
     log_and_raise,
@@ -54,29 +55,29 @@ def process_image(
         )
         segment_map, centroid_map, hybrid_map = prediction_maps
 
+        image_np = image.cpu().numpy()
+        segment_map_np = segment_map.cpu().numpy()
+        centroid_map_np = centroid_map.cpu().numpy()
+        hybrid_map_np = hybrid_map.cpu().numpy()
+    
         if post_process:
-            image_np = image.cpu().numpy()
-            segment_map_np = segment_map.cpu().numpy()
-            centroid_map_np = centroid_map.cpu().numpy()
-            hybrid_map_np = hybrid_map.cpu().numpy()
-
             # labels_ws = compute_watershed(segment_map_np, centroid_map_np, hybrid_map_np, conf)
             # features = extract_ellipses(labels_ws, transform, conf)
             # save_geojson(features, geojson_path, crs, transform, name="FittedEllipses")
 
-            # # Filtering-only variant
-            # filtered_mask = segment_filtering_only(segment_map_np, conf)
-            # features = extract_contours(filtered_mask, transform)
-            # save_geojson(features, geojson_path, crs, transform, name="FilteredContours")
+            # Filtering-only variant
+            filtered_mask = segment_filtering_only(segment_map_np, conf)
+            features = extract_contours(filtered_mask, transform)
+            save_geojson(features, geojson_path, crs, transform, name="FilteredContours")
 
-            # Watershed-only variant
-            labels_ws = watershed_segmentation_only(segment_map_np, centroid_map_np, hybrid_map_np, conf)
-            features = extract_contours_from_labels(labels_ws, transform)
-            save_geojson(features, geojson_path, crs, transform, name="WatershedContours")
+            # # Watershed-only variant
+            # labels_ws = watershed_segmentation_only(segment_map_np, centroid_map_np, hybrid_map_np, conf)
+            # features = extract_contours_from_labels(labels_ws, transform)
+            # save_geojson(features, geojson_path, crs, transform, name="WatershedContours")
 
         else:
-            binary_mask = threshold_prediction_map(segment_map, conf.segment_threshold)
-            features = extract_contours_from_labels(binary_mask, transform)
+            binary_mask = threshold_prediction_map(segment_map_np, conf.segment_threshold)
+            features = extract_contours(binary_mask, transform)
             save_geojson(features, geojson_path, crs, transform, name="Contours")
 
         logger.info(f"Successfully processed and saved GeoJSON for: {os.path.basename(image_path)}")
