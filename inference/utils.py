@@ -270,17 +270,8 @@ def _update_maps(
     count_map[y : y + binary_confidence.shape[0], x : x + binary_confidence.shape[1]] += binary_mask
 
 
-def threshold_prediction_map(prediction_map: torch.Tensor, threshold: float = 0.5) -> torch.Tensor:
-    logger = get_logger()
-
-    if not isinstance(prediction_map, torch.Tensor):
-        log_and_raise(logger, ValueError("prediction_map must be a torch.Tensor"))
-    if not (0 <= threshold <= 1):
-        log_and_raise(logger, ValueError("threshold must be between 0 and 1"))
-    if not isinstance(threshold, (float, int)):
-        log_and_raise(logger, ValueError("threshold must be a float or an int"))
-
-    binary_mask = (prediction_map >= threshold).to(dtype=torch.float32)
+def threshold_prediction_map(prediction_map: np.ndarray, threshold: float = 0.5) -> np.ndarray:
+    binary_mask = (prediction_map >= threshold)
     return binary_mask
 
 
@@ -398,6 +389,57 @@ def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
                 }
                 features.append(feature)
 
+    return features
+
+
+def extract_contours(binary_mask: np.ndarray, transform: Affine) -> List[Dict]:
+    logger = get_logger()
+
+    if isinstance(binary_mask, torch.Tensor):
+        binary_mask = binary_mask.cpu().numpy()
+
+    if binary_mask.ndim == 3:  # (C, H, W) -> Take the first channel
+        binary_mask = binary_mask[0]
+    elif binary_mask.ndim > 3:  # (N, C, H, W) -> Take the first image and channel
+        binary_mask = binary_mask[0, 0]
+
+    binary_mask = (binary_mask > 0).astype(np.uint8)
+
+    if binary_mask.ndim != 2 or not np.issubdtype(binary_mask.dtype, np.integer):
+        log_and_raise(logger, ValueError("binary_mask must be a 2D binary integer array."))
+
+    contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    reshaped_contours = [contour.reshape(-1, 2) for contour in contours]
+    print(f"Extracted {len(reshaped_contours)} contours from the binary mask.")
+    
+    features = []
+    skipped_contours = 0
+    for contour in reshaped_contours:
+        if len(contour) >= 3:
+            transformed_contour = _apply_transform(contour, transform)
+            if not np.array_equal(transformed_contour[0], transformed_contour[-1]):
+                transformed_contour = np.vstack([transformed_contour, transformed_contour[0]])
+
+            polygon = Polygon(transformed_contour)
+
+            if not polygon.is_valid:
+                polygon = polygon.buffer(0)
+
+            if polygon.is_valid and not polygon.is_empty:
+                features.append(
+                    {
+                        "type": "Feature",
+                        "geometry": {"type": "Polygon", "coordinates": [transformed_contour.tolist()]},
+                        "properties": {},
+                    }
+                )
+            else:
+                skipped_contours += 1
+        else:
+            skipped_contours += 1
+
+    logger.debug(f"Processed {len(features)} features, skipped {skipped_contours} contours.")
     return features
 
 
