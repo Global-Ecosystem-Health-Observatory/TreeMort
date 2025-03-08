@@ -18,7 +18,7 @@ from shapely.geometry import Polygon
 from skimage.filters import gaussian
 from skimage.feature import peak_local_max
 from skimage.measure import regionprops, find_contours
-from skimage.morphology import erosion, disk, remove_small_objects
+from skimage.morphology import erosion, disk, remove_small_objects, binary_dilation
 from skimage.segmentation import watershed
 
 from treemort.modeling.builder import build_model
@@ -315,7 +315,37 @@ def compute_watershed(segment_map, centroid_map, hybrid_map, conf):
     markers = ndi.label(markers)[0]
 
     labels_ws = watershed(-centroid_map_smoothed, markers, mask=binary_seg)
-    return labels_ws
+
+    new_labels = _postprocess_labels(labels_ws, min_region_size=conf.min_area_pixels, dilation_radius=conf.dilation_radius)
+
+    return new_labels
+
+
+def _postprocess_labels(labels_ws, min_region_size=50, dilation_radius=1):
+    unique_labels, counts = np.unique(labels_ws, return_counts=True)
+    label_sizes = dict(zip(unique_labels, counts))
+
+    new_labels = labels_ws.copy()
+
+    for lbl in unique_labels:
+        if lbl == 0:  # Skip background
+            continue
+        if label_sizes[lbl] < min_region_size:  # If region is too small
+            mask = labels_ws == lbl
+            
+            dilated = binary_dilation(mask, disk(dilation_radius))
+            boundary_labels = labels_ws[dilated & (labels_ws != lbl)]
+
+            if boundary_labels.size > 0:
+                unique_neighbors, neighbor_counts = np.unique(boundary_labels, return_counts=True)
+                valid_neighbors = unique_neighbors[unique_neighbors != 0]
+                valid_counts = neighbor_counts[unique_neighbors != 0]
+
+                if valid_counts.size > 0:
+                    target_label = valid_neighbors[np.argmax(valid_counts)]
+                    new_labels[mask] = target_label
+
+    return new_labels
 
 
 def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
