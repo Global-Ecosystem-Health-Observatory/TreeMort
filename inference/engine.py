@@ -11,16 +11,16 @@ from inference.utils import (
     load_model,
     sliding_window_inference,
     initialize_logger,
-    save_labels_as_geojson,
     load_and_preprocess_image,
     threshold_prediction_map,
     extract_contours,
-    contours_to_geojson,
     save_geojson,
     log_and_raise,
     validate_path,
     expand_path,
-    generate_watershed_labels,
+    compute_watershed, 
+    extract_ellipses, 
+    save_geojson,
 )
 
 
@@ -38,41 +38,54 @@ def process_image(
         image, transform, crs = load_and_preprocess_image(image_path, conf.nir_rgb_order)
         logger.debug(f"Loaded and preprocessed image: {os.path.basename(image_path)}")
 
-        segment_map = sliding_window_inference(
+        prediction_maps = sliding_window_inference(
             model,
             image,
             window_size=conf.window_size,
             stride=conf.stride,
-            threshold=conf.threshold,
+            threshold=conf.segment_threshold,
             output_channels=conf.output_channels,
         )
-
+        segment_map = prediction_maps[0]
+        
+        image_np = image.cpu().numpy()
+        segment_map_np = segment_map.cpu().numpy()
+        
         if post_process:
-            segment_labels = generate_watershed_labels(
-                segment_map,
-                threshold=conf.threshold,
-                min_distance=conf.min_distance,
-                blur_sigma=conf.blur_sigma,
-                dilation_radius=conf.dilation_radius,
-            )
+            labels_ws = compute_watershed(segment_map_np, conf)
+            features = extract_ellipses(labels_ws, transform, conf)
+            save_geojson(features, geojson_path, crs, transform, name="FittedEllipses")
 
-            save_labels_as_geojson(
-                segment_labels,
-                transform,
-                crs,
-                geojson_path,
-                min_area_threshold=conf.min_area_threshold,
-                max_aspect_ratio=conf.max_aspect_ratio,
-                min_solidity=conf.min_solidity,
-            )
+        # if post_process:
+        #     segment_labels = generate_watershed_labels(
+        #         segment_map,
+        #         threshold=conf.threshold,
+        #         min_distance=conf.min_distance,
+        #         blur_sigma=conf.blur_sigma,
+        #         dilation_radius=conf.dilation_radius,
+        #     )
+
+        #     save_labels_as_geojson(
+        #         segment_labels,
+        #         transform,
+        #         crs,
+        #         geojson_path,
+        #         min_area_threshold=conf.min_area_threshold,
+        #         max_aspect_ratio=conf.max_aspect_ratio,
+        #         min_solidity=conf.min_solidity,
+        #     )
 
         else:
-            binary_mask = threshold_prediction_map(segment_map, conf.threshold)
-            contours = extract_contours(binary_mask)
-            geojson_data = contours_to_geojson(
-                contours, transform, crs, os.path.splitext(os.path.basename(image_path))[0]
-            )
-            save_geojson(geojson_data, geojson_path)
+            binary_mask = threshold_prediction_map(segment_map_np, conf.segment_threshold)
+            features = extract_contours(binary_mask, transform)
+            save_geojson(features, geojson_path, crs, transform, name="Contours")
+
+            # binary_mask = threshold_prediction_map(segment_map, conf.threshold)
+            # contours = extract_contours(binary_mask)
+            # geojson_data = contours_to_geojson(
+            #     contours, transform, crs, os.path.splitext(os.path.basename(image_path))[0]
+            # )
+            # save_geojson(geojson_data, geojson_path)
 
         logger.info(f"Successfully processed and saved GeoJSON for: {os.path.basename(image_path)}")
     except Exception as e:
@@ -159,19 +172,23 @@ def parse_config(config_file_path: str) -> argparse.Namespace:
     parser.add("--stride", type=int, default=128, help="Stride length for sliding window during inference (default: 128 pixels).")
     parser.add("--input-channels", type=int, required=True, help="number of input channels")
     parser.add("--output-channels", type=int, required=True, help="number of output channels")
-    parser.add("--threshold", type=float, default=0.5, help="Threshold for binary classification during inference (default: 0.5).")
-    parser.add("--min-area-threshold", type=float, default=1.0, help="Minimum area (in pixels) for retaining a detected region.")
+    parser.add("--min-area", type=float, default=1.0, help="Minimum area (in pixels) for retaining a detected region.")
     parser.add("--max-aspect-ratio", type=float, default=3.0, help="Maximum allowable aspect ratio for detected regions.")
     parser.add("--min-solidity", type=float, default=0.85, help="Minimum solidity for retaining a detected region (solidity = area/convex hull).")
     parser.add("--min-distance", type=int, default=7, help="Minimum distance between peaks for watershed segmentation.")
     parser.add("--dilation-radius", type=int, default=0, help="Radius of the structuring element for dilating binary masks.")
+    parser.add("--erosion-radius", type=int, default=0, help="Radius of the structuring element for eroding binary masks.")
     parser.add("--blur-sigma", type=float, default=1.0, help="Standard deviation for Gaussian blur applied to prediction maps.")
+    parser.add("--segment-threshold", type=float, default=0.5, help="Threshold for binary classification during inference (default: 0.5).")
     parser.add("--centroid-threshold", type=float, default=0.5, help="Threshold for filtering peaks based on the centroid map.")
     parser.add("--hybrid-threshold", type=float, default=-0.5, help="Threshold for filtering contours based on the hybrid map.")
+    parser.add("--tightness", type=float, default=0.1, help="Tightness parameter for ellipse fitting.")
     parser.add("--nir-rgb-order", type=int, nargs='+', default=[3, 0, 1, 2], help="Order of NIR, Red, Green, and Blue channels in the input imagery.")
 
     conf, _ = parser.parse_known_args()
     conf.model_config = expand_path(conf.model_config)
+
+    conf.min_area_pixels = conf.min_area / 0.0625 # for 25cm pix resolution; (0.25*0.25) = 0.0625 sq. m per pixel ; 1/0.0625 = 16 pixels
     return conf
 
 
