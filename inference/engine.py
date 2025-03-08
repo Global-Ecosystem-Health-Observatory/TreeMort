@@ -159,64 +159,24 @@ def parse_config(config_file_path: str) -> argparse.Namespace:
     validate_path(logger, config_file_path)
 
     parser = configargparse.ArgParser(default_config_files=[config_file_path])
-    parser.add(
-        "--model-config",
-        type=str,
-        required=True,
-        help="Path to the model configuration file (e.g., architecture, hyperparameters).",
-    )
+    parser.add("--model-config", type=str, required=True, help="Path to the model configuration file (e.g., architecture, hyperparameters).")
     parser.add("--best-model", type=str, required=True, help="Path to the file containing the best model weights.")
-    parser.add(
-        "--window-size", type=int, default=256, help="Size of the sliding window for inference (default: 256 pixels)."
-    )
-    parser.add(
-        "--stride",
-        type=int,
-        default=128,
-        help="Stride length for sliding window during inference (default: 128 pixels).",
-    )
+    parser.add("--window-size", type=int, default=256, help="Size of the sliding window for inference (default: 256 pixels).")
+    parser.add("--stride", type=int, default=128, help="Stride length for sliding window during inference (default: 128 pixels).")
     parser.add("--input-channels", type=int, required=True, help="number of input channels")
     parser.add("--output-channels", type=int, required=True, help="number of output channels")
     parser.add("--min-area", type=float, default=1.0, help="Minimum area (in pixels) for retaining a detected region.")
-    parser.add(
-        "--max-aspect-ratio", type=float, default=3.0, help="Maximum allowable aspect ratio for detected regions."
-    )
-    parser.add(
-        "--min-solidity",
-        type=float,
-        default=0.85,
-        help="Minimum solidity for retaining a detected region (solidity = area/convex hull).",
-    )
+    parser.add("--max-aspect-ratio", type=float, default=3.0, help="Maximum allowable aspect ratio for detected regions.")
+    parser.add("--min-solidity", type=float, default=0.85, help="Minimum solidity for retaining a detected region (solidity = area/convex hull).")
     parser.add("--min-distance", type=int, default=7, help="Minimum distance between peaks for watershed segmentation.")
-    parser.add(
-        "--dilation-radius", type=int, default=0, help="Radius of the structuring element for dilating binary masks."
-    )
-    parser.add(
-        "--erosion-radius", type=int, default=0, help="Radius of the structuring element for eroding binary masks."
-    )
-    parser.add(
-        "--blur-sigma", type=float, default=1.0, help="Standard deviation for Gaussian blur applied to prediction maps."
-    )
-    parser.add(
-        "--segment-threshold",
-        type=float,
-        default=0.5,
-        help="Threshold for binary classification during inference (default: 0.5).",
-    )
-    parser.add(
-        "--centroid-threshold", type=float, default=0.5, help="Threshold for filtering peaks based on the centroid map."
-    )
-    parser.add(
-        "--hybrid-threshold", type=float, default=-0.5, help="Threshold for filtering contours based on the hybrid map."
-    )
+    parser.add("--dilation-radius", type=int, default=0, help="Radius of the structuring element for dilating binary masks.")
+    parser.add("--erosion-radius", type=int, default=0, help="Radius of the structuring element for eroding binary masks.")
+    parser.add("--blur-sigma", type=float, default=1.0, help="Standard deviation for Gaussian blur applied to prediction maps.")
+    parser.add("--segment-threshold", type=float, default=0.5, help="Threshold for binary classification during inference (default: 0.5).")
+    parser.add("--centroid-threshold", type=float, default=0.5, help="Threshold for filtering peaks based on the centroid map.")
+    parser.add("--hybrid-threshold", type=float, default=-0.5, help="Threshold for filtering contours based on the hybrid map.")
     parser.add("--tightness", type=float, default=0.1, help="Tightness parameter for ellipse fitting.")
-    parser.add(
-        "--nir-rgb-order",
-        type=int,
-        nargs='+',
-        default=[3, 0, 1, 2],
-        help="Order of NIR, Red, Green, and Blue channels in the input imagery.",
-    )
+    parser.add("--nir-rgb-order", type=int, nargs='+', default=[3, 0, 1, 2], help="Order of NIR, Red, Green, and Blue channels in the input imagery.")
 
     conf, _ = parser.parse_known_args()
     conf.model_config = expand_path(conf.model_config)
