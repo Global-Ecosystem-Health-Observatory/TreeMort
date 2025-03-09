@@ -65,15 +65,15 @@ def process_image(
             # features = extract_ellipses(labels_ws, transform, conf)
             # save_geojson(features, geojson_path, crs, transform, name="FittedEllipses")
 
-            # # Filtering-only variant
-            # filtered_mask = segment_filtering_only(segment_map_np, conf)
-            # features = extract_contours(filtered_mask, transform)
-            # save_geojson(features, geojson_path, crs, transform, name="FilteredContours")
+            # Filtering-only variant
+            filtered_mask = segment_filtering_only(segment_map_np, conf)
+            features = extract_contours(filtered_mask, transform)
+            save_geojson(features, geojson_path, crs, transform, name="FilteredContours")
 
-            # Watershed-only variant
-            labels_ws = watershed_segmentation_only(segment_map_np, centroid_map_np, hybrid_map_np, conf)
-            features = extract_contours_from_labels(labels_ws, transform)
-            save_geojson(features, geojson_path, crs, transform, name="WatershedContours")
+            # # Watershed-only variant
+            # labels_ws = watershed_segmentation_only(segment_map_np, centroid_map_np, hybrid_map_np, conf)
+            # features = extract_contours_from_labels(labels_ws, transform)
+            # save_geojson(features, geojson_path, crs, transform, name="WatershedContours")
 
         else:
             binary_mask = threshold_prediction_map(segment_map_np, conf.segment_threshold)
