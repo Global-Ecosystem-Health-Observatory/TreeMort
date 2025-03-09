@@ -51,6 +51,53 @@ class DeadTreeDataset(Dataset):
 
         return image, label
 
+    def _prepare_kokonet_label(self, image, label):
+        # Rescale image from [0, 1] to [-1, 1] (all channels)
+        image = image * 2 - 1
+
+        # Process only the first label channel.
+        first_label = label[0]  # shape: [H, W]
+        H, W = first_label.shape
+        device = first_label.device
+
+        grid_y, grid_x = torch.meshgrid(
+            torch.arange(H, device=device), 
+            torch.arange(W, device=device),
+            indexing='ij'
+        )
+        coords = torch.stack([grid_y, grid_x], dim=-1).reshape(-1, 2)
+
+        first_label_flat = first_label.reshape(-1)
+        fg_indices = (first_label_flat == 1).nonzero(as_tuple=False).squeeze()
+        bg_indices = (first_label_flat == 0).nonzero(as_tuple=False).squeeze()
+
+        fg_coords = coords[fg_indices].float()  # Shape: [N_fg, 2]
+        bg_coords = coords[bg_indices].float()  # Shape: [N_bg, 2]
+
+        if bg_coords.numel() == 0:
+            distance_fg = torch.ones(fg_coords.shape[0], device=device)
+        else:
+            dists = torch.cdist(fg_coords, bg_coords, p=2)  # [N_fg, N_bg]
+            distance_fg, _ = dists.min(dim=1)
+
+        if distance_fg.numel() > 0:
+            max_dist = distance_fg.max()
+            normalized_fg = distance_fg / max_dist if max_dist > 0 else distance_fg
+        else:
+            normalized_fg = distance_fg
+
+        # initialize all pixels to -1 (for background).
+        topo_flat = -1 * torch.ones_like(first_label_flat, dtype=torch.float32)
+        topo_flat[fg_indices] = normalized_fg
+        topo_map = topo_flat.reshape(H, W).unsqueeze(0)
+
+        if label.shape[0] > 1:
+            new_label = torch.cat([topo_map, label[1:]], dim=0)
+        else:
+            new_label = topo_map
+
+        return image, new_label
+    
     def _adjust_image_processor_mean_std(self):
         if self.image_processor:
             if len(self.image_processor.image_mean) == 3:
@@ -64,6 +111,8 @@ class DeadTreeDataset(Dataset):
     def __getitem__(self, idx):            
         image, label = self._load_data(idx)
         image, label = self._preprocess_image_and_label(image, label)
+
+        image, label = self._prepare_kokonet_label(image, label)
 
         return image, label
 

@@ -37,6 +37,7 @@ def masked_mse(pred, target, mask):
 
 def masked_iou(pred_probs, target, buffer_mask, threshold=0.5):
     pred = (pred_probs > threshold).float()
+    target = (target > threshold).float()
     
     pred = pred * buffer_mask
     target = target * buffer_mask

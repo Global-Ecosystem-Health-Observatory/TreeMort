@@ -19,6 +19,7 @@ from treemort.modeling.network.custom_models import (
     CustomBeit,
 )
 from treemort.modeling.network.hcfnet.HCFnet import HCFnet
+from treemort.modeling.network.kokonet import Kokonet
 from treemort.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -36,6 +37,7 @@ def configure_model(conf, id2label):
         "beit": lambda: configure_beit(conf, id2label),
         "flair_unet": lambda: configure_flair_unet(conf),
         "hcfnet": lambda: configure_hcfnet(conf),
+        "kokonet": lambda: configure_kokonet(conf),
     }
 
     assert conf.model in model_choices, f"[ERROR] Invalid model: {conf.model}."
@@ -124,4 +126,9 @@ def configure_flair_unet(conf):
 
 def configure_hcfnet(conf):
     model = HCFnet(conf.input_channels, conf.output_channels)
+    return model
+
+
+def configure_kokonet(conf):
+    model = Kokonet(conf.input_channels, conf.output_channels)
     return model

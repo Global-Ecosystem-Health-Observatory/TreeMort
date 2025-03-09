@@ -1,0 +1,13 @@
+# settings for kokonet
+
+include = base_config.txt
+
+model = kokonet
+
+output-dir = ./output/kokonet
+
+activation = tanh
+
+threshold = -0.5
+
+resume = True
