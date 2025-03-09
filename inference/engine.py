@@ -61,14 +61,14 @@ def process_image(
         hybrid_map_np = hybrid_map.cpu().numpy()
     
         if post_process:
-            # labels_ws = compute_watershed(segment_map_np, centroid_map_np, hybrid_map_np, conf)
-            # features = extract_ellipses(labels_ws, transform, conf)
-            # save_geojson(features, geojson_path, crs, transform, name="FittedEllipses")
+            labels_ws = compute_watershed(segment_map_np, centroid_map_np, hybrid_map_np, conf)
+            features = extract_ellipses(labels_ws, transform, conf)
+            save_geojson(features, geojson_path, crs, transform, name="FittedEllipses")
 
-            # Filtering-only variant
-            filtered_mask = segment_filtering_only(segment_map_np, conf)
-            features = extract_contours(filtered_mask, transform)
-            save_geojson(features, geojson_path, crs, transform, name="FilteredContours")
+            # # Filtering-only variant
+            # filtered_mask = segment_filtering_only(segment_map_np, conf)
+            # features = extract_contours(filtered_mask, transform)
+            # save_geojson(features, geojson_path, crs, transform, name="FilteredContours")
 
             # # Watershed-only variant
             # labels_ws = watershed_segmentation_only(segment_map_np, centroid_map_np, hybrid_map_np, conf)
