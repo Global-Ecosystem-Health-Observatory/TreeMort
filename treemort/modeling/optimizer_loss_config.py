@@ -25,32 +25,7 @@ def configure_optimizer(model, learning_rate, total_steps):
 
 
 def configure_loss_and_metrics(conf, class_weights=None):
-    if conf.loss == "hybrid":
-        def criterion(pred, target):
-            pred_mask = pred[:, 0, :, :]
-
-            buffer_mask = target[:, 3, :, :]
-            true_mask = target[:, 0, :, :]
-
-            return hybrid_loss(pred_mask, true_mask, buffer_mask)
-
-        def metrics(pred, target):
-            pred_mask = pred[:, 0, :, :]
-
-            buffer_mask = target[:, 3, :, :]
-            true_mask = target[:, 0, :, :]
-
-            seg_metrics = {
-                "iou_segments": masked_iou(pred_mask, true_mask, buffer_mask),
-                "f_score_segments": masked_f1(pred_mask, true_mask, buffer_mask)
-            }
-
-            return {**seg_metrics}
-
-        logger.info("Configured hybrid loss using TreeMortalityLoss class (BCE, MSE, and L1-based hybrid loss).")
-        return criterion, metrics
-
-    elif conf.loss == "mse":
+    if conf.loss == "mse":
         def criterion(pred, target):
             pred_mask = pred[:, 0, :, :]
 
@@ -70,30 +45,10 @@ def configure_loss_and_metrics(conf, class_weights=None):
             true_mask = target[:, 0, :, :]
 
             return {
-                "mse_segments": masked_iou(pred_mask, true_mask, buffer_mask),
-                "f_score_segments": masked_f1(pred_mask, true_mask, buffer_mask),
+                "iou_segments": masked_iou(pred_mask, true_mask, buffer_mask, threshold=conf.threshold),
+                "f_score_segments": masked_f1(pred_mask, true_mask, buffer_mask, threshold=conf.threshold),
             }
         logger.info("Masked MSE loss configured with buffer weighting.")
-        return criterion, metrics
-
-    elif conf.loss == "weighted_dice_loss":
-        def criterion(pred, target):
-            buffer_mask = target[:, 3, :, :].unsqueeze(1)
-            seg_loss = weighted_dice_loss(
-                pred[:, 0, :, :], target[:, 0, :, :], buffer_mask=buffer_mask, class_weights=class_weights
-            )
-            centroid_loss = weighted_dice_loss(
-                pred[:, 1, :, :], target[:, 1, :, :], buffer_mask=buffer_mask, class_weights=class_weights
-            )
-            return seg_loss + centroid_loss
-
-        def metrics(pred, target):
-            buffer_mask = target[:, 3, :, :]
-            return {
-                "iou_segments": masked_iou(pred[:, 0, :, :], target[:, 0, :, :], buffer_mask),
-                "iou_points": masked_iou(pred[:, 1, :, :], target[:, 1, :, :], buffer_mask),
-            }
-        logger.info("Buffer-weighted Dice loss configured.")
         return criterion, metrics
 
     else:

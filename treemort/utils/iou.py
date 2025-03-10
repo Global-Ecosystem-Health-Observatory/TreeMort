@@ -8,15 +8,18 @@ from scipy import ndimage
 from scipy.ndimage import maximum_filter
 from scipy.spatial.distance import cdist
 
+from treemort.utils.metrics import apply_activation
+
 
 class IOUCallback:
-    def __init__(self, model, dataset, num_samples, batch_size, threshold, model_name):
+    def __init__(self, model, dataset, num_samples, batch_size, threshold, activation, model_name):
         self.model = model
         self.dataset = dataset
         self.num_samples = num_samples
         self.batch_size = batch_size
         self.threshold = threshold
         self.model_name = model_name
+        self.activation = activation
         self.device = next(model.parameters()).device
 
     def evaluate(self):
@@ -84,7 +87,7 @@ class IOUCallback:
         elif self.model_name in ["dinov2", "beit"]:
             predictions = self._process_vision_transformer(outputs)
         else:
-            predictions = torch.sigmoid(outputs[:, 0:1, :, :]), torch.sigmoid(outputs[:, 1:2, :, :])
+            predictions = apply_activation(outputs[:, 0:1, :, :], activation=self.activation), apply_activation(outputs[:, 1:2, :, :], activation=self.activation)
         return predictions
 
     def _process_transformer_model(self, outputs, image_shape):
@@ -92,10 +95,10 @@ class IOUCallback:
         combined_logits = torch.max(query_logits, dim=1).values
         h, w = image_shape[2], image_shape[3]
         interpolated_logits = F.interpolate(combined_logits.unsqueeze(1), size=(h, w), mode="bilinear", align_corners=False)
-        return torch.sigmoid(interpolated_logits), None
+        return apply_activation(interpolated_logits, activation=self.activation), None
 
     def _process_vision_transformer(self, outputs):
-        return torch.sigmoid(outputs.logits[:, 1:2, :, :]), None
+        return apply_activation(outputs.logits[:, 1:2, :, :], activation=self.activation), None
 
     def _calculate_pixel_iou(self, y_pred, y_true):
         y_pred_binary = np.squeeze(y_pred > self.threshold)

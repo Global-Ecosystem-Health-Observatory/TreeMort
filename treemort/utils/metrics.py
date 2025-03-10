@@ -2,7 +2,7 @@ import torch
 import numpy as np
 
 from scipy.spatial.distance import cdist
-from scipy.ndimage import gaussian_filter, maximum_filter
+from scipy.ndimage import maximum_filter
 
 
 def iou_score(pred_probs, target, threshold=0.5):
@@ -53,6 +53,7 @@ def masked_iou(pred_probs, target, buffer_mask, threshold=0.5):
 
 def masked_f1(pred_probs, target, buffer_mask, threshold=0.5):
     pred = (pred_probs > threshold).float()
+    target = (target > threshold).float()
     
     pred = pred * buffer_mask
     target = target * buffer_mask
@@ -67,10 +68,6 @@ def masked_f1(pred_probs, target, buffer_mask, threshold=0.5):
     
     return f1
 
-
-import torch
-import numpy as np
-from scipy.ndimage import maximum_filter
 
 def extract_centroids_from_heatmap(heatmap, threshold=0.5, min_distance=5):
     if isinstance(heatmap, torch.Tensor):
@@ -153,3 +150,14 @@ def proximity_metrics(pred_centroid_map, true_centroid_map, buffer_mask=None,
         "f1_score": f1,
         "localization_error": loc_error
     }
+
+
+def apply_activation(logits, activation="sigmoid"):
+    if activation == "tanh":
+        probs = torch.tanh(logits)
+    elif activation == "sigmoid":
+        probs = torch.sigmoid(logits)
+    else:
+        raise ValueError(f"Unsupported activation type: {activation}")
+    
+    return probs

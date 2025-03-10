@@ -45,6 +45,7 @@ def process_image(
             stride=conf.stride,
             threshold=conf.segment_threshold,
             output_channels=conf.output_channels,
+            activation=conf.activation,
         )
         segment_map = prediction_maps[0]
         
@@ -55,25 +56,6 @@ def process_image(
             labels_ws = compute_watershed(segment_map_np, conf)
             features = extract_ellipses(labels_ws, transform, conf)
             save_geojson(features, geojson_path, crs, transform, name="FittedEllipses")
-
-        # if post_process:
-        #     segment_labels = generate_watershed_labels(
-        #         segment_map,
-        #         threshold=conf.threshold,
-        #         min_distance=conf.min_distance,
-        #         blur_sigma=conf.blur_sigma,
-        #         dilation_radius=conf.dilation_radius,
-        #     )
-
-        #     save_labels_as_geojson(
-        #         segment_labels,
-        #         transform,
-        #         crs,
-        #         geojson_path,
-        #         min_area_threshold=conf.min_area_threshold,
-        #         max_aspect_ratio=conf.max_aspect_ratio,
-        #         min_solidity=conf.min_solidity,
-        #     )
 
         else:
             binary_mask = threshold_prediction_map(segment_map_np, conf.segment_threshold)
