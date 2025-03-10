@@ -52,17 +52,26 @@ def configure_loss_and_metrics(conf, class_weights=None):
 
     elif conf.loss == "mse":
         def criterion(pred, target):
-            buffer_mask = target[:, 3, :, :].unsqueeze(1)
-            seg_loss = buffer_mask * F.mse_loss(pred[:, 0, :, :], target[:, 0, :, :])
-            point_loss = buffer_mask * F.mse_loss(pred[:, 1, :, :], target[:, 1, :, :])
+            pred_mask = pred[:, 0, :, :]
+
+            buffer_mask = target[:, 3, :, :]
+            true_mask = target[:, 0, :, :]
+
             valid_pixels = buffer_mask.sum() + 1e-8
-            return (seg_loss.sum() + point_loss.sum()) / valid_pixels
+
+            seg_loss = (buffer_mask * F.mse_loss(pred_mask, true_mask))
+
+            return seg_loss.sum() / valid_pixels
 
         def metrics(pred, target):
+            pred_mask = pred[:, 0, :, :]
+
             buffer_mask = target[:, 3, :, :]
+            true_mask = target[:, 0, :, :]
+
             return {
-                "mse_segments": masked_iou(pred[:, 0, :, :], target[:, 0, :, :], buffer_mask),
-                "mse_points": masked_iou(pred[:, 1, :, :], target[:, 1, :, :], buffer_mask),
+                "mse_segments": masked_iou(pred_mask, true_mask, buffer_mask),
+                "f_score_segments": masked_f1(pred_mask, true_mask, buffer_mask),
             }
         logger.info("Masked MSE loss configured with buffer weighting.")
         return criterion, metrics

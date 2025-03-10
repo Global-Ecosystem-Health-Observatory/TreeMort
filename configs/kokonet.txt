@@ -2,11 +2,15 @@
 
 include = base_config.txt
 
+hdf5-file = Finland_RGBNIR_25cm_sdt.h5
+
 model = kokonet
 
 output-dir = ./output/kokonet
 
 activation = tanh
+
+loss = mse
 
 threshold = -0.5
 
