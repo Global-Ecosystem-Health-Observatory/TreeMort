@@ -55,7 +55,6 @@ class DeadTreeDataset(Dataset):
         # Rescale image from [0, 1] to [-1, 1] (all channels)
         image = image * 2 - 1
 
-        # Process only the first label channel.
         first_label = label[0]  # shape: [H, W]
         H, W = first_label.shape
         device = first_label.device
@@ -65,30 +64,41 @@ class DeadTreeDataset(Dataset):
             torch.arange(W, device=device),
             indexing='ij'
         )
-        coords = torch.stack([grid_y, grid_x], dim=-1).reshape(-1, 2)
+        coords = torch.stack([grid_y, grid_x], dim=-1).reshape(-1, 2)  # Shape: [H*W, 2]
 
         first_label_flat = first_label.reshape(-1)
         fg_indices = (first_label_flat == 1).nonzero(as_tuple=False).squeeze()
         bg_indices = (first_label_flat == 0).nonzero(as_tuple=False).squeeze()
 
-        fg_coords = coords[fg_indices].float()  # Shape: [N_fg, 2]
-        bg_coords = coords[bg_indices].float()  # Shape: [N_bg, 2]
+        if fg_indices.numel() > 0:
+            fg_coords = coords[fg_indices].float().reshape(-1, 2)  # Shape: [N_fg, 2]
+        else:
+            fg_coords = torch.empty((0, 2), device=device)
+
+        if bg_indices.numel() > 0:
+            bg_coords = coords[bg_indices].float().reshape(-1, 2)  # Shape: [N_bg, 2]
+        else:
+            bg_coords = torch.empty((0, 2), device=device)
 
         if bg_coords.numel() == 0:
             distance_fg = torch.ones(fg_coords.shape[0], device=device)
+        elif fg_coords.numel() == 0:
+            distance_fg = torch.zeros(0, device=device)  # No foreground, so no distances
         else:
-            dists = torch.cdist(fg_coords, bg_coords, p=2)  # [N_fg, N_bg]
-            distance_fg, _ = dists.min(dim=1)
+            dists = torch.cdist(fg_coords.unsqueeze(0), bg_coords.unsqueeze(0), p=2)  # Ensures 2D shape
+            distance_fg, _ = dists.squeeze(0).min(dim=1)  # Get minimum distance
 
+        # Normalize distances
         if distance_fg.numel() > 0:
             max_dist = distance_fg.max()
             normalized_fg = distance_fg / max_dist if max_dist > 0 else distance_fg
         else:
             normalized_fg = distance_fg
 
-        # initialize all pixels to -1 (for background).
-        topo_flat = -1 * torch.ones_like(first_label_flat, dtype=torch.float32)
-        topo_flat[fg_indices] = normalized_fg
+        # Initialize all pixels to -1 (background).
+        topo_flat = -1 * torch.ones_like(first_label_flat, dtype=torch.float32, device=device)
+        if fg_indices.numel() > 0:
+            topo_flat[fg_indices] = normalized_fg
         topo_map = topo_flat.reshape(H, W).unsqueeze(0)
 
         if label.shape[0] > 1:
