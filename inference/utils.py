@@ -90,7 +90,7 @@ def load_and_preprocess_image(
     _validate_image_channels(image, nir_rgb_order)
     nir_rgb_order = nir_rgb_order or list(range(image.shape[0]))
 
-    image = image.astype(np.float32) / max_pixel_value
+    image = (image.astype(np.float32) / max_pixel_value) * 2 - 1    # rescale to -1 and +1
     image = image[nir_rgb_order] if nir_rgb_order != list(range(image.shape[0])) else image
     image_tensor = torch.tensor(image, dtype=torch.float32)
 
@@ -130,8 +130,6 @@ def sliding_window_inference(
     output_channels: int = 1,
     activation: str = "sigmoid",
 ) -> torch.Tensor:
-    _validate_inference_params(window_size, stride, threshold)
-
     device = next(model.parameters()).device
     padded_image = _pad_image(image, window_size)
 
@@ -144,15 +142,6 @@ def sliding_window_inference(
         )
 
     return _finalize_prediction(prediction_map, count_map, image.shape, threshold)
-
-
-def _validate_inference_params(window_size: int, stride: int, threshold: float) -> None:
-    logger = get_logger()
-
-    if window_size <= 0 or stride <= 0:
-        log_and_raise(logger, ValueError("window_size and stride must be positive integers."))
-    if not (0 <= threshold <= 1):
-        log_and_raise(logger, ValueError("threshold must be between 0 and 1."))
 
 
 def _initialize_maps(
@@ -211,33 +200,22 @@ def process_batch(
 ) -> tuple[torch.Tensor, torch.Tensor]:
     logger = get_logger()
 
-    _validate_batch_inputs(patches, coords, threshold)
-
     predictions = _infer_patches(patches, model, activation, device)
 
     for i, (y, x) in enumerate(coords):
-        binary_confidence = predictions[i, 0]
+        binary_confidence = (predictions[i, 0] + 1.0) / 2.0
 
         _update_maps(prediction_map, count_map, binary_confidence, threshold, y, x)
 
     return prediction_map, count_map
 
 
-def _validate_batch_inputs(patches: list[torch.Tensor], coords: list[tuple[int, int]], threshold: float) -> None:
-    logger = get_logger()
-
-    if not patches or not coords:
-        log_and_raise(logger, ValueError("Patches and coordinates cannot be empty."))
-    if not (0 <= threshold <= 1):
-        log_and_raise(logger, ValueError("Threshold must be between 0 and 1."))
-
-
 def _infer_patches(patches: list[torch.Tensor], model: torch.nn.Module, activation: str, device: torch.device) -> torch.Tensor:
     batch_tensor = torch.stack(patches).to(device)
 
     with torch.no_grad():
-        outputs = model(batch_tensor)
-        predictions = apply_activation(outputs[:, 0:1, ...], activation=activation)
+        predictions = model(batch_tensor)
+        # predictions = apply_activation(outputs[:, 0:1, ...], activation=activation)
         
     return predictions
 

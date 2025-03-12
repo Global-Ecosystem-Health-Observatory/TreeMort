@@ -62,13 +62,6 @@ def process_image(
             features = extract_contours(binary_mask, transform)
             save_geojson(features, geojson_path, crs, transform, name="Contours")
 
-            # binary_mask = threshold_prediction_map(segment_map, conf.threshold)
-            # contours = extract_contours(binary_mask)
-            # geojson_data = contours_to_geojson(
-            #     contours, transform, crs, os.path.splitext(os.path.basename(image_path))[0]
-            # )
-            # save_geojson(geojson_data, geojson_path)
-
         logger.info(f"Successfully processed and saved GeoJSON for: {os.path.basename(image_path)}")
     except Exception as e:
         log_and_raise(logger, RuntimeError(f"Error processing image {os.path.basename(image_path)}: {e}"))
@@ -154,6 +147,7 @@ def parse_config(config_file_path: str) -> argparse.Namespace:
     parser.add("--stride", type=int, default=128, help="Stride length for sliding window during inference (default: 128 pixels).")
     parser.add("--input-channels", type=int, required=True, help="number of input channels")
     parser.add("--output-channels", type=int, required=True, help="number of output channels")
+    parser.add("--activation", type=str, default="sigmoid", help="activation function")
     parser.add("--min-area", type=float, default=1.0, help="Minimum area (in pixels) for retaining a detected region.")
     parser.add("--max-aspect-ratio", type=float, default=3.0, help="Maximum allowable aspect ratio for detected regions.")
     parser.add("--min-solidity", type=float, default=0.85, help="Minimum solidity for retaining a detected region (solidity = area/convex hull).")
@@ -271,7 +265,7 @@ scp -O -r rahmanan@puhti.csc.fi:/scratch/project_2008436/rahmanan/dead_trees/Fin
 
 - Download model
 
-scp -O -r rahmanan@puhti.csc.fi:/scratch/project_2008436/rahmanan/output/flair_unet output
+scp -O -r rahmanan@puhti.csc.fi:/scratch/project_2008436/rahmanan/output/kokonet output
 
 '''
 
