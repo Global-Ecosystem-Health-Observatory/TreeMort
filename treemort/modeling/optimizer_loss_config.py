@@ -41,8 +41,8 @@ def configure_loss_and_metrics(conf, class_weights=None):
             true_mask = target[:, 0, :, :]
 
             seg_metrics = {
-                "iou_segments": masked_iou(pred_mask, true_mask, buffer_mask),
-                "f_score_segments": masked_f1(pred_mask, true_mask, buffer_mask)
+                "iou_segments": masked_iou(pred_mask, true_mask, buffer_mask, threshold=conf.threshold),
+                "f_score_segments": masked_f1(pred_mask, true_mask, buffer_mask, threshold=conf.threshold)
             }
 
             return {**seg_metrics}
@@ -61,8 +61,8 @@ def configure_loss_and_metrics(conf, class_weights=None):
         def metrics(pred, target):
             buffer_mask = target[:, 3, :, :]
             return {
-                "mse_segments": masked_iou(pred[:, 0, :, :], target[:, 0, :, :], buffer_mask),
-                "mse_points": masked_iou(pred[:, 1, :, :], target[:, 1, :, :], buffer_mask),
+                "mse_segments": masked_iou(pred[:, 0, :, :], target[:, 0, :, :], buffer_mask, threshold=conf.threshold),
+                "mse_points": masked_iou(pred[:, 1, :, :], target[:, 1, :, :], buffer_mask, threshold=conf.threshold),
             }
         logger.info("Masked MSE loss configured with buffer weighting.")
         return criterion, metrics
@@ -81,8 +81,8 @@ def configure_loss_and_metrics(conf, class_weights=None):
         def metrics(pred, target):
             buffer_mask = target[:, 3, :, :]
             return {
-                "iou_segments": masked_iou(pred[:, 0, :, :], target[:, 0, :, :], buffer_mask),
-                "iou_points": masked_iou(pred[:, 1, :, :], target[:, 1, :, :], buffer_mask),
+                "iou_segments": masked_iou(pred[:, 0, :, :], target[:, 0, :, :], buffer_mask, threshold=conf.threshold),
+                "iou_points": masked_iou(pred[:, 1, :, :], target[:, 1, :, :], buffer_mask, threshold=conf.threshold),
             }
         logger.info("Buffer-weighted Dice loss configured.")
         return criterion, metrics

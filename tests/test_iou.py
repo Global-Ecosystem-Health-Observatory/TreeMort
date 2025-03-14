@@ -1,11 +1,10 @@
 import pytest
 import torch
 
-import numpy as np
-
 from unittest.mock import MagicMock
-from treemort.utils.iou import IOUCallback
 from torch.utils.data import DataLoader, TensorDataset
+
+from treemort.utils.metrics import iou_score
 
 
 class SimpleModel(torch.nn.Module):
@@ -35,30 +34,21 @@ def simple_model():
 
 
 def test_iou_callback(sample_data, simple_model):
-    num_samples = 10
-    batch_size = 2
-    threshold = 0.5
-    model_name = 'unet'
-
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     simple_model.to(device)
+    
+    simple_model.eval()
+    
+    images, labels = next(iter(sample_data))
+    images = images.to(device)
+    labels = labels.to(device)
 
-    iou_callback = IOUCallback(
-        model=simple_model,
-        dataset=sample_data,
-        num_samples=num_samples,
-        batch_size=batch_size,
-        threshold=threshold,
-        model_name=model_name,
-    )
+    with torch.no_grad():
+        preds = simple_model(images)
 
-    result = iou_callback.evaluate()
+    result = iou_score(preds, labels, threshold=0.5)
 
-    assert isinstance(result, dict)
-    assert "mean_iou_pixels" in result
-    assert "mean_iou_trees" in result
-    assert 0 <= result["mean_iou_pixels"] <= 1
-    assert 0 <= result["mean_iou_trees"] <= 1
+    assert 0 <= result <= 1
 
 
 if __name__ == "__main__":

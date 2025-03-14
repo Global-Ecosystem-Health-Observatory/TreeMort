@@ -3,6 +3,8 @@ import torch.nn.functional as F
 
 from typing import Optional, List, Tuple
 
+from treemort.utils.metrics import apply_activation
+
 
 def hybrid_loss(
     logits: torch.Tensor,
@@ -13,6 +15,7 @@ def hybrid_loss(
     focal_alpha: float = 0.25,
     focal_gamma: float = 2.0,
     smooth: float = 1e-8,
+    activation: str = "sigmoid",
 ) -> torch.Tensor:
     if buffer_mask is not None:
         logits = logits * buffer_mask
@@ -33,7 +36,7 @@ def hybrid_loss(
 
     bce_loss = F.binary_cross_entropy_with_logits(logits, target, weight=weights, reduction='mean')
 
-    pred = torch.sigmoid(logits)
+    pred = apply_activation(logits, activation=activation)
     intersection = (pred * target * weights).sum()
     union = (pred * weights).sum() + (target * weights).sum()
     dice_loss = 1 - (2.0 * intersection + smooth) / (union + smooth)
@@ -71,8 +74,8 @@ def center_crop(tensor: torch.Tensor, target_size: Tuple[int, int]) -> torch.Ten
     return tensor[..., i : i + th, j : j + tw]
 
 
-def dice_loss(logits, target, smooth=1.0):
-    pred = torch.sigmoid(logits)
+def dice_loss(logits, target, smooth=1.0, activation="sigmoid"):
+    pred = apply_activation(logits, activation=activation)
     if pred.shape[-2:] != target.shape[-2:]:
         raise RuntimeError(f"Dice size mismatch: {pred.shape} vs {target.shape}")
 
@@ -81,7 +84,7 @@ def dice_loss(logits, target, smooth=1.0):
     return 1 - (2.0 * intersection + smooth) / (union + smooth)
 
 
-def weighted_dice_loss(logits, target, buffer_mask=None, class_weights=None, smooth=1e-8):
+def weighted_dice_loss(logits, target, buffer_mask=None, class_weights=None, smooth=1e-8, activation="sigmoid"):
     if buffer_mask is not None:
         logits = logits * buffer_mask
         target = target * buffer_mask
@@ -91,14 +94,14 @@ def weighted_dice_loss(logits, target, buffer_mask=None, class_weights=None, smo
     else:
         weights = 1.0
 
-    pred = torch.sigmoid(logits)
+    pred = apply_activation(logits, activation=activation)
     intersection = (pred * target * weights).sum()
     union = (pred * weights).sum() + (target * weights).sum()
 
     return 1 - (2.0 * intersection + smooth) / (union + smooth)
 
 
-def mse_loss(logits, target):
+def mse_loss(logits, target, activation="sigmoid"):
     if logits.shape[-2:] != target.shape[-2:]:
         raise RuntimeError(f"MSE size mismatch: {logits.shape} vs {target.shape}")
-    return F.mse_loss(torch.sigmoid(logits), target.float())
+    return F.mse_loss(apply_activation(logits, activation=activation), target.float())

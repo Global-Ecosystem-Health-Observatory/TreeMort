@@ -1,12 +1,12 @@
 import torch
 
 from treemort.utils.logger import get_logger
-from treemort.utils.metrics import masked_iou, masked_f1
+from treemort.utils.metrics import masked_iou, masked_f1, apply_activation
 
 logger = get_logger(__name__)
 
 
-def evaluator(model, dataloader, num_samples, threshold):
+def evaluator(model, dataloader, num_samples, conf):
     try:
         logger.info("Starting evaluation...")
         
@@ -32,12 +32,12 @@ def evaluator(model, dataloader, num_samples, threshold):
                     
                     buffer_mask = labels[i, 3, :, :]  # [H, W]
                     h, w = buffer_mask.shape
-                
-                    pred_mask = torch.sigmoid(preds[0, 0]) * buffer_mask
+
+                    pred_mask = apply_activation(preds[0, 0], activation=conf.activation) * buffer_mask
                     true_mask = labels[i, 0] * buffer_mask
                     
-                    seg_metrics["iou"] += masked_iou(pred_mask, true_mask, buffer_mask, threshold)
-                    seg_metrics["f1"] += masked_f1(pred_mask, true_mask, buffer_mask, threshold)
+                    seg_metrics["iou"] += masked_iou(pred_mask, true_mask, buffer_mask, threshold=conf.threshold)
+                    seg_metrics["f1"] += masked_f1(pred_mask, true_mask, buffer_mask, threshold=conf.threshold)
                     
                     total_processed += 1
 

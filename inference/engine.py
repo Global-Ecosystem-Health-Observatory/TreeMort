@@ -45,6 +45,7 @@ def process_image(
             stride=conf.stride,
             threshold=conf.segment_threshold,
             output_channels=conf.output_channels,
+            activation=conf.activation,
         )
         segment_map = prediction_maps[0]
         
@@ -172,6 +173,7 @@ def parse_config(config_file_path: str) -> argparse.Namespace:
     parser.add("--stride", type=int, default=128, help="Stride length for sliding window during inference (default: 128 pixels).")
     parser.add("--input-channels", type=int, required=True, help="number of input channels")
     parser.add("--output-channels", type=int, required=True, help="number of output channels")
+    parser.add("--activation", type=str, default="sigmoid", help="activation function")
     parser.add("--min-area", type=float, default=1.0, help="Minimum area (in pixels) for retaining a detected region.")
     parser.add("--max-aspect-ratio", type=float, default=3.0, help="Maximum allowable aspect ratio for detected regions.")
     parser.add("--min-solidity", type=float, default=0.85, help="Minimum solidity for retaining a detected region (solidity = area/convex hull).")

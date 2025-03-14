@@ -36,7 +36,7 @@ def run(conf, eval_only):
 
     if eval_only:
         logger.info("Evaluation-only mode started.")
-        evaluator(model, test_loader, len(test_loader), conf.threshold)
+        evaluator(model, test_loader, len(test_loader), conf)
         logger.info("Evaluation completed.")
 
     else:

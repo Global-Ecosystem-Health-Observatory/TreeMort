@@ -28,5 +28,7 @@ threshold = 0.5
 
 loss = hybrid # available options [mse, hybrid]
 
+activation = sigmoid
+
 val-size = 0.2
 test-size = 0.1
