@@ -4,7 +4,6 @@ from tqdm import tqdm
 from collections import defaultdict
 
 from treemort.training.output_processing import process_model_output
-from treemort.utils.metrics import apply_activation
 
 
 def train_one_epoch(model, optimizer, scheduler, criterion, metrics, train_loader, conf, device):
@@ -28,8 +27,7 @@ def train_one_epoch(model, optimizer, scheduler, criterion, metrics, train_loade
         scheduler.step()
 
         with torch.no_grad():
-            pred_probs = apply_activation(logits, activation=conf.activation)
-            batch_metrics = metrics(pred_probs, labels)
+            batch_metrics = metrics(logits, labels)
 
         train_loss += loss.item()
         for key, value in batch_metrics.items():

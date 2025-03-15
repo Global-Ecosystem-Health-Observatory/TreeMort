@@ -4,7 +4,6 @@ from tqdm import tqdm
 from collections import defaultdict
 
 from treemort.training.output_processing import process_model_output
-from treemort.utils.metrics import apply_activation
 
 
 def validate_one_epoch(model, criterion, metrics, val_loader, conf, device):
@@ -35,8 +34,7 @@ def validate_one_epoch(model, criterion, metrics, val_loader, conf, device):
 
             loss = criterion(logits, targets)
             
-            pred_probs = apply_activation(logits, activation=conf.activation)
-            batch_metrics = metrics(pred_probs, targets)
+            batch_metrics = metrics(logits, targets)
 
             val_loss += loss.item()
             for key, value in batch_metrics.items():

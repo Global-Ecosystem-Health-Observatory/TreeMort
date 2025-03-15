@@ -5,100 +5,87 @@ import numpy as np
 
 from tqdm import tqdm
 from scipy import ndimage
-from scipy.ndimage import maximum_filter
-from scipy.spatial.distance import cdist
-
-from treemort.utils.metrics import apply_activation
 
 
 class IOUCallback:
-    def __init__(self, model, dataset, num_samples, batch_size, threshold, activation, model_name):
+    def __init__(
+        self,
+        model,
+        dataset,
+        num_samples,
+        batch_size,
+        threshold,
+        model_name,
+    ):
         self.model = model
         self.dataset = dataset
         self.num_samples = num_samples
         self.batch_size = batch_size
         self.threshold = threshold
         self.model_name = model_name
-        self.activation = activation
-        self.device = next(model.parameters()).device
+        self.device = next(model.parameters()).device  # Get the device of the model
 
     def evaluate(self):
         self.model.eval()
 
-        segmentation_metrics_acc = {
-            "pixel_ious": [],
-            "tree_ious": [],
-            "mean_ious": [],
-            "balanced_ious": [],
-            "dice_scores": [],
-            "adjusted_dice_scores": [],
-            "mcc_scores": [],
-        }
-        centroid_metrics_acc = {"precision": [], "recall": [], "f1_score": []}
+        (pixel_ious, tree_ious, mean_ious, balanced_ious, dice_scores, adjusted_dice_scores, mcc_scores,) = ([], [], [], [], [], [], [])
 
         with tqdm(total=self.num_samples, desc="Evaluating") as pbar:
             with torch.no_grad():
                 for images, labels in self.dataset:
                     images, labels = images.to(self.device), labels.to(self.device)
+                    predictions = self._get_predictions(images, labels)
+                    predictions, labels = (predictions.cpu().numpy(), labels.cpu().numpy(),)
 
-                    pred_segmentation, pred_centroids = self._get_predictions(images)
+                    for i in range(len(predictions)):
+                        y_pred, y_true = predictions[i], labels[i]
 
-                    true_segmentation = labels[:, 0, :, :]
-                    true_centroids = labels[:, 1, :, :]
+                        pixel_ious.append(self._calculate_pixel_iou(y_pred, y_true))
+                        tree_ious.append(self._calculate_tree_iou(y_pred, y_true))
+                        mean_ious.append(self._calculate_mean_iou(y_pred, y_true))
+                        balanced_ious.append(self._calculate_balanced_iou(y_pred, y_true))
+                        dice_scores.append(self._calculate_dice_coefficient(y_pred, y_true))
+                        adjusted_dice_scores.append(self._calculate_adjusted_dice_coefficient(y_pred, y_true))
+                        mcc_scores.append(self._calculate_mcc(y_pred, y_true))
 
-                    for i in range(len(pred_segmentation)):
-                        y_pred_seg = pred_segmentation[i].cpu().numpy()
-                        y_true_seg = true_segmentation[i].cpu().numpy()
-
-                        segmentation_metrics_acc["pixel_ious"].append(self._calculate_pixel_iou(y_pred_seg, y_true_seg))
-                        segmentation_metrics_acc["tree_ious"].append(self._calculate_tree_iou(y_pred_seg, y_true_seg))
-                        segmentation_metrics_acc["mean_ious"].append(self._calculate_mean_iou(y_pred_seg, y_true_seg))
-                        segmentation_metrics_acc["balanced_ious"].append(self._calculate_balanced_iou(y_pred_seg, y_true_seg))
-                        segmentation_metrics_acc["dice_scores"].append(self._calculate_dice_coefficient(y_pred_seg, y_true_seg))
-                        segmentation_metrics_acc["adjusted_dice_scores"].append(
-                            self._calculate_adjusted_dice_coefficient(y_pred_seg, y_true_seg)
-                        )
-                        segmentation_metrics_acc["mcc_scores"].append(self._calculate_mcc(y_pred_seg, y_true_seg))
-
-                    for i in range(len(pred_centroids)):
-                        y_pred_cent = pred_centroids[i].cpu().numpy()
-                        y_true_cent = true_centroids[i].cpu().numpy()
-
-                        pred_coords = self._extract_centroids_from_heatmap(y_pred_cent)
-                        true_coords = self._extract_centroids_from_heatmap(y_true_cent)
-
-                        precision, recall, f1_score = self._calculate_centroid_metrics(pred_coords, true_coords)
-                        centroid_metrics_acc["precision"].append(precision)
-                        centroid_metrics_acc["recall"].append(recall)
-                        centroid_metrics_acc["f1_score"].append(f1_score)
-
-                    pbar.update(images.size(0))
+                    pbar.update(1)
                     pbar.set_postfix(iterations_left=self.num_samples - pbar.n)
 
-        segmentation_metrics = {key: np.mean(values) for key, values in segmentation_metrics_acc.items()}
-        centroid_metrics = {key: np.mean(values) for key, values in centroid_metrics_acc.items()}
+        return self._compute_mean_ious(
+            pixel_ious,
+            tree_ious,
+            mean_ious,
+            balanced_ious,
+            dice_scores,
+            adjusted_dice_scores,
+            mcc_scores,
+        )
 
-        return segmentation_metrics, centroid_metrics
-
-    def _get_predictions(self, images):
+    def _get_predictions(self, images, labels):
         outputs = self.model(images)
-        if self.model_name in ["maskformer", "detr"]:
-            predictions = self._process_transformer_model(outputs, images.shape)
+
+        _, _, h, w = images.shape
+
+        if self.model_name == "maskformer":
+            query_logits = outputs['masks_queries_logits']
+            combined_logits = torch.max(query_logits, dim=1).values
+            interpolated_logits = F.interpolate(combined_logits.unsqueeze(1), size=(h, w), mode='bilinear', align_corners=False)
+            predictions = torch.sigmoid(interpolated_logits)
+
+        elif self.model_name == "detr":
+            query_logits = outputs['pred_masks']
+            combined_logits = torch.max(query_logits, dim=1).values
+            interpolated_logits = F.interpolate(combined_logits.unsqueeze(1), size=(h, w), mode='bilinear', align_corners=False)
+            predictions = torch.sigmoid(interpolated_logits)
+
         elif self.model_name in ["dinov2", "beit"]:
-            predictions = self._process_vision_transformer(outputs)
+            logits = outputs.logits[:, 1:2, :, :]
+            predictions = torch.sigmoid(logits)
+
         else:
-            predictions = apply_activation(outputs[:, 0:1, :, :], activation=self.activation), apply_activation(outputs[:, 1:2, :, :], activation=self.activation)
+            predictions = torch.sigmoid(outputs)
+
         return predictions
-
-    def _process_transformer_model(self, outputs, image_shape):
-        query_logits = outputs["masks_queries_logits"] if "masks_queries_logits" in outputs else outputs["pred_masks"]
-        combined_logits = torch.max(query_logits, dim=1).values
-        h, w = image_shape[2], image_shape[3]
-        interpolated_logits = F.interpolate(combined_logits.unsqueeze(1), size=(h, w), mode="bilinear", align_corners=False)
-        return apply_activation(interpolated_logits, activation=self.activation), None
-
-    def _process_vision_transformer(self, outputs):
-        return apply_activation(outputs.logits[:, 1:2, :, :], activation=self.activation), None
 
     def _calculate_pixel_iou(self, y_pred, y_true):
         y_pred_binary = np.squeeze(y_pred > self.threshold)
@@ -143,7 +130,7 @@ class IOUCallback:
             iou_trees = tp_trees / (tp_trees + fp_trees + fn_trees)
 
         return iou_trees
-
+    
     def _calculate_mean_iou(self, y_pred, y_true):
         y_pred_binary = np.squeeze(y_pred > self.threshold)
         y_true_binary = np.squeeze(y_true > self.threshold)
@@ -245,32 +232,30 @@ class IOUCallback:
         mcc = numerator / denominator
         return mcc
 
-    def _extract_centroids_from_heatmap(self, heatmap, threshold=0.1, min_distance=5):
-        if heatmap.ndim > 2:
-            heatmap = np.squeeze(heatmap)
+    def _compute_mean_ious(
+        self,
+        pixel_ious,
+        tree_ious,
+        mean_ious,
+        balanced_ious,
+        dice_scores,
+        adjusted_dice_scores,
+        mcc_scores,
+    ):
+        mean_iou_pixels = np.mean(pixel_ious)
+        mean_iou_trees = np.mean(tree_ious)
+        mean_iou = np.mean(mean_ious)
+        mean_balanced_iou = np.mean(balanced_ious)
+        mean_dice_score = np.mean(dice_scores)
+        mean_adjusted_dice_score = np.mean(adjusted_dice_scores)
+        mean_mcc = np.mean(mcc_scores)
 
-        if heatmap.ndim != 2:
-            raise ValueError(f"Expected a 2D heatmap, got {heatmap.ndim} dimensions instead.")
-
-        peaks = (heatmap == maximum_filter(heatmap, size=min_distance)) & (heatmap > threshold)
-
-        return [tuple(coord) for coord in np.argwhere(peaks)]
-
-    def _calculate_centroid_metrics(self, pred_coords, true_coords, proximity_threshold=5):
-        if not pred_coords and not true_coords:
-            return 1.0, 1.0, 1.0
-        if not pred_coords or not true_coords:
-            return 0.0, 0.0, 0.0
-
-        distances = cdist(pred_coords, true_coords)
-        matches = distances <= proximity_threshold
-
-        tp = np.sum(np.any(matches, axis=1))
-        fp = len(pred_coords) - tp
-        fn = len(true_coords) - np.sum(np.any(matches, axis=0))
-
-        precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-        recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-        f1_score = (2 * precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
-
-        return precision, recall, f1_score
+        return {
+            "mean_iou_pixels": mean_iou_pixels,
+            "mean_iou_trees": mean_iou_trees,
+            "mean_iou": mean_iou,
+            "mean_balanced_iou": mean_balanced_iou,
+            "mean_dice_score": mean_dice_score,
+            "mean_adjusted_dice_score": mean_adjusted_dice_score,
+            "mean_mcc": mean_mcc,
+        }

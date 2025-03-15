@@ -3,7 +3,6 @@ from treemort.training.validation_loop import validate_one_epoch
 from treemort.training.callback_handler import handle_callbacks
 
 from treemort.utils.logger import get_logger
-from treemort.utils.callbacks import EarlyStopping
 
 logger = get_logger(__name__)
 

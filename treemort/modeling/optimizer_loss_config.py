@@ -5,7 +5,7 @@ from torch.optim.lr_scheduler import OneCycleLR
 
 from treemort.utils.loss import weighted_dice_loss, hybrid_loss
 from treemort.utils.logger import get_logger
-from treemort.utils.metrics import masked_iou, masked_f1
+from treemort.utils.metrics import masked_iou, masked_f1, apply_activation
 
 logger = get_logger(__name__)
 
@@ -40,9 +40,11 @@ def configure_loss_and_metrics(conf, class_weights=None):
             buffer_mask = target[:, 3, :, :]
             true_mask = target[:, 0, :, :]
 
+            pred_probs = apply_activation(pred_mask, activation=conf.activation)
+
             seg_metrics = {
-                "iou_segments": masked_iou(pred_mask, true_mask, buffer_mask, threshold=conf.threshold),
-                "f_score_segments": masked_f1(pred_mask, true_mask, buffer_mask, threshold=conf.threshold)
+                "iou_segments": masked_iou(pred_probs, true_mask, buffer_mask, threshold=conf.threshold),
+                "f_score_segments": masked_f1(pred_probs, true_mask, buffer_mask, threshold=conf.threshold)
             }
 
             return {**seg_metrics}
