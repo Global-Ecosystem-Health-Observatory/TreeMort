@@ -66,7 +66,7 @@ if __name__ == "__main__":
     
     _ = configure_logger(verbosity=args.verbosity)
     
-    conf = setup(args.config, args.data_config)
+    conf = setup(args.config, data_config=args.data_config)
 
     run(conf, args.eval_only)
 
