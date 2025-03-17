@@ -36,12 +36,16 @@ def evaluator(model, dataloader, num_samples, conf):
                     pred_mask = apply_activation(preds[0, 0], activation=conf.activation) * buffer_mask
                     true_mask = labels[i, 0] * buffer_mask
                     
-                    seg_metrics["iou"] += masked_iou(pred_mask, true_mask, buffer_mask, threshold=conf.threshold)
-                    seg_metrics["f1"] += masked_f1(pred_mask, true_mask, buffer_mask, threshold=conf.threshold)
+                    seg_metrics["iou"] += masked_iou(pred_mask, true_mask, buffer_mask, threshold=conf.segment_threshold)
+                    seg_metrics["f1"] += masked_f1(pred_mask, true_mask, buffer_mask, threshold=conf.segment_threshold)
                     
                     total_processed += 1
 
-        seg_metrics = {k: v/total_processed for k,v in seg_metrics.items()}
+        if total_processed > 0:
+            seg_metrics = {k: v/total_processed for k,v in seg_metrics.items()}
+        else:
+            logger.warning("No samples were processed during evaluation.")
+            seg_metrics = {k: 0.0 for k in seg_metrics.keys()}
 
         logger.info("Segmentation Metrics:")
         for key, value in seg_metrics.items():

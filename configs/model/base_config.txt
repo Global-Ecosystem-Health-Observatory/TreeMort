@@ -1,9 +1,12 @@
 # Common settings for all models
 
-data-folder = ${TREEMORT_DATA_PATH}/Finland/RGBNIR/25cm
-hdf5-file = Finland_RGBNIR_25cm.h5
+include = {data_config}
+
+data-config = {data_config}
 
 output-dir = ./output
+
+model = test
 
 train-crop-size = 256
 val-crop-size = 256
@@ -24,7 +27,7 @@ model-weights = best # available options [best, latest]
 
 learning-rate = 1e-4
 
-threshold = 0.5
+segment-threshold = 0.5
 
 loss = hybrid # available options [mse, hybrid]
 

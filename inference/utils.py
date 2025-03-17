@@ -12,65 +12,39 @@ from typing import Optional, List, Tuple, Generator, Dict
 
 from rasterio.crs import CRS
 
-from scipy import ndimage as ndi
 from scipy.ndimage import gaussian_filter, binary_dilation
 from shapely.geometry import Polygon
 
-from skimage.filters import gaussian
 from skimage.feature import peak_local_max
 from skimage.measure import regionprops, find_contours
 from skimage.morphology import erosion, disk, remove_small_objects
 from skimage.segmentation import watershed
 
 from treemort.modeling.builder import build_model
-from treemort.utils.config import setup
-from treemort.utils.logger import configure_logger, get_logger
-
-
-def initialize_logger(verbosity: str) -> None:
-    configure_logger(verbosity=verbosity)
-
-
-def log_and_raise(logger, exception: Exception):
-    logger.error(str(exception))
-    raise exception
-
-
-def expand_path(path):
-    return os.path.expandvars(path)
-
-
-def validate_path(logger, path: str, is_dir: bool = False) -> bool:
-    if not os.path.exists(path):
-        log_and_raise(logger, FileNotFoundError(f"Path does not exist: {path}"))
-    if is_dir and not os.path.isdir(path):
-        log_and_raise(logger, NotADirectoryError(f"Expected directory but got: {path}"))
-    return True
+from treemort.utils.config import validate_path
+from treemort.utils.logger import get_logger, log_and_raise
+from treemort.utils.metrics import apply_activation
 
 
 def load_model(
-    config_path: str,
-    best_model: str,
+    conf,
     id2label: dict = {0: "alive", 1: "dead"},
     device: torch.device = torch.device("cpu"),
 ) -> torch.nn.Module:
     logger = get_logger()
+    
+    best_model_path = os.path.join(conf.output_dir, conf.model, conf.best_model)
+    validate_path(best_model_path)
 
-    validate_path(logger, config_path)
-    validate_path(logger, best_model)
-
-    conf = setup(config_path)
     model, *_ = build_model(conf, id2label, device)
     model = model.to(device).eval()
 
     try:
-        model.load_state_dict(torch.load(best_model, map_location=device, weights_only=True))
+        model.load_state_dict(torch.load(best_model_path, map_location=device, weights_only=True))
     except Exception as e:
         log_and_raise(logger, RuntimeError(f"Failed to load model weights: {e}"))
 
-    logger.debug(
-        f"Model loaded successfully: {os.path.join(os.path.basename(os.path.dirname(best_model)), os.path.basename(best_model))} (Config: {os.path.basename(config_path)})"
-    )
+    logger.debug(f"Model loaded successfully: {best_model_path}")
     return model
 
 
@@ -79,7 +53,7 @@ def load_and_preprocess_image(
 ) -> Tuple[torch.Tensor, Affine, CRS]:
     logger = get_logger()
 
-    validate_path(logger, tiff_file)
+    validate_path(tiff_file)
 
     with rasterio.open(tiff_file) as src:
         image = src.read()
@@ -128,6 +102,7 @@ def sliding_window_inference(
     batch_size: int = 1,
     threshold: float = 0.5,
     output_channels: int = 1,
+    activation: str = "sigmoid",
 ) -> torch.Tensor:
     _validate_inference_params(window_size, stride, threshold)
 
@@ -139,7 +114,7 @@ def sliding_window_inference(
 
     for batch in _batch_patches(patches, coords, batch_size):
         prediction_map, count_map = _process_batch(
-            batch["patches"], batch["coords"], prediction_map, count_map, model, threshold, device
+            batch["patches"], batch["coords"], prediction_map, count_map, model, threshold, activation, device
         )
 
     return _finalize_prediction(prediction_map, count_map, image.shape, threshold)
@@ -205,13 +180,14 @@ def _process_batch(
     count_map: torch.Tensor,
     model: torch.nn.Module,
     threshold: float,
+    activation: str,
     device: torch.device,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     logger = get_logger()
 
     _validate_batch_inputs(patches, coords, threshold)
 
-    predictions = _infer_patches(patches, model, device)
+    predictions = _infer_patches(patches, model, activation, device)
 
     for i, (y, x) in enumerate(coords):
         binary_confidence = predictions[i, 0]
@@ -230,12 +206,12 @@ def _validate_batch_inputs(patches: list[torch.Tensor], coords: list[tuple[int, 
         log_and_raise(logger, ValueError("Threshold must be between 0 and 1."))
 
 
-def _infer_patches(patches: list[torch.Tensor], model: torch.nn.Module, device: torch.device) -> torch.Tensor:
+def _infer_patches(patches: list[torch.Tensor], model: torch.nn.Module, activation: str, device: torch.device) -> torch.Tensor:
     batch_tensor = torch.stack(patches).to(device)
-
+    
     with torch.no_grad():
         outputs = model(batch_tensor)
-        predictions = torch.sigmoid(outputs[:, 0:1, ...])
+        predictions = apply_activation(outputs[:, 0:1, ...], activation=activation)
         
     return predictions
 
@@ -425,7 +401,7 @@ def extract_contours(binary_mask: np.ndarray, transform: Affine) -> List[Dict]:
     contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     reshaped_contours = [contour.reshape(-1, 2) for contour in contours]
-    print(f"Extracted {len(reshaped_contours)} contours from the binary mask.")
+    logger.debug(f"Extracted {len(reshaped_contours)} contours from the binary mask.")
     
     features = []
     skipped_contours = 0

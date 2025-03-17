@@ -1,9 +1,7 @@
-# settings for kokonet
+# settings for Unet
 
 include = base_config.txt
 
 model = unet
-
-output-dir = ./output/unet
 
 resume = True

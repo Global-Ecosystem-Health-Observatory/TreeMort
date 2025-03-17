@@ -8,11 +8,12 @@ fi
 
 CONFIG_FILE=$1
 EVAL_ONLY=false
+DATA_CONFIG=""
 
-# Check for additional arguments
 while [[ "$#" -gt 1 ]]; do
     case $2 in
         --eval-only) EVAL_ONLY="$3"; shift ;;
+        --data-config) DATA_CONFIG="$3"; shift ;;
 	--test-run) TEST_RUN="$3"; shift ;;
     esac
     shift
@@ -62,11 +63,15 @@ fi
 
 EOT
 
-if [ "$EVAL_ONLY" = true ]; then
-    echo "srun python3 -m treemort.main \"$CONFIG_FILE\" --eval-only" >> $SBATCH_SCRIPT
-else
-    echo "srun python3 -m treemort.main \"$CONFIG_FILE\"" >> $SBATCH_SCRIPT
+# Build the command string with optional --data-config and --eval-only flags
+CMD="srun python3 -m treemort.main \"$CONFIG_FILE\""
+if [ -n "$DATA_CONFIG" ]; then
+    CMD="$CMD --data-config \"$DATA_CONFIG\""
 fi
+if [ "$EVAL_ONLY" = true ]; then
+    CMD="$CMD --eval-only"
+fi
+echo "$CMD" >> $SBATCH_SCRIPT
 
 echo "Generated SBATCH script:"
 cat $SBATCH_SCRIPT

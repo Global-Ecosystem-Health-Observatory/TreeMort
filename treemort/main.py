@@ -7,7 +7,7 @@ from treemort.modeling.builder import resume_or_load
 from treemort.training.trainer import trainer
 from treemort.evaluation.evaluator import evaluator
 from treemort.utils.config import setup
-from treemort.utils.logger import get_logger
+from treemort.utils.logger import get_logger, configure_logger
 
 logger = get_logger(__name__)
 
@@ -57,12 +57,16 @@ def run(conf, eval_only):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Configuration setup for network.")
-    parser.add_argument(     "config", type=str,            help="Path to the configuration file")
-    parser.add_argument("--eval-only", action="store_true", help="If set, only evaluate the model without training",)
-
+    parser.add_argument("config",        type=str, help="Path to the configuration file")
+    parser.add_argument("--data-config", type=str, required=True, help="Path to the additional data configuration file")
+    parser.add_argument('--verbosity',   type=str, default='info', choices=['info', 'debug', 'warning'])
+    parser.add_argument("--eval-only",   action="store_true", help="If set, only evaluate the model without training")
+    
     args = parser.parse_args()
-
-    conf = setup(args.config)
+    
+    _ = configure_logger(verbosity=args.verbosity)
+    
+    conf = setup(args.config, args.data_config)
 
     run(conf, args.eval_only)
 
@@ -72,11 +76,11 @@ Usage:
 
 1) Train
 
-python3 -m treemort.main ./configs/flair_unet_bs8_cs256.txt
+python3 -m treemort.main ./configs/model/flair_unet.txt --data-config ./configs/data/finland.txt
 
 2) Evaluate
 
-python3 -m treemort.main ./configs/flair_unet_bs8_cs256.txt --eval-only
+python3 -m treemort.main ./configs/model/flair_unet.txt --data-config ./configs/data/finland.txt --eval-only
 
 - For Puhti
 
@@ -85,10 +89,10 @@ export TREEMORT_REPO_PATH="/users/rahmanan/TreeMort"
 
 1) Train
 
-sh $TREEMORT_REPO_PATH/scripts/run_treemort.sh $TREEMORT_REPO_PATH/configs/flair_unet_bs8_cs256.txt --eval-only false
+sh $TREEMORT_REPO_PATH/scripts/run_treemort.sh $TREEMORT_REPO_PATH/configs/model/flair_unet.txt --data-config $TREEMORT_REPO_PATH/configs/data/finland.txt --eval-only false
 
 2) Evaluate
 
-sh $TREEMORT_REPO_PATH/scripts/run_treemort.sh $TREEMORT_REPO_PATH/configs/flair_unet_bs8_cs256.txt --eval-only true
+sh $TREEMORT_REPO_PATH/scripts/run_treemort.sh $TREEMORT_REPO_PATH/configs/model/flair_unet.txt --data-config $TREEMORT_REPO_PATH/configs/data/finland.txt --eval-only true
 
 '''

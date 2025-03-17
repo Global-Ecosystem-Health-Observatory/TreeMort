@@ -13,7 +13,13 @@
 # Usage:
 # export TREEMORT_VENV_PATH="/custom/path/to/venv"
 # export TREEMORT_REPO_PATH="/custom/path/to/treemort/repo"
-# sbatch --export=ALL,CONFIG_PATH="/custom/path/to/config",DATA_PATH="/custom/path/to/data",OUTPUT_PATH="/custom/path/to/output" run_inference.sh
+# sbatch \
+#   --export=ALL,CONFIG_PATH="/custom/path/to/config",\
+#   MODEL_CONFIG_PATH="/custom/path/to/config",\
+#   DATA_CONFIG_PATH="/custom/path/to/config",\
+#   DATA_PATH="/custom/path/to/data",\
+#   OUTPUT_PATH="/custom/path/to/output" \
+#   run_inference.sh
 
 MODULE_NAME="pytorch/2.3"
 module load $MODULE_NAME
@@ -44,6 +50,26 @@ fi
 
 if [ ! -f "$CONFIG_PATH" ]; then
     echo "[ERROR] Config file not found at $CONFIG_PATH"
+    exit 1
+fi
+
+if [ -z "$MODEL_CONFIG_PATH" ]; then
+    echo "[ERROR] MODEL_CONFIG_PATH variable is not set. Please provide a config path using --export."
+    exit 1
+fi
+
+if [ ! -f "$MODEL_CONFIG_PATH" ]; then
+    echo "[ERROR] Model config file not found at $MODEL_CONFIG_PATH"
+    exit 1
+fi
+
+if [ -z "$DATA_CONFIG_PATH" ]; then
+    echo "[ERROR] DATA_CONFIG_PATH variable is not set. Please provide a config path using --export."
+    exit 1
+fi
+
+if [ ! -f "$DATA_CONFIG_PATH" ]; then
+    echo "[ERROR] Date config file not found at $DATA_CONFIG_PATH"
     exit 1
 fi
 
@@ -84,11 +110,13 @@ echo "[INFO] Starting inference with the following settings:"
 echo "       Data path: $DATA_PATH"
 echo "       Output path: $OUTPUT_PATH"
 echo "       Config file: $CONFIG_PATH"
+echo "       Model config file: $MODEL_CONFIG_PATH"
+echo "       Data config file: $DATA_CONFIG_PATH"
 echo "       Inference engine: $ENGINE_PATH"
 echo "       CPUs per task: $SLURM_CPUS_PER_TASK"
 echo "       Memory per CPU: $SLURM_MEM_PER_CPU MB"
 
-srun python3 "$ENGINE_PATH" "$DATA_PATH" --config "$CONFIG_PATH" --outdir "$OUTPUT_PATH" $POST_PROCESS
+srun python3 "$ENGINE_PATH" "$DATA_PATH" --config "$CONFIG_PATH" --model-config "$MODEL_CONFIG_PATH" --data-config "$DATA_CONFIG_PATH" --outdir "$OUTPUT_PATH" $POST_PROCESS
 
 EXIT_STATUS=$?
 if [ $EXIT_STATUS -ne 0 ]; then

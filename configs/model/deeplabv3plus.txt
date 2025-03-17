@@ -4,6 +4,4 @@ include = base_config.txt
 
 model = deeplabv3+
 
-output-dir = ./output/deeplabv3plus
-
 resume = True

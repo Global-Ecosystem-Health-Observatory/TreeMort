@@ -4,6 +4,4 @@ include = base_config.txt
 
 model = hcfnet
 
-output-dir = ./output/hcfnet
-
 resume = True

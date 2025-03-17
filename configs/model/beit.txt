@@ -6,8 +6,6 @@ model = beit
 
 backbone = microsoft/beit-base-finetuned-ade-640-640
 
-output-dir = ./output/beit
-
 train-crop-size = 640
 val-crop-size = 640
 test-crop-size = 640

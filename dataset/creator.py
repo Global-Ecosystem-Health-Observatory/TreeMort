@@ -2,7 +2,6 @@ import os
 import h5py
 import rasterio
 import argparse
-import configargparse
 import concurrent.futures
 
 import numpy as np
@@ -10,15 +9,16 @@ import numpy as np
 from pyproj import Transformer
 from pathlib import Path
 from scipy.ndimage import label as nd_label  # Explicit import to avoid shadowing
-from skimage.feature import peak_local_max
 from rasterio.transform import xy
 
 from dataset.utils import (
-    expand_path,
     get_image_and_polygons,
     create_partial_segment_mask,
     create_hybrid_sdt_boundary_labels,
 )
+
+from treemort.utils.config import setup
+from treemort.utils.logger import get_logger, configure_logger
 
 
 def pad_image(image, window_size):
@@ -64,6 +64,8 @@ def extract_patches(image, label, window_size, stride, buffer=32):
 
 
 def process_image(image_path, label_path, conf):
+    logger = get_logger()
+
     image_name = os.path.basename(image_path)
 
     try:
@@ -125,15 +127,17 @@ def process_image(image_path, label_path, conf):
         return image_name, labeled_patches
 
     except Exception as e:
-        print(f"[ERROR] Failed to process {image_path}: {e}")
+        logger.error(f"Failed to process {image_path}: {e}")
         return image_name, []
 
 
 def write_to_hdf5(hdf5_file, data):
+    logger = get_logger()
+
     with h5py.File(hdf5_file, "a") as hf:
         for image_name, labeled_patches in data:
             if not labeled_patches:
-                print(f"[WARNING] No labeled patches for image: {image_name}")
+                logger.warning(f"No labeled patches for image: {image_name}")
                 continue
                 
             for idx, patch in enumerate(labeled_patches):
@@ -171,6 +175,8 @@ def convert_to_hdf5(
     num_workers=4,
     chunk_size=10,
 ):
+    logger = get_logger()
+
     data_path = Path(conf.data_folder)
     hdf5_path = Path(conf.data_folder).parent / conf.hdf5_file
  
@@ -189,7 +195,7 @@ def convert_to_hdf5(
             label_list.append(label_path)
         else:
             image_list.remove(image_path)
-            print(f"[WARNING] Labels not found for {image_path}")
+            logger.warning(f"Labels not found for {image_path}")
 
     if no_of_samples is not None:
         image_list = image_list[:no_of_samples]
@@ -223,41 +229,26 @@ def convert_to_hdf5(
                     if result:  # Ensure result is not None
                         results.append(result)
                 except Exception as e:
-                    print(f"[ERROR] File {file} generated an exception: {e}")
+                    logger.error(f"File {file} generated an exception: {e}")
 
             write_to_hdf5(hdf5_path, results)
 
         files_left = max(0, len(image_list) - (chunk_idx + 1) * chunk_size)
-        print(f"[INFO] Completed chunk {chunk_idx + 1}/{chunk_count}. {files_left} files left to process.")
+        logger.info(f"Completed chunk {chunk_idx + 1}/{chunk_count}. {files_left} files left to process.")
 
-
-def parse_config(config_file_path):
-    parser = configargparse.ArgParser(default_config_files=[config_file_path])
-
-    parser.add("--data-folder",             type=str, required=True,    help="directory with aerial image and label data")
-    parser.add("--hdf5-file",               type=str, required=True,    help="name of output hdf5 file")
-    parser.add("--num-workers",             type=int, default=4,        help="number of workers for parallel processing")
-    parser.add("--window-size",             type=int, default=256,      help="size of the window")
-    parser.add("--stride",                  type=int, default=128,      help="stride for the window")
-    parser.add("--nir-rgb-order",           type=int, nargs='+', default=[3, 0, 1, 2],   help="NIR, R, G, B order")
-    parser.add("--normalize-imagewise",     action="store_true",        help="normalize imagewise")
-    parser.add("--normalize-channelwise",   action="store_true",        help="normalize channelwise")
-
-    conf, _ = parser.parse_known_args()
-
-    conf.data_folder = expand_path(conf.data_folder)
-
-    return conf
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Aerial images dataset creation.")
-    parser.add_argument("config",           type=str,               help="Path to the configuration file",)
-    parser.add_argument("--no-of-samples",  type=int, default=None, help="If set N>1, creates samples from N Aerial Images, for testing purposes only",)
-    parser.add_argument("--num-workers",    type=int, default=4,    help="Number of workers for parallel processing",)
-    parser.add_argument("--chunk-size",     type=int, default=10,   help="Number of images to process in a single chunk",)
+    parser.add_argument("config",          type=str, help="Path to the configuration file",)
+    parser.add_argument("--no-of-samples", type=int, default=None, help="If set N>1, creates samples from N Aerial Images, for testing purposes only",)
+    parser.add_argument("--num-workers",   type=int, default=4, help="Number of workers for parallel processing",)
+    parser.add_argument("--chunk-size",    type=int, default=10, help="Number of images to process in a single chunk",)
+    parser.add_argument('--verbosity',     type=str, default='info', choices=['info', 'debug', 'warning'])
     args = parser.parse_args()
 
-    conf = parse_config(args.config)
+    conf = setup(args.config)
+
+    _ = configure_logger(verbosity=args.verbosity)
 
     convert_to_hdf5(
         conf,
@@ -271,11 +262,11 @@ Usage:
 
 export TREEMORT_DATA_PATH="/Users/anisr/Documents/dead_trees" 
 
-python3 -m dataset.creator ./configs/Finland_RGBNIR_25cm.txt
+python3 -m dataset.creator ${TREEMORT_REPO_PATH}/configs/data/finland.txt
 
 - For testing only
 
-python3 -m dataset.creator ./configs/Finland_RGBNIR_25cm.txt --no-of-samples 3
+python3 -m dataset.creator ${TREEMORT_REPO_PATH}/configs/data/finland.txt --no-of-samples 3
 
 - For Puhti
 

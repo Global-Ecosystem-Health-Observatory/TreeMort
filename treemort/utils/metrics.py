@@ -153,11 +153,12 @@ def proximity_metrics(pred_centroid_map, true_centroid_map, buffer_mask=None,
 
 
 def apply_activation(logits, activation="sigmoid"):
-    if activation == "tanh":
-        probs = torch.tanh(logits)
-    elif activation == "sigmoid":
-        probs = torch.sigmoid(logits)
-    else:
+    activations = {
+        "tanh": torch.tanh,
+        "sigmoid": torch.sigmoid
+    }
+
+    if activation not in activations:
         raise ValueError(f"Unsupported activation type: {activation}")
 
-    return probs
+    return activations[activation](logits)
