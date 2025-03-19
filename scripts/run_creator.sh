@@ -13,7 +13,7 @@
 # export TREEMORT_VENV_PATH="/custom/path/to/venv"
 # sbatch --export=ALL,CONFIG_PATH="/custom/path/to/config" run_creator.sh
 
-MODULE_NAME="pytorch/2.3"
+MODULE_NAME="pytorch/2.5"
 
 TREEMORT_VENV_PATH="${TREEMORT_VENV_PATH:-/projappl/project_2004205/rahmanan/venv}"
 

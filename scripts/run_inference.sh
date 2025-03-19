@@ -21,7 +21,7 @@
 #   OUTPUT_PATH="/custom/path/to/output" \
 #   run_inference.sh
 
-MODULE_NAME="pytorch/2.3"
+MODULE_NAME="pytorch/2.5"
 module load $MODULE_NAME
 
 TREEMORT_VENV_PATH="${TREEMORT_VENV_PATH:-/projappl/project_2004205/rahmanan/venv}"

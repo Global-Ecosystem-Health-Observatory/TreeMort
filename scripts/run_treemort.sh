@@ -46,7 +46,7 @@ fi
 # Add the rest of the script
 cat <<EOT >> $SBATCH_SCRIPT
 
-MODULE_NAME="pytorch/2.3"
+MODULE_NAME="pytorch/2.5"
 
 echo "Loading module: \$MODULE_NAME"
 module load \$MODULE_NAME
