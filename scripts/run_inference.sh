@@ -8,16 +8,12 @@ if [ "$HPC_TYPE" == "lumi" ]; then
     PROJECT_NAME="project_462000684"
     PARTITION_NAME="small-g"
     MODULE_NAME="pytorch/2.5"
-    VENV_PATH="/projappl/project_462000684/rahmanan/venv"
-    TREEMORT_REPO_PATH="/users/rahmanan/TreeMort"
     MODULE_USE_CMD="module use /appl/local/csc/modulefiles/"
     GPU_DIRECTIVE="#SBATCH --gpus-per-node=1"
 else
     PROJECT_NAME="project_2004205"
     PARTITION_NAME="gpu"
     MODULE_NAME="pytorch/2.5"
-    VENV_PATH="/projappl/project_2004205/rahmanan/venv"
-    TREEMORT_REPO_PATH="/users/rahmanan/TreeMort"
     MODULE_USE_CMD=""
     GPU_DIRECTIVE="#SBATCH --gres=gpu:v100:1"
 fi
@@ -43,11 +39,11 @@ $MODULE_USE_CMD
 echo "Loading module: $MODULE_NAME"
 module load $MODULE_NAME
 
-if [ -d "$VENV_PATH" ]; then
-    echo "[INFO] Activating virtual environment at $VENV_PATH"
-    source "$VENV_PATH/bin/activate"
+if [ -d "$TREEMORT_VENV_PATH" ]; then
+    echo "[INFO] Activating virtual environment at $TREEMORT_VENV_PATH"
+    source "$TREEMORT_VENV_PATH/bin/activate"
 else
-    echo "[ERROR] Virtual environment not found at $VENV_PATH"
+    echo "[ERROR] Virtual environment not found at $TREEMORT_VENV_PATH"
     exit 1
 fi
 

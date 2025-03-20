@@ -219,8 +219,10 @@ Usage: ./submit_inference.sh <hpc_type> <model config file> <data config file> [
 
 Examples:
 
-(sans post-processing) sh ./scripts/submit_inference.sh lumi flair_unet finland
-(with post-processing) sh ./scripts/submit_inference.sh lumi flair_unet finland --post-process
+export TREEMORT_REPO_PATH="/users/rahmanan/TreeMort"
+
+(sans post-processing) sh $TREEMORT_REPO_PATH/scripts/submit_inference.sh lumi flair_unet finland
+(with post-processing) sh $TREEMORT_REPO_PATH/scripts/submit_inference.sh lumi flair_unet finland --post-process
 
 '''
 
