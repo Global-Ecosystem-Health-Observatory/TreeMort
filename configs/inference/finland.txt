@@ -2,7 +2,7 @@
 
 include = base_config.txt
 
-best-model = best.weights.finland.pth
+best-model = best.weights.pth
 
 min-area = 1.0            # Smaller canopies typical of boreal species in sq. m
 max-aspect-ratio = 3.0    # Compact shapes expected for Finnish tree canopies
