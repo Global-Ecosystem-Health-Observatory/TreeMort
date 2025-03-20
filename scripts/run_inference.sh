@@ -8,8 +8,8 @@ if [ "$HPC_TYPE" == "lumi" ]; then
     PROJECT_NAME="project_462000684"
     PARTITION_NAME="small-g"
     MODULE_NAME="pytorch/2.5"
-    VENV_PATH="/appl/project_462000684/venv"
-    # TREEMORT_REPO_PATH="/appl/project_462000684/TreeMort"
+    VENV_PATH="/projappl/project_462000684/rahmanan/venv"
+    TREEMORT_REPO_PATH="/users/rahmanan/TreeMort"
     MODULE_USE_CMD="module use /appl/local/csc/modulefiles/"
     GPU_DIRECTIVE="#SBATCH --gpus-per-node=1"
 else
@@ -43,13 +43,13 @@ $MODULE_USE_CMD
 echo "Loading module: $MODULE_NAME"
 module load $MODULE_NAME
 
-# if [ -d "$VENV_PATH" ]; then
-#     echo "[INFO] Activating virtual environment at $VENV_PATH"
-#     source "$VENV_PATH/bin/activate"
-# else
-#     echo "[ERROR] Virtual environment not found at $VENV_PATH"
-#     exit 1
-# fi
+if [ -d "$VENV_PATH" ]; then
+    echo "[INFO] Activating virtual environment at $VENV_PATH"
+    source "$VENV_PATH/bin/activate"
+else
+    echo "[ERROR] Virtual environment not found at $VENV_PATH"
+    exit 1
+fi
 
 ENGINE_PATH="${TREEMORT_REPO_PATH}/inference/engine.py"
 
@@ -89,8 +89,11 @@ fi
 POST_PROCESS=""
 
 while [[ "$#" -gt 0 ]]; do
+    if [ -z "$1" ]; then
+        break
+    fi
     case $1 in
-        --post-process) POST_PROCESS="--post-process"; shift ;;
+        --post-process) POST_PROCESS="--post-process" ;;
         *) echo "[ERROR] Unknown parameter passed: $1"; exit 1 ;;
     esac
     shift
@@ -101,9 +104,7 @@ if [ -n "$POST_PROCESS" ]; then
 fi
 
 echo "[INFO] Starting inference..."
-echo srun python3 "$ENGINE_PATH" "$DATA_PATH" --config "$CONFIG_PATH" --model-config "$MODEL_CONFIG_PATH" --data-config "$DATA_CONFIG_PATH" --outdir "$OUTPUT_PATH" $POST_PROCESS
-
-echo $POST_PROCESS
+srun python3 "$ENGINE_PATH" "$DATA_PATH" --config "$CONFIG_PATH" --model-config "$MODEL_CONFIG_PATH" --data-config "$DATA_CONFIG_PATH" --outdir "$OUTPUT_PATH" $POST_PROCESS
 
 EXIT_STATUS=$?
 if [ $EXIT_STATUS -ne 0 ]; then
@@ -115,8 +116,8 @@ fi
 exit $EXIT_STATUS
 EOT
 
-# echo "Generated SBATCH script:"
-# cat $SBATCH_SCRIPT
+echo "Generated SBATCH script:"
+cat $SBATCH_SCRIPT
 
 # Submit SLURM Job
-bash $SBATCH_SCRIPT
+bash $SBATCH_SCRIPT "$@"

@@ -213,63 +213,14 @@ python -m inference.engine \
     --data-config ${TREEMORT_REPO_PATH}/configs/data/finland.txt \
     --outdir ${TREEMORT_DATA_PATH}/Finland/Predictions
 
-'''
-
-''' Usage: Puhti
-
-- Env variables
-
-export TREEMORT_VENV_PATH="/projappl/project_2004205/rahmanan/venv"
-export TREEMORT_REPO_PATH="/users/rahmanan/TreeMort"
-export TREEMORT_DATA_PATH="/scratch/project_2008436/rahmanan/dead_trees"
-
-- Working directory
-
-
 2) HPC
 
-Usage:
+Usage: ./submit_inference.sh <hpc_type> <model config file> <data config file> [--post-process]
 
-HPC_TYPE="lumi" CONFIG_PATH="/path/to/config.txt" \
-MODEL_CONFIG_PATH="/path/to/model_config.txt" \
-DATA_CONFIG_PATH="/path/to/data_config.txt" \
-DATA_PATH="/path/to/data" \
-OUTPUT_PATH="/path/to/output" \
-sh /path/to/run_inference.sh --post-process
+Examples:
 
-Example (puhti):
-
-HPC_TYPE="lumi" CONFIG_PATH="$TREEMORT_REPO_PATH/configs/inference/finland.txt" \
-MODEL_CONFIG_PATH="$TREEMORT_REPO_PATH/configs/model/flair_unet.txt" \
-DATA_CONFIG_PATH="$TREEMORT_REPO_PATH/configs/data/finland.txt" \
-DATA_PATH="$TREEMORT_DATA_PATH/Finland/RGBNIR/25cm" \
-OUTPUT_PATH="$TREEMORT_DATA_PATH/Finland/Predictions" \
-sh $TREEMORT_REPO_PATH/scripts/run_inference.sh --post-process
-
-export TREEMORT_VENV_PATH="/projappl/project_2004205/rahmanan/venv"
-export TREEMORT_REPO_PATH="/users/rahmanan/TreeMort"
-
-(Train) sh $TREEMORT_REPO_PATH/scripts/run_treemort.sh puhti $TREEMORT_REPO_PATH/configs/inference/finland.txt --model-config $TREEMORT_REPO_PATH/configs/model/flair_unet.txt --data-config $TREEMORT_REPO_PATH/configs/data/finland.txt --eval-only false
-(Test)  sh $TREEMORT_REPO_PATH/scripts/run_treemort.sh puhti $TREEMORT_REPO_PATH/configs/model/flair_unet.txt --data-config $TREEMORT_REPO_PATH/configs/data/finland.txt --eval-only true
-
-
-cd /scratch/project_2008436/rahmanan
-
-sbatch \
-    --export=ALL,CONFIG_PATH="$TREEMORT_REPO_PATH/configs/inference/finland.txt",\
-    MODEL_CONFIG_PATH="$TREEMORT_REPO_PATH/configs/model/flair_unet.txt",\
-    DATA_CONFIG_PATH="$TREEMORT_REPO_PATH/configs/data/finland.txt",\
-    DATA_PATH="$TREEMORT_DATA_PATH/Finland/RGBNIR/25cm",\
-    OUTPUT_PATH="$TREEMORT_DATA_PATH/Finland/Predictions" \
-    $TREEMORT_REPO_PATH/scripts/run_inference.sh
-
-sbatch \
-    --export=ALL,CONFIG_PATH="$TREEMORT_REPO_PATH/configs/inference/finland.txt",\
-    MODEL_CONFIG_PATH="$TREEMORT_REPO_PATH/configs/model/flair_unet.txt",\
-    DATA_CONFIG_PATH="$TREEMORT_REPO_PATH/configs/data/finland.txt",\
-    DATA_PATH="$TREEMORT_DATA_PATH/Finland/RGBNIR/25cm",\
-    OUTPUT_PATH="$TREEMORT_DATA_PATH/Finland/Predictions" \
-    $TREEMORT_REPO_PATH/scripts/run_inference.sh --post-process
+(sans post-processing) sh ./scripts/submit_inference.sh lumi flair_unet finland
+(with post-processing) sh ./scripts/submit_inference.sh lumi flair_unet finland --post-process
 
 '''
 

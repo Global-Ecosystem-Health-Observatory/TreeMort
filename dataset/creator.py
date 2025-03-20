@@ -270,9 +270,10 @@ python3 -m dataset.creator ${TREEMORT_REPO_PATH}/configs/data/finland.txt --no-o
 
 - For Puhti
 
-export TREEMORT_VENV_PATH="/projappl/project_2004205/rahmanan/venv"
-export TREEMORT_REPO_PATH="/users/rahmanan/TreeMort"
+Usage: ./submit_creator.sh <hpc_type> <data config file>
 
-sbatch --export=ALL,CONFIG_PATH="$TREEMORT_REPO_PATH/configs/Finland_RGBNIR_25cm.txt" $TREEMORT_REPO_PATH/scripts/run_creator.sh
+Examples:
+
+sh ./scripts/submit_creator.sh lumi finland
 
 '''
