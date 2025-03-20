@@ -1,40 +1,55 @@
 #!/bin/bash
+
+# Set default HPC type to "puhti"
+HPC_TYPE=${HPC_TYPE:-"puhti"}
+
+# Set HPC-specific variables
+if [ "$HPC_TYPE" == "lumi" ]; then
+    PROJECT_NAME="project_462000684"
+    PARTITION_NAME="small-g"
+    MODULE_NAME="pytorch/2.5"
+    VENV_PATH="/appl/project_462000684/venv"
+    # TREEMORT_REPO_PATH="/appl/project_462000684/TreeMort"
+    MODULE_USE_CMD="module use /appl/local/csc/modulefiles/"
+    GPU_DIRECTIVE="#SBATCH --gpus-per-node=1"
+else
+    PROJECT_NAME="project_2004205"
+    PARTITION_NAME="gpu"
+    MODULE_NAME="pytorch/2.5"
+    VENV_PATH="/projappl/project_2004205/rahmanan/venv"
+    TREEMORT_REPO_PATH="/users/rahmanan/TreeMort"
+    MODULE_USE_CMD=""
+    GPU_DIRECTIVE="#SBATCH --gres=gpu:v100:1"
+fi
+
+# Create SBATCH script
+SBATCH_SCRIPT=$(mktemp)
+
+# SLURM Job Configuration
+cat <<'EOT' > $SBATCH_SCRIPT
+#!/bin/bash
 #SBATCH --job-name=treemort-inference
-#SBATCH --account=project_2004205
+#SBATCH --account=$PROJECT_NAME
 #SBATCH --output=output/stdout/%A_%a.out
 #SBATCH --error=output/stderr/%A_%a.err
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
 #SBATCH --time=05:00:00
-#SBATCH --partition=gpu
+#SBATCH --partition=$PARTITION_NAME
 #SBATCH --mem-per-cpu=24000
-#SBATCH --gres=gpu:v100:1
+$GPU_DIRECTIVE
 
-# Usage:
-# export TREEMORT_VENV_PATH="/custom/path/to/venv"
-# export TREEMORT_REPO_PATH="/custom/path/to/treemort/repo"
-# sbatch \
-#   --export=ALL,CONFIG_PATH="/custom/path/to/config",\
-#   MODEL_CONFIG_PATH="/custom/path/to/config",\
-#   DATA_CONFIG_PATH="/custom/path/to/config",\
-#   DATA_PATH="/custom/path/to/data",\
-#   OUTPUT_PATH="/custom/path/to/output" \
-#   run_inference.sh
-
-MODULE_NAME="pytorch/2.5"
+$MODULE_USE_CMD
+echo "Loading module: $MODULE_NAME"
 module load $MODULE_NAME
 
-TREEMORT_VENV_PATH="${TREEMORT_VENV_PATH:-/projappl/project_2004205/rahmanan/venv}"
-
-if [ -d "$TREEMORT_VENV_PATH" ]; then
-    echo "[INFO] Activating virtual environment at $TREEMORT_VENV_PATH"
-    source "$TREEMORT_VENV_PATH/bin/activate"
-else
-    echo "[ERROR] Virtual environment not found at $TREEMORT_VENV_PATH"
-    exit 1
-fi
-
-TREEMORT_REPO_PATH="${TREEMORT_REPO_PATH:-/users/rahmanan/TreeMort}"
+# if [ -d "$VENV_PATH" ]; then
+#     echo "[INFO] Activating virtual environment at $VENV_PATH"
+#     source "$VENV_PATH/bin/activate"
+# else
+#     echo "[ERROR] Virtual environment not found at $VENV_PATH"
+#     exit 1
+# fi
 
 ENGINE_PATH="${TREEMORT_REPO_PATH}/inference/engine.py"
 
@@ -43,54 +58,32 @@ if [ ! -f "$ENGINE_PATH" ]; then
     exit 1
 fi
 
-if [ -z "$CONFIG_PATH" ]; then
-    echo "[ERROR] CONFIG_PATH variable is not set. Please provide a config path using --export."
+if [ -z "$CONFIG_PATH" ] || [ ! -f "$CONFIG_PATH" ]; then
+    echo "[ERROR] Config file is missing or invalid."
     exit 1
 fi
 
-if [ ! -f "$CONFIG_PATH" ]; then
-    echo "[ERROR] Config file not found at $CONFIG_PATH"
+if [ -z "$MODEL_CONFIG_PATH" ] || [ ! -f "$MODEL_CONFIG_PATH" ]; then
+    echo "[ERROR] Model config file is missing or invalid."
     exit 1
 fi
 
-if [ -z "$MODEL_CONFIG_PATH" ]; then
-    echo "[ERROR] MODEL_CONFIG_PATH variable is not set. Please provide a config path using --export."
+if [ -z "$DATA_CONFIG_PATH" ] || [ ! -f "$DATA_CONFIG_PATH" ]; then
+    echo "[ERROR] Data config file is missing or invalid."
     exit 1
 fi
 
-if [ ! -f "$MODEL_CONFIG_PATH" ]; then
-    echo "[ERROR] Model config file not found at $MODEL_CONFIG_PATH"
-    exit 1
-fi
-
-if [ -z "$DATA_CONFIG_PATH" ]; then
-    echo "[ERROR] DATA_CONFIG_PATH variable is not set. Please provide a config path using --export."
-    exit 1
-fi
-
-if [ ! -f "$DATA_CONFIG_PATH" ]; then
-    echo "[ERROR] Date config file not found at $DATA_CONFIG_PATH"
-    exit 1
-fi
-
-if [ -z "$DATA_PATH" ]; then
-    echo "[ERROR] DATA_PATH variable is not set. Please provide a data path using --export."
+if [ -z "$DATA_PATH" ] || [ ! -d "$DATA_PATH" ]; then
+    echo "[ERROR] Data directory is missing or invalid."
     exit 1
 fi
 
 if [ -z "$OUTPUT_PATH" ]; then
-    echo "[ERROR] OUTPUT_PATH variable is not set. Please provide a data path using --export."
+    echo "[ERROR] Output directory is not set."
     exit 1
-fi
-
-if [ ! -d "$DATA_PATH" ]; then
-    echo "[ERROR] Data directory not found at $DATA_PATH"
-    exit 1
-fi
-
-if [ ! -d "$OUTPUT_PATH" ]; then
+elif [ ! -d "$OUTPUT_PATH" ]; then
     echo "[WARNING] Output directory not found at $OUTPUT_PATH. Creating it now..."
-    mkdir -p "$OUTPUT_PATH" || { echo "[ERROR] Failed to create output directory at $OUTPUT_PATH"; exit 1; }
+    mkdir -p "$OUTPUT_PATH" || { echo "[ERROR] Failed to create output directory."; exit 1; }
 fi
 
 POST_PROCESS=""
@@ -100,23 +93,17 @@ while [[ "$#" -gt 0 ]]; do
         --post-process) POST_PROCESS="--post-process"; shift ;;
         *) echo "[ERROR] Unknown parameter passed: $1"; exit 1 ;;
     esac
+    shift
 done
 
 if [ -n "$POST_PROCESS" ]; then
     echo "[INFO] Post-processing is enabled"
 fi
 
-echo "[INFO] Starting inference with the following settings:"
-echo "       Data path: $DATA_PATH"
-echo "       Output path: $OUTPUT_PATH"
-echo "       Config file: $CONFIG_PATH"
-echo "       Model config file: $MODEL_CONFIG_PATH"
-echo "       Data config file: $DATA_CONFIG_PATH"
-echo "       Inference engine: $ENGINE_PATH"
-echo "       CPUs per task: $SLURM_CPUS_PER_TASK"
-echo "       Memory per CPU: $SLURM_MEM_PER_CPU MB"
+echo "[INFO] Starting inference..."
+echo srun python3 "$ENGINE_PATH" "$DATA_PATH" --config "$CONFIG_PATH" --model-config "$MODEL_CONFIG_PATH" --data-config "$DATA_CONFIG_PATH" --outdir "$OUTPUT_PATH" $POST_PROCESS
 
-srun python3 "$ENGINE_PATH" "$DATA_PATH" --config "$CONFIG_PATH" --model-config "$MODEL_CONFIG_PATH" --data-config "$DATA_CONFIG_PATH" --outdir "$OUTPUT_PATH" $POST_PROCESS
+echo $POST_PROCESS
 
 EXIT_STATUS=$?
 if [ $EXIT_STATUS -ne 0 ]; then
@@ -126,3 +113,10 @@ else
 fi
 
 exit $EXIT_STATUS
+EOT
+
+# echo "Generated SBATCH script:"
+# cat $SBATCH_SCRIPT
+
+# Submit SLURM Job
+bash $SBATCH_SCRIPT

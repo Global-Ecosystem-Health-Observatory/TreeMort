@@ -72,27 +72,34 @@ if __name__ == "__main__":
 
 
 '''
-Usage:
 
-1) Train
+1) Local
 
-python3 -m treemort.main ./configs/model/flair_unet.txt --data-config ./configs/data/finland.txt
+Usage: python3 -m treemort.main <config file> --data-config <data config file> [--eval-only]
 
-2) Evaluate
+Example:
 
-python3 -m treemort.main ./configs/model/flair_unet.txt --data-config ./configs/data/finland.txt --eval-only
+(Train) python3 -m treemort.main $TREEMORT_REPO_PATH/configs/model/flair_unet.txt --data-config $TREEMORT_REPO_PATH/configs/data/finland.txt
+(Test)  python3 -m treemort.main $TREEMORT_REPO_PATH/configs/model/flair_unet.txt --data-config $TREEMORT_REPO_PATH/configs/data/finland.txt --eval-only
 
-- For Puhti
+2) HPC
+
+Usage: ./run_treemort.sh <hpc_type> <config file> --data-config <data config file> [--eval-only true|false] [--test-run true|false]
+
+Example (puhti):
 
 export TREEMORT_VENV_PATH="/projappl/project_2004205/rahmanan/venv"
 export TREEMORT_REPO_PATH="/users/rahmanan/TreeMort"
 
-1) Train
+(Train) sh $TREEMORT_REPO_PATH/scripts/run_treemort.sh puhti $TREEMORT_REPO_PATH/configs/model/flair_unet.txt --data-config $TREEMORT_REPO_PATH/configs/data/finland.txt --eval-only false
+(Test)  sh $TREEMORT_REPO_PATH/scripts/run_treemort.sh puhti $TREEMORT_REPO_PATH/configs/model/flair_unet.txt --data-config $TREEMORT_REPO_PATH/configs/data/finland.txt --eval-only true
 
-sh $TREEMORT_REPO_PATH/scripts/run_treemort.sh $TREEMORT_REPO_PATH/configs/model/flair_unet.txt --data-config $TREEMORT_REPO_PATH/configs/data/finland.txt --eval-only false
+Example (lumi):
 
-2) Evaluate
+export TREEMORT_VENV_PATH="/projappl/project_462000684/rahmanan/venv"
+export TREEMORT_REPO_PATH="/users/rahmanan/TreeMort"
 
-sh $TREEMORT_REPO_PATH/scripts/run_treemort.sh $TREEMORT_REPO_PATH/configs/model/flair_unet.txt --data-config $TREEMORT_REPO_PATH/configs/data/finland.txt --eval-only true
+(Train) sh $TREEMORT_REPO_PATH/scripts/run_treemort.sh lumi $TREEMORT_REPO_PATH/configs/model/flair_unet.txt --data-config $TREEMORT_REPO_PATH/configs/data/finland.txt --eval-only false
+(Test)  sh $TREEMORT_REPO_PATH/scripts/run_treemort.sh lumi $TREEMORT_REPO_PATH/configs/model/flair_unet.txt --data-config $TREEMORT_REPO_PATH/configs/data/finland.txt --eval-only true
 
 '''
