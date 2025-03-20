@@ -47,13 +47,6 @@ else
     exit 1
 fi
 
-ENGINE_PATH="${TREEMORT_REPO_PATH}/inference/engine.py"
-
-if [ ! -f "$ENGINE_PATH" ]; then
-    echo "[ERROR] Inference engine source file not found at $ENGINE_PATH"
-    exit 1
-fi
-
 if [ -z "$CONFIG_PATH" ] || [ ! -f "$CONFIG_PATH" ]; then
     echo "[ERROR] Config file is missing or invalid."
     exit 1
@@ -100,7 +93,7 @@ if [ -n "$POST_PROCESS" ]; then
 fi
 
 echo "[INFO] Starting inference..."
-srun python3 "$ENGINE_PATH" "$DATA_PATH" --config "$CONFIG_PATH" --model-config "$MODEL_CONFIG_PATH" --data-config "$DATA_CONFIG_PATH" --outdir "$OUTPUT_PATH" $POST_PROCESS
+srun python3 "$TREEMORT_REPO_PATH/inference/engine.py" "$DATA_PATH" --config "$CONFIG_PATH" --model-config "$MODEL_CONFIG_PATH" --data-config "$DATA_CONFIG_PATH" --outdir "$OUTPUT_PATH" $POST_PROCESS
 
 EXIT_STATUS=$?
 if [ $EXIT_STATUS -ne 0 ]; then
