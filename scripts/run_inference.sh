@@ -22,7 +22,7 @@ fi
 SBATCH_SCRIPT=$(mktemp)
 
 # SLURM Job Configuration
-cat <<'EOT' > $SBATCH_SCRIPT
+cat <<EOT > $SBATCH_SCRIPT
 #!/bin/bash
 #SBATCH --job-name=treemort-inference
 #SBATCH --account=$PROJECT_NAME
