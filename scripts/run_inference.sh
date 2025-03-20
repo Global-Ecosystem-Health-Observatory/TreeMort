@@ -77,13 +77,13 @@ fi
 
 POST_PROCESS=""
 
-while [[ "$#" -gt 0 ]]; do
-    if [ -z "$1" ]; then
+while [[ "\$#" -gt 0 ]]; do
+    if [ -z "\$1" ]; then
         break
     fi
-    case $1 in
+    case \$1 in
         --post-process) POST_PROCESS="--post-process" ;;
-        *) echo "[ERROR] Unknown parameter passed: $1"; exit 1 ;;
+        *) echo "[ERROR] Unknown parameter passed: \$1"; exit 1 ;;
     esac
     shift
 done
@@ -109,4 +109,4 @@ echo "Generated SBATCH script:"
 cat $SBATCH_SCRIPT
 
 # Submit SLURM Job
-bash $SBATCH_SCRIPT "$@"
+sbatch $SBATCH_SCRIPT "$@"
