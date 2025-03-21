@@ -1,12 +1,16 @@
 import torch
 
+from collections import defaultdict
+
+from treemort.training.output_processing import process_model_output
+
 from treemort.utils.logger import get_logger
-from treemort.utils.metrics import masked_iou, masked_f1, apply_activation
+from treemort.utils.metrics import masked_iou, masked_f1, apply_activation, log_metrics
 
 logger = get_logger(__name__)
 
 
-def evaluator(model, dataloader, num_samples, conf):
+def evaluator(model, dataloader, num_samples, metrics, conf):
     try:
         logger.info("Starting evaluation...")
         
@@ -15,44 +19,39 @@ def evaluator(model, dataloader, num_samples, conf):
         model.eval()
         device = next(model.parameters()).device
         total_processed = 0
+
+        test_metrics = defaultdict(float)
         
         with torch.no_grad():
             for batch_idx, (images, labels) in enumerate(dataloader):
-                if total_processed >= num_samples:
-                    break
+                images, labels = images.to(device), labels.to(device)
                 
-                images = images.to(device)
-                labels = labels.to(device)
-                
-                preds = model(images)
-    
-                for i in range(preds.shape[0]):
-                    if total_processed >= num_samples:
-                        break
-                    
-                    buffer_mask = labels[i, 3, :, :]  # [H, W]
-                    h, w = buffer_mask.shape
+                buffer_mask = labels[:, 3, :, :].unsqueeze(1)  # [B, 1, H, W]
+                _, _, h, w = buffer_mask.shape
 
-                    pred_mask = apply_activation(preds[0, 0], activation=conf.activation) * buffer_mask
-                    true_mask = labels[i, 0] * buffer_mask
-                    
-                    seg_metrics["iou"] += masked_iou(pred_mask, true_mask, buffer_mask, threshold=conf.segment_threshold)
-                    seg_metrics["f1"] += masked_f1(pred_mask, true_mask, buffer_mask, threshold=conf.segment_threshold)
-                    
-                    total_processed += 1
+                logits = process_model_output(model, images, conf.model)
+            
+                target_mask = labels[:, 0, :, :].unsqueeze(1)  # [B, 1, h, w]
+                target_centroid = labels[:, 1, :, :].unsqueeze(1)  # [B, 1, h, w]
+                target_hybrid = labels[:, 2, :, :].unsqueeze(1)  # [B, 1, h, w]
+                targets = torch.cat([
+                    target_mask,        # Channel 0
+                    target_centroid,    # Channel 1
+                    target_hybrid,      # Channel 2
+                    buffer_mask         # Channel 3
+                ], dim=1)  # [B, 4, h, w]
 
-        if total_processed > 0:
-            seg_metrics = {k: v/total_processed for k,v in seg_metrics.items()}
-        else:
-            logger.warning("No samples were processed during evaluation.")
-            seg_metrics = {k: 0.0 for k in seg_metrics.keys()}
+                batch_metrics = metrics(logits, targets)
 
-        logger.info("Segmentation Metrics:")
-        for key, value in seg_metrics.items():
-            logger.info(f"{key}: {value:.3f}")
+                for key, value in batch_metrics.items():
+                    test_metrics[key] += value.item() if torch.is_tensor(value) else value
 
-        logger.info(f"Evaluation completed on {total_processed} samples.")
-        return {"segmentation_metrics": seg_metrics}
+        for key in test_metrics:
+            test_metrics[key] /= len(dataloader)
+
+        log_metrics(test_metrics, "Test")
+
+        return model
 
     except Exception as e:
         logger.error(f"Error during evaluation: {e}")

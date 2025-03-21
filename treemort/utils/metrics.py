@@ -4,6 +4,8 @@ import numpy as np
 from scipy.spatial.distance import cdist
 from scipy.ndimage import maximum_filter
 
+from treemort.utils.logger import get_logger
+
 
 def iou_score(pred_probs, target, threshold=0.5):
     pred = (pred_probs > threshold).float()
@@ -162,3 +164,29 @@ def apply_activation(logits, activation="sigmoid"):
         raise ValueError(f"Unsupported activation type: {activation}")
 
     return activations[activation](logits)
+
+
+def log_metrics(metrics, phase):
+    logger = get_logger()
+
+    seg_metrics = {k:v for k,v in metrics.items() if "segments" in k}
+    logger.info(f"{phase} Segmentation Metrics:")
+    for metric, value in seg_metrics.items():
+        logger.info(f"  {metric.replace('_segments', '').title()}: {value:.4f}")
+
+    cent_metrics = {k:v for k,v in metrics.items() if "points" in k}
+    logger.info(f"{phase} Centroid Metrics:")
+    for metric, value in cent_metrics.items():
+        logger.info(f"  {metric.replace('_points', '').title()}: {value:.4f}")
+
+    inst_metrics = {k:v for k,v in metrics.items() if "instance" in k}
+    if inst_metrics:
+        logger.info(f"{phase} Instance Metrics:")
+        for metric, value in inst_metrics.items():
+            logger.info(f"  {metric.replace('_instance', '').title()}: {value:.4f}")
+
+    prox_metrics = {k:v for k,v in metrics.items() if "proximity" in k}
+    if prox_metrics:
+        logger.info(f"{phase} Proximity Metrics:")
+        for metric, value in prox_metrics.items():
+            logger.info(f"  {metric.title()}: {value:.4f}")

@@ -21,6 +21,7 @@ from skimage.morphology import erosion, disk, remove_small_objects
 from skimage.segmentation import watershed
 
 from treemort.modeling.builder import build_model
+from treemort.training.output_processing import process_model_output
 from treemort.utils.config import validate_path
 from treemort.utils.logger import get_logger, log_and_raise
 from treemort.utils.metrics import apply_activation
@@ -103,6 +104,7 @@ def sliding_window_inference(
     threshold: float = 0.5,
     output_channels: int = 1,
     activation: str = "sigmoid",
+    model_name: str = "test",
 ) -> torch.Tensor:
     _validate_inference_params(window_size, stride, threshold)
 
@@ -114,7 +116,7 @@ def sliding_window_inference(
 
     for batch in _batch_patches(patches, coords, batch_size):
         prediction_map, count_map = _process_batch(
-            batch["patches"], batch["coords"], prediction_map, count_map, model, threshold, activation, device
+            batch["patches"], batch["coords"], prediction_map, count_map, model, threshold, activation, model_name, device
         )
 
     return _finalize_prediction(prediction_map, count_map, image.shape, threshold)
@@ -181,13 +183,14 @@ def _process_batch(
     model: torch.nn.Module,
     threshold: float,
     activation: str,
+    model_name: str,
     device: torch.device,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     logger = get_logger()
 
     _validate_batch_inputs(patches, coords, threshold)
 
-    predictions = _infer_patches(patches, model, activation, device)
+    predictions = _infer_patches(patches, model, activation, model_name, device)
 
     for i, (y, x) in enumerate(coords):
         binary_confidence = predictions[i, 0]
@@ -206,13 +209,13 @@ def _validate_batch_inputs(patches: list[torch.Tensor], coords: list[tuple[int, 
         log_and_raise(logger, ValueError("Threshold must be between 0 and 1."))
 
 
-def _infer_patches(patches: list[torch.Tensor], model: torch.nn.Module, activation: str, device: torch.device) -> torch.Tensor:
+def _infer_patches(patches: list[torch.Tensor], model: torch.nn.Module, activation: str, model_name: str, device: torch.device) -> torch.Tensor:
     batch_tensor = torch.stack(patches).to(device)
     
     with torch.no_grad():
-        outputs = model(batch_tensor)
-        predictions = apply_activation(outputs[:, 0:1, ...], activation=activation)
-        
+        logits = process_model_output(model, batch_tensor, model_name)
+        predictions = apply_activation(logits[:, 0:1, ...], activation=activation)
+
     return predictions
 
 
