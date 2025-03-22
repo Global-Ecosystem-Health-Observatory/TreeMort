@@ -22,6 +22,8 @@ from inference.utils import (
     save_geojson,
 )
 
+os.environ["TRANSFORMERS_CACHE"] = "/tmp/huggingface_cache"
+
 
 def process_image(
     model: torch.nn.Module,
