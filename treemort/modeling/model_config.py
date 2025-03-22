@@ -95,10 +95,9 @@ def configure_detr(conf, id2label):
 
 
 def configure_beit(conf, id2label):
-    # Assume conf.cache_dir is defined; otherwise, you could use:
-    cache_dir = os.environ.get("TRANSFORMERS_CACHE")
-    cache_dir = conf.cache_dir if hasattr(conf, 'cache_dir') else None
-
+    # Use conf.cache_dir if defined; otherwise, fall back to TRANSFORMERS_CACHE
+    cache_dir = conf.cache_dir if hasattr(conf, 'cache_dir') and conf.cache_dir is not None else os.environ.get("TRANSFORMERS_CACHE")
+    
     config = BeitConfig.from_pretrained(
         conf.backbone,
         num_labels=len(id2label),
