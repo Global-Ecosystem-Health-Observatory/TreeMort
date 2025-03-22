@@ -95,9 +95,15 @@ if [ -n "$POST_PROCESS" ]; then
     echo "[INFO] Post-processing is enabled"
 fi
 
-echo "[INFO] Pre-downloading the model..."
+echo "[INFO] Pre-downloading Beit and Maskformer models..."
 rm -rf "$TREEMORT_DATA_PATH/huggingface_cache/microsoft/beit-base-finetuned-ade-640-640"
 python3 -c "from transformers import AutoModel; AutoModel.from_pretrained('microsoft/beit-base-finetuned-ade-640-640', cache_dir='$TREEMORT_DATA_PATH/huggingface_cache')"
+
+rm -rf "$TREEMORT_DATA_PATH/huggingface_cache/facebook/maskformer-swin-base-ade"
+python3 -c "from transformers import AutoModel; AutoModel.from_pretrained('facebook/maskformer-swin-base-ade', cache_dir='$TREEMORT_DATA_PATH/huggingface_cache')"
+
+rm -rf "$TREEMORT_DATA_PATH/huggingface_cache/facebook/detr-resnet-50-panoptic"
+python3 -c "from transformers import AutoModel; AutoModel.from_pretrained('facebook/detr-resnet-50-panoptic', cache_dir='$TREEMORT_DATA_PATH/huggingface_cache')"
 
 echo "[INFO] Starting inference..."
 srun python3 "$TREEMORT_REPO_PATH/inference/engine.py" "$DATA_PATH" --config "$CONFIG_PATH" --model-config "$MODEL_CONFIG_PATH" --data-config "$DATA_CONFIG_PATH" --outdir "$OUTPUT_PATH" $POST_PROCESS

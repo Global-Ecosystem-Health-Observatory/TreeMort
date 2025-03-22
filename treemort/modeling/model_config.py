@@ -3,8 +3,8 @@ import os
 import segmentation_models_pytorch as smp
 
 from transformers import (
-    MaskFormerConfig, 
-    DetrConfig, 
+    MaskFormerConfig,
+    DetrConfig,
     BeitConfig,
     MaskFormerForInstanceSegmentation,
     DetrForSegmentation,
@@ -48,43 +48,101 @@ def configure_model(conf, id2label):
 
 
 def configure_unet(conf):
-    model = smp.Unet(encoder_name="resnet34", in_channels=conf.input_channels, classes=conf.output_channels, activation=None,)
+    model = smp.Unet(
+        encoder_name="resnet34",
+        in_channels=conf.input_channels,
+        classes=conf.output_channels,
+        activation=None,
+    )
     return model
 
 
 def configure_sa_unet(conf):
-    model = SelfAttentionUNet(in_channels=conf.input_channels, n_classes=conf.output_channels, depth=4, wf=6, batch_norm=True,)
+    model = SelfAttentionUNet(
+        in_channels=conf.input_channels,
+        n_classes=conf.output_channels,
+        depth=4,
+        wf=6,
+        batch_norm=True,
+    )
     return model
 
 
 def configure_sa_unet_multiscale(conf):
-    model = MultiScaleAttentionUNet(in_channels=conf.input_channels, n_classes=conf.output_channels, depth=4, wf=6, batch_norm=True,)
+    model = MultiScaleAttentionUNet(
+        in_channels=conf.input_channels,
+        n_classes=conf.output_channels,
+        depth=4,
+        wf=6,
+        batch_norm=True,
+    )
     return model
 
 
 def configure_deeplabv3_plus(conf):
-    model = smp.DeepLabV3Plus(encoder_name="resnet50", in_channels=conf.input_channels, encoder_weights="imagenet",)
+    model = smp.DeepLabV3Plus(
+        encoder_name="resnet50",
+        in_channels=conf.input_channels,
+        encoder_weights="imagenet",
+    )
     return model
 
 
 def configure_dinov2(conf, id2label):
-    model = Dinov2ForSemanticSegmentation.from_pretrained(conf.backbone, id2label=id2label, num_labels=len(id2label),)
+    model = Dinov2ForSemanticSegmentation.from_pretrained(
+        conf.backbone,
+        id2label=id2label,
+        num_labels=len(id2label),
+    )
     return model
 
 
 def configure_maskformer(conf, id2label):
-    config = MaskFormerConfig.from_pretrained(conf.backbone, num_labels=len(id2label), id2label=id2label, ignore_mismatched_sizes=True,)
+    cache_dir = (
+        conf.cache_dir
+        if hasattr(conf, 'cache_dir') and conf.cache_dir is not None
+        else os.environ.get("TRANSFORMERS_CACHE")
+    )
+
+    config = MaskFormerConfig.from_pretrained(
+        conf.backbone,
+        num_labels=len(id2label),
+        id2label=id2label,
+        ignore_mismatched_sizes=True,
+        cache_dir=cache_dir,
+    )
     model = CustomMaskFormer(config)
-    pretrained_model = MaskFormerForInstanceSegmentation.from_pretrained(conf.backbone)
+    pretrained_model = MaskFormerForInstanceSegmentation.from_pretrained(
+        conf.backbone, cache_dir=cache_dir, local_files_only=True
+    )
     model.model.load_state_dict(pretrained_model.model.state_dict(), strict=False)
     return model
 
 
 def configure_detr(conf, id2label):
-    config = DetrConfig.from_pretrained(conf.backbone, num_labels=len(id2label), id2label=id2label, ignore_mismatched_sizes=True,)
+    cache_dir = (
+        conf.cache_dir
+        if hasattr(conf, 'cache_dir') and conf.cache_dir is not None
+        else os.environ.get("TRANSFORMERS_CACHE")
+    )
+
+    config = DetrConfig.from_pretrained(
+        conf.backbone,
+        num_labels=len(id2label),
+        id2label=id2label,
+        ignore_mismatched_sizes=True,
+        cache_dir=cache_dir,
+    )
     model = CustomDetr(config)
-    
-    pretrained_model = DetrForSegmentation.from_pretrained(conf.backbone, num_labels=len(id2label), id2label=id2label, ignore_mismatched_sizes=True,)
+
+    pretrained_model = DetrForSegmentation.from_pretrained(
+        conf.backbone,
+        num_labels=len(id2label),
+        id2label=id2label,
+        ignore_mismatched_sizes=True,
+        cache_dir=cache_dir,
+        local_files_only=True,
+    )
 
     state_dict = pretrained_model.detr.state_dict()
     del state_dict["class_labels_classifier.weight"]
@@ -96,20 +154,18 @@ def configure_detr(conf, id2label):
 
 def configure_beit(conf, id2label):
     # Use conf.cache_dir if defined; otherwise, fall back to TRANSFORMERS_CACHE
-    cache_dir = conf.cache_dir if hasattr(conf, 'cache_dir') and conf.cache_dir is not None else os.environ.get("TRANSFORMERS_CACHE")
-    
+    cache_dir = (
+        conf.cache_dir
+        if hasattr(conf, 'cache_dir') and conf.cache_dir is not None
+        else os.environ.get("TRANSFORMERS_CACHE")
+    )
+
     config = BeitConfig.from_pretrained(
-        conf.backbone,
-        num_labels=len(id2label),
-        id2label=id2label,
-        ignore_mismatched_sizes=True,
-        cache_dir=cache_dir
+        conf.backbone, num_labels=len(id2label), id2label=id2label, ignore_mismatched_sizes=True, cache_dir=cache_dir
     )
     model = CustomBeit(config)
     pretrained_model = BeitForSemanticSegmentation.from_pretrained(
-        conf.backbone,
-        cache_dir=cache_dir,
-        local_files_only=True
+        conf.backbone, cache_dir=cache_dir, local_files_only=True
     )
     model.beit.load_state_dict(pretrained_model.beit.state_dict(), strict=False)
     return model
