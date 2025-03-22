@@ -1,3 +1,5 @@
+import os
+
 import segmentation_models_pytorch as smp
 
 from transformers import (
@@ -94,7 +96,7 @@ def configure_detr(conf, id2label):
 
 def configure_beit(conf, id2label):
     # Assume conf.cache_dir is defined; otherwise, you could use:
-    # cache_dir = os.environ.get("TRANSFORMERS_CACHE")
+    cache_dir = os.environ.get("TRANSFORMERS_CACHE")
     cache_dir = conf.cache_dir if hasattr(conf, 'cache_dir') else None
 
     config = BeitConfig.from_pretrained(
