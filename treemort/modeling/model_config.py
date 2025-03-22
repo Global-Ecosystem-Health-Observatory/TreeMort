@@ -108,7 +108,8 @@ def configure_beit(conf, id2label):
     model = CustomBeit(config)
     pretrained_model = BeitForSemanticSegmentation.from_pretrained(
         conf.backbone,
-        cache_dir=cache_dir
+        cache_dir=cache_dir,
+        local_files_only=True
     )
     model.beit.load_state_dict(pretrained_model.beit.state_dict(), strict=False)
     return model
