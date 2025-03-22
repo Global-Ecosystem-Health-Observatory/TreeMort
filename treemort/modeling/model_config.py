@@ -93,9 +93,22 @@ def configure_detr(conf, id2label):
 
 
 def configure_beit(conf, id2label):
-    config = BeitConfig.from_pretrained(conf.backbone, num_labels=len(id2label), id2label=id2label, ignore_mismatched_sizes=True,)
+    # Assume conf.cache_dir is defined; otherwise, you could use:
+    # cache_dir = os.environ.get("TRANSFORMERS_CACHE")
+    cache_dir = conf.cache_dir if hasattr(conf, 'cache_dir') else None
+
+    config = BeitConfig.from_pretrained(
+        conf.backbone,
+        num_labels=len(id2label),
+        id2label=id2label,
+        ignore_mismatched_sizes=True,
+        cache_dir=cache_dir
+    )
     model = CustomBeit(config)
-    pretrained_model = BeitForSemanticSegmentation.from_pretrained(conf.backbone)
+    pretrained_model = BeitForSemanticSegmentation.from_pretrained(
+        conf.backbone,
+        cache_dir=cache_dir
+    )
     model.beit.load_state_dict(pretrained_model.beit.state_dict(), strict=False)
     return model
 
