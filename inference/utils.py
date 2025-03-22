@@ -104,6 +104,7 @@ def sliding_window_inference(
     threshold: float = 0.5,
     output_channels: int = 1,
     activation: str = "sigmoid",
+    crop_size: int = 256,
     model_name: str = "test",
 ) -> torch.Tensor:
     _validate_inference_params(window_size, stride, threshold)
@@ -116,7 +117,7 @@ def sliding_window_inference(
 
     for batch in _batch_patches(patches, coords, batch_size):
         prediction_map, count_map = _process_batch(
-            batch["patches"], batch["coords"], prediction_map, count_map, model, threshold, activation, model_name, device
+            batch["patches"], batch["coords"], prediction_map, count_map, model, threshold, activation, crop_size, model_name, device
         )
 
     return _finalize_prediction(prediction_map, count_map, image.shape, threshold)
@@ -183,18 +184,24 @@ def _process_batch(
     model: torch.nn.Module,
     threshold: float,
     activation: str,
+    crop_size: int,
     model_name: str,
     device: torch.device,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     logger = get_logger()
 
+    original_patch_size = patches[0].shape[1]
+
     _validate_batch_inputs(patches, coords, threshold)
 
-    predictions = _infer_patches(patches, model, activation, model_name, device)
+    transformed_patches = [_center_crop_or_pad(patch, crop_size) for patch in patches]
+
+    predictions = _infer_patches(transformed_patches, model, activation, model_name, device)
+
+    cropped_predictions = [_center_crop_or_pad(pred, original_patch_size) for pred in predictions]
 
     for i, (y, x) in enumerate(coords):
-        binary_confidence = predictions[i, 0]
-
+        binary_confidence = cropped_predictions[i][0]
         _update_maps(prediction_map, count_map, binary_confidence, threshold, y, x)
 
     return prediction_map, count_map
@@ -207,6 +214,24 @@ def _validate_batch_inputs(patches: list[torch.Tensor], coords: list[tuple[int, 
         log_and_raise(logger, ValueError("Patches and coordinates cannot be empty."))
     if not (0 <= threshold <= 1):
         log_and_raise(logger, ValueError("Threshold must be between 0 and 1."))
+
+
+def _center_crop_or_pad(image: torch.Tensor, target_size: int) -> torch.Tensor:
+    C, h, w = image.shape
+    pad_h = max(target_size - h, 0)
+    pad_w = max(target_size - w, 0)
+    pad_top = pad_h // 2
+    pad_bottom = pad_h - pad_top
+    pad_left = pad_w // 2
+    pad_right = pad_w - pad_left
+    if pad_h > 0 or pad_w > 0:
+        image = torch.nn.functional.pad(image, (pad_left, pad_right, pad_top, pad_bottom), mode='constant', value=0)
+    _, h_new, w_new = image.shape
+    if h_new > target_size or w_new > target_size:
+        crop_top = (h_new - target_size) // 2
+        crop_left = (w_new - target_size) // 2
+        image = image[:, crop_top:crop_top+target_size, crop_left:crop_left+target_size]
+    return image
 
 
 def _infer_patches(patches: list[torch.Tensor], model: torch.nn.Module, activation: str, model_name: str, device: torch.device) -> torch.Tensor:

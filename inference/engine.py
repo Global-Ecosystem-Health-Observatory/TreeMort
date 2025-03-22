@@ -45,6 +45,7 @@ def process_image(
             threshold=conf.segment_threshold,
             output_channels=conf.output_channels,
             activation=conf.activation,
+            crop_size=conf.test_crop_size,
             model_name=conf.model,
         )
         segment_map = prediction_maps[0]
