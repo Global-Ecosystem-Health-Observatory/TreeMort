@@ -30,9 +30,12 @@ def configure_model(conf, id2label):
     model_choices = {
         "unet": lambda: configure_unet(conf),
         "unetplusplus": lambda: configure_unetplusplus(conf),
+        "fpn": lambda: configure_fpn(conf),
+        "pspnet": lambda: configure_pspnet(conf),
         "sa_unet": lambda: configure_sa_unet(conf),
         "sa_unet_multiscale": lambda: configure_sa_unet_multiscale(conf),
-        "deeplabv3+": lambda: configure_deeplabv3_plus(conf),
+        "deeplabv3": lambda: configure_deeplabv3(conf),
+        "deeplabv3plus": lambda: configure_deeplabv3_plus(conf),
         "dinov2": lambda: configure_dinov2(conf, id2label),
         "maskformer": lambda: configure_maskformer(conf, id2label),
         "detr": lambda: configure_detr(conf, id2label),
@@ -70,6 +73,17 @@ def configure_unetplusplus(conf):
     return model
 
 
+def configure_fpn(conf):
+    model = smp.FPN(
+        encoder_name=conf.backbone,
+        encoder_weights='imagenet',
+        in_channels=conf.input_channels,
+        classes=conf.output_channels,
+        activation=None,
+    )
+    return model
+
+
 def configure_sa_unet(conf):
     model = SelfAttentionUNet(
         in_channels=conf.input_channels,
@@ -92,11 +106,35 @@ def configure_sa_unet_multiscale(conf):
     return model
 
 
+def configure_deeplabv3(conf):
+    model = smp.DeepLabV3(
+        encoder_name=conf.backbone,
+        encoder_weights='imagenet',
+        in_channels=conf.input_channels,
+        classes=conf.output_channels,
+        activation=None,
+    )
+    return model
+
+
 def configure_deeplabv3_plus(conf):
     model = smp.DeepLabV3Plus(
-        encoder_name="resnet50",
+        encoder_name=conf.backbone,
+        encoder_weights='imagenet',
         in_channels=conf.input_channels,
-        encoder_weights="imagenet",
+        classes=conf.output_channels,
+        activation=None,
+    )
+    return model
+
+
+def configure_pspnet(conf):
+    model = smp.PSPNet(
+        encoder_name=conf.backbone,
+        encoder_weights='imagenet',
+        in_channels=conf.input_channels,
+        classes=conf.output_channels,
+        activation=None,
     )
     return model
 

@@ -2,7 +2,7 @@
 
 include = base_config.txt
 
-model = deeplabv3plus
+model = deeplabv3+
 
 backbone = efficientnet-b7
 

@@ -1,8 +1,8 @@
-# settings for deeplabv3+
+# settings for FPN
 
 include = base_config.txt
 
-model = deeplabv3plus
+model = fpn
 
 backbone = efficientnet-b7
 
