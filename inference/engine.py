@@ -228,15 +228,17 @@ export TREEMORT_REPO_PATH="/users/rahmanan/TreeMort"
 
 '''
 
-''' Data: Puhti
+''' Data:
 
 - Download geojsons
 
-scp -O -r rahmanan@puhti.csc.fi:/scratch/project_2008436/rahmanan/dead_trees/Finland/Predictions ~/Documents/dead_trees/Finland
+(puhti) scp -O -r rahmanan@puhti.csc.fi:/scratch/project_2008436/rahmanan/dead_trees/Finland/Predictions ~/Documents/dead_trees/Finland
+(lumi)  scp -O -r rahmanan@lumi.csc.fi:/scratch/project_462000684/rahmanan/dead_trees/Finland/Predictions ~/Documents/dead_trees/Finland
 
 - Download model
 
-scp -O -r rahmanan@puhti.csc.fi:/scratch/project_2008436/rahmanan/output/flair_unet output
+(puhti) scp -O -r rahmanan@puhti.csc.fi:/scratch/project_2008436/rahmanan/output/flair_unet output
+(lumi)  scp -O -r rahmanan@lumi.csc.fi:/scratch/project_2008436/rahmanan/output/flair_unet output
 
 '''
 

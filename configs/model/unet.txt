@@ -4,4 +4,6 @@ include = base_config.txt
 
 model = unet
 
+backbone = efficientnet-b7
+
 resume = True
