@@ -29,7 +29,7 @@ logger = get_logger(__name__)
 def configure_model(conf, id2label):
     model_choices = {
         "unet": lambda: configure_unet(conf),
-        "unetplusplus": lambda: configure_unet(conf),
+        "unetplusplus": lambda: configure_unetplusplus(conf),
         "sa_unet": lambda: configure_sa_unet(conf),
         "sa_unet_multiscale": lambda: configure_sa_unet_multiscale(conf),
         "deeplabv3+": lambda: configure_deeplabv3_plus(conf),
@@ -59,7 +59,7 @@ def configure_unet(conf):
     return model
 
 
-def configure_unet(conf):
+def configure_unetplusplus(conf):
     model = smp.UnetPlusPlus(
         encoder_name=conf.backbone,
         encoder_weights='imagenet',

@@ -84,22 +84,13 @@ Example:
 
 2) HPC
 
-Usage: ./run_treemort.sh <hpc_type> <config file> --data-config <data config file> [--eval-only true|false] [--test-run true|false]
+Usage: ./submit_treemort.sh <hpc_type> <model config file> <data config file> [--eval-only]
 
-Example (puhti):
+Examples:
 
-export TREEMORT_VENV_PATH="/projappl/project_2004205/rahmanan/venv"
 export TREEMORT_REPO_PATH="/users/rahmanan/TreeMort"
 
-(Train) sh $TREEMORT_REPO_PATH/scripts/run_treemort.sh puhti $TREEMORT_REPO_PATH/configs/model/flair_unet.txt --data-config $TREEMORT_REPO_PATH/configs/data/finland.txt --eval-only false
-(Test)  sh $TREEMORT_REPO_PATH/scripts/run_treemort.sh puhti $TREEMORT_REPO_PATH/configs/model/flair_unet.txt --data-config $TREEMORT_REPO_PATH/configs/data/finland.txt --eval-only true
-
-Example (lumi):
-
-export TREEMORT_VENV_PATH="/projappl/project_462000684/rahmanan/venv"
-export TREEMORT_REPO_PATH="/users/rahmanan/TreeMort"
-
-(Train) sh $TREEMORT_REPO_PATH/scripts/run_treemort.sh lumi $TREEMORT_REPO_PATH/configs/model/flair_unet.txt --data-config $TREEMORT_REPO_PATH/configs/data/finland.txt --eval-only false
-(Test)  sh $TREEMORT_REPO_PATH/scripts/run_treemort.sh lumi $TREEMORT_REPO_PATH/configs/model/flair_unet.txt --data-config $TREEMORT_REPO_PATH/configs/data/finland.txt --eval-only true
+(train) sh $TREEMORT_REPO_PATH/scripts/submit_treemort.sh lumi unet finland
+(test)  sh $TREEMORT_REPO_PATH/scripts/submit_treemort.sh lumi unet finland --eval-only
 
 '''
