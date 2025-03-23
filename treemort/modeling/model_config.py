@@ -35,7 +35,7 @@ def configure_model(conf, id2label):
         "sa_unet": lambda: configure_sa_unet(conf),
         "sa_unet_multiscale": lambda: configure_sa_unet_multiscale(conf),
         "deeplabv3": lambda: configure_deeplabv3(conf),
-        "deeplabv3plus": lambda: configure_deeplabv3_plus(conf),
+        "deeplabv3plus": lambda: configure_deeplabv3plus(conf),
         "dinov2": lambda: configure_dinov2(conf, id2label),
         "maskformer": lambda: configure_maskformer(conf, id2label),
         "detr": lambda: configure_detr(conf, id2label),
@@ -117,7 +117,7 @@ def configure_deeplabv3(conf):
     return model
 
 
-def configure_deeplabv3_plus(conf):
+def configure_deeplabv3plus(conf):
     model = smp.DeepLabV3Plus(
         encoder_name=conf.backbone,
         encoder_weights='imagenet',
