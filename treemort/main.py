@@ -90,7 +90,7 @@ Examples:
 
 export TREEMORT_REPO_PATH="/users/rahmanan/TreeMort"
 
-(train) sh $TREEMORT_REPO_PATH/scripts/submit_treemort.sh lumi unet finland
-(test)  sh $TREEMORT_REPO_PATH/scripts/submit_treemort.sh lumi unet finland --eval-only
+(train) bash $TREEMORT_REPO_PATH/scripts/submit_treemort.sh lumi unet finland
+(test)  bash $TREEMORT_REPO_PATH/scripts/submit_treemort.sh lumi unet finland --eval-only
 
 '''
