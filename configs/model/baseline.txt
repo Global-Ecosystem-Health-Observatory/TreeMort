@@ -1,0 +1,7 @@
+# settings for Unet
+
+include = base_config.txt
+
+model = baseline
+
+resume = True

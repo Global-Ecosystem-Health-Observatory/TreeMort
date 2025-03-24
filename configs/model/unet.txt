@@ -1,4 +1,4 @@
-# settings for Unet
+# settings for Unet with backbone
 
 include = base_config.txt
 

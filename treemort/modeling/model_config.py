@@ -11,6 +11,7 @@ from transformers import (
     BeitForSemanticSegmentation,
 )
 
+from treemort.modeling.network.unet import UNet
 from treemort.modeling.network.sa_unet import SelfAttentionUNet
 from treemort.modeling.network.sa_unet_multiscale import MultiScaleAttentionUNet
 from treemort.modeling.network.dinov2 import Dinov2ForSemanticSegmentation
@@ -28,6 +29,7 @@ logger = get_logger(__name__)
 
 def configure_model(conf, id2label):
     model_choices = {
+        "baseline": lambda: configure_baseline(conf),
         "unet": lambda: configure_unet(conf),
         "unetplusplus": lambda: configure_unetplusplus(conf),
         "fpn": lambda: configure_fpn(conf),
@@ -48,6 +50,14 @@ def configure_model(conf, id2label):
 
     model = model_choices[conf.model]()
     logger.info(f"{conf.model} model configured.")
+    return model
+
+
+def configure_baseline(conf):
+    model = UNet(
+        in_channels=conf.input_channels,
+        n_classes=conf.output_channels,
+    )
     return model
 
 
