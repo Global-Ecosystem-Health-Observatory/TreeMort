@@ -1,11 +1,11 @@
+from tqdm import tqdm
+
 from treemort.training.train_loop import train_one_epoch
 from treemort.training.validation_loop import validate_one_epoch
 from treemort.training.callback_handler import handle_callbacks
 
 from treemort.utils.logger import get_logger
 from treemort.utils.metrics import log_metrics
-
-logger = get_logger(__name__)
 
 
 def trainer(
@@ -19,28 +19,28 @@ def trainer(
     conf,
     callbacks,
 ):
+    logger = get_logger()
+
     device = next(model.parameters()).device
     best_metric = float('inf')
 
-    for epoch in range(conf.epochs):
-        logger.info(f"\nEpoch {epoch+1}/{conf.epochs}")
-        logger.info("-------------------------------")
+    for epoch in tqdm(range(conf.epochs), desc="Epochs", unit="epoch"):
         
         train_loss, train_metrics = train_one_epoch(
             model, optimizer, schedular, criterion, metrics, 
             train_loader, conf, device
         )
 
-        logger.info(f"[Train] Loss: {train_loss:.4f}")
-        log_metrics(train_metrics, "Train")
+        # logger.info(f"[Train] Loss: {train_loss:.4f}")
+        # log_metrics(train_metrics, "Train")
 
         val_loss, val_metrics = validate_one_epoch(
             model, criterion, metrics, 
             val_loader, conf, device
         )
 
-        logger.info(f"[Val] Loss: {val_loss:.4f}")
-        log_metrics(val_metrics, "Val")
+        # logger.info(f"[Val] Loss: {val_loss:.4f}")
+        # log_metrics(val_metrics, "Val")
 
         stop_training = handle_callbacks(
             callbacks,
