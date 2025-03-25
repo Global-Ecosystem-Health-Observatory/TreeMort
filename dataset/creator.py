@@ -260,6 +260,8 @@ if __name__ == "__main__":
 '''
 Usage:
 
+- Local
+
 export TREEMORT_DATA_PATH="/Users/anisr/Documents/dead_trees" 
 
 python3 -m dataset.creator ${TREEMORT_REPO_PATH}/configs/data/finland.txt
@@ -268,7 +270,7 @@ python3 -m dataset.creator ${TREEMORT_REPO_PATH}/configs/data/finland.txt
 
 python3 -m dataset.creator ${TREEMORT_REPO_PATH}/configs/data/finland.txt --no-of-samples 3
 
-- For Puhti
+- HPC
 
 Usage: ./submit_creator.sh <hpc_type> <data config file>
 
