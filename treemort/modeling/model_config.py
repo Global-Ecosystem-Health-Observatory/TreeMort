@@ -57,6 +57,7 @@ def configure_baseline(conf):
     model = UNet(
         in_channels=conf.input_channels,
         n_classes=conf.output_channels,
+        padding=True,
     )
     return model
 
