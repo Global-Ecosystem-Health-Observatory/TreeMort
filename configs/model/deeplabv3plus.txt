@@ -1,0 +1,9 @@
+# settings for deeplabv3+
+
+include = base_config.txt
+
+model = deeplabv3plus
+
+backbone = efficientnet-b7
+
+resume = True

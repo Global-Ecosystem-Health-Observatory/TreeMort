@@ -1,0 +1,9 @@
+# settings for PSPNet
+
+include = base_config.txt
+
+model = pspnet
+
+backbone = efficientnet-b7
+
+resume = True

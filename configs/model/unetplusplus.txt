@@ -1,0 +1,9 @@
+# settings for Unet++
+
+include = base_config.txt
+
+model = unetplusplus
+
+backbone = efficientnet-b7
+
+resume = True

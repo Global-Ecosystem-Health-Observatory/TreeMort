@@ -49,7 +49,7 @@ def test_setup(temp_config_file):
     assert conf.output_dir == "output"
     assert conf.model_weights == "latest"
     assert conf.learning_rate == 2e-4
-    assert conf.threshold == 0.5
+    assert conf.segment_threshold == 0.5
     assert conf.activation == "sigmoid"
     assert conf.loss == "hybrid"
     assert not conf.resume

@@ -9,7 +9,7 @@ set -e
 #
 # sh $TREEMORT_REPO_PATH/scripts/install_treemort.sh
 
-MODULE_NAME="pytorch/2.3"
+MODULE_NAME="pytorch/2.5"
 
 TREEMORT_VENV_PATH="${TREEMORT_VENV_PATH:-/projappl/project_2004205/rahmanan/venv}"
 TREEMORT_REPO_PATH="${TREEMORT_REPO_PATH:-/users/rahmanan/TreeMort}"

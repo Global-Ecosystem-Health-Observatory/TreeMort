@@ -1,0 +1,9 @@
+# settings for FPN
+
+include = base_config.txt
+
+model = fpn
+
+backbone = efficientnet-b7
+
+resume = True

@@ -16,8 +16,40 @@ class DeadTreeDataset(Dataset):
         self.crop_size = crop_size
         self.transform = transform
         self.image_processor = image_processor
+        self._adjust_image_processor_mean_std()
 
-        self._adjust_image_processor_mean_std() # Fix incompatable image mean/std to support four channels
+    def _load_data(self, idx):
+        key = self.keys[idx]
+        with h5py.File(self.hdf5_file, "r") as hf:
+            group = hf[key]
+            
+            image = group['image'][()].astype(np.float32)
+            
+            labels = group['labels']
+            mask = labels['mask'][()]
+            centroid = labels['centroid'][()]
+            hybrid = labels['hybrid'][()]
+            buffer_mask = labels['buffer_mask'][()]
+            
+            label = np.stack([mask, centroid, hybrid, buffer_mask], axis=-1)
+
+        return image, label
+
+    def _preprocess_image_and_label(self, image, label):
+        image = torch.from_numpy(image).permute(2, 0, 1)  # [C, H, W]
+        label = torch.from_numpy(label).permute(2, 0, 1)  # [C, H, W]
+        
+        image = image / 255.0
+
+        image, label = self._center_crop_or_pad(image, label, self.crop_size)
+
+        if self.image_processor:
+            image = apply_image_processor(image, self.image_processor)
+            
+        if self.transform:
+            image, label = self.transform(image, label)
+
+        return image, label
 
     def _adjust_image_processor_mean_std(self):
         if self.image_processor:
@@ -32,34 +64,6 @@ class DeadTreeDataset(Dataset):
     def __getitem__(self, idx):            
         image, label = self._load_data(idx)
         image, label = self._preprocess_image_and_label(image, label)
-
-        return image, label
-
-    def _load_data(self, idx):
-        key = self.keys[idx]
-
-        with h5py.File(self.hdf5_file, "r") as hf:
-            image = hf[key]['image'][()]
-            label = hf[key]['label'][()]
-
-        return image, label
-
-    def _preprocess_image_and_label(self, image, label):
-        image = torch.from_numpy(image.astype(np.float32))
-        label = torch.from_numpy(label.astype(np.float32))
-
-        image = image / 255.0
-
-        image = image.permute(2, 0, 1)  # Convert to (C, H, W) format
-        label = label.unsqueeze(0)  # Convert to (1, H, W) format
-
-        image, label = self._center_crop_or_pad(image, label, self.crop_size)
-
-        if self.image_processor:
-            image, label = apply_image_processor(image, label, self.image_processor)
-
-        if self.transform:
-            image, label = self.transform(image, label)
 
         return image, label
 

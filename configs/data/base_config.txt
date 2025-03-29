@@ -1,0 +1,7 @@
+# Common settings for all data
+
+window-size = 256
+stride = 128
+nir-rgb-order = [3, 0, 1, 2]
+
+normalize-channelwise = True

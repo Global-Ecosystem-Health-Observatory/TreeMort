@@ -1,3 +1,4 @@
+import os
 import torch
 
 from treemort.modeling.model_config import configure_model
@@ -13,20 +14,20 @@ logger = get_logger(__name__)
 def resume_or_load(conf, id2label, n_batches, device):
     logger.info("Building model...")
 
-    model, optimizer, criterion, metrics = build_model(conf, id2label, device)
+    model, optimizer, schedular, criterion, metrics = build_model(conf, id2label, device, total_steps=conf.epochs * n_batches)
 
-    callbacks = build_callbacks(n_batches, conf.output_dir, optimizer)
+    callbacks = build_callbacks(n_batches, os.path.join(conf.output_dir, conf.model), optimizer)
 
     if conf.resume:
         load_checkpoint_if_available(model, conf)
     else:
         logger.info("Training model from scratch.")
 
-    return model, optimizer, criterion, metrics, callbacks
+    return model, optimizer, schedular, criterion, metrics, callbacks
 
 
 def load_checkpoint_if_available(model, conf):
-    checkpoint_path = get_checkpoint(conf.model_weights, conf.output_dir)
+    checkpoint_path = get_checkpoint(conf.model_weights, os.path.join(conf.output_dir, conf.model))
 
     if checkpoint_path:
         device = next(model.parameters()).device  # Get the device of the model
@@ -36,12 +37,12 @@ def load_checkpoint_if_available(model, conf):
         logger.info("No checkpoint found. Training from scratch.")
 
 
-def build_model(conf, id2label, device):
+def build_model(conf, id2label, device, total_steps=1):
     model = configure_model(conf, id2label)
     model.to(device)
     logger.info(f"Model successfully moved to {device}.")
 
-    optimizer = configure_optimizer(model, conf.learning_rate)
+    optimizer, scheduler = configure_optimizer(model, conf.learning_rate, total_steps)
     criterion, metrics = configure_loss_and_metrics(conf)
 
-    return model, optimizer, criterion, metrics
+    return model, optimizer, scheduler, criterion, metrics

@@ -1,14 +1,12 @@
-# settings for dinov2
+# Common settings for all models
 
-data-folder = /scratch/project_2008436/rahmanan/dead_trees/Finland/RGBNIR/25cm
+include = {data_config}
 
-hdf5-file = Finland_RGBNIR_25cm.h5
+data-config = {data_config}
 
-model = dinov2
+output-dir = ./output
 
-backbone = facebook/dinov2-base
-
-output-dir = output/dinov2
+model = test
 
 train-crop-size = 256
 val-crop-size = 256
@@ -29,13 +27,11 @@ model-weights = best # available options [best, latest]
 
 learning-rate = 1e-4
 
-threshold = 0.5
-
-# activation = sigmoid # available options [tanh, sigmoid]
+segment-threshold = 0.5
 
 loss = hybrid # available options [mse, hybrid]
 
+activation = sigmoid
+
 val-size = 0.2
 test-size = 0.1
-
-resume

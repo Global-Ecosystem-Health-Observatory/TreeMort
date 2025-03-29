@@ -1,27 +1,58 @@
-from treemort.utils.iou import IOUCallback
+import torch
+
+from collections import defaultdict
+
+from treemort.training.output_processing import process_model_output
+
 from treemort.utils.logger import get_logger
+from treemort.utils.metrics import masked_iou, masked_f1, apply_activation, log_metrics
 
 logger = get_logger(__name__)
 
 
-def evaluator(model, dataset, num_samples, batch_size, threshold, model_name):
-    iou_callback = IOUCallback(
-        model=model,
-        dataset=dataset,
-        num_samples=num_samples,
-        batch_size=batch_size,
-        threshold=threshold,
-        model_name=model_name,
-    )
+def evaluator(model, dataloader, num_samples, metrics, conf):
+    try:
+        logger.info("Starting evaluation...")
+        
+        seg_metrics = {"iou": 0.0, "f1": 0.0}
+        
+        model.eval()
+        device = next(model.parameters()).device
+        total_processed = 0
 
-    iou_results = iou_callback.evaluate()
+        test_metrics = defaultdict(float)
+        
+        with torch.no_grad():
+            for batch_idx, (images, labels) in enumerate(dataloader):
+                images, labels = images.to(device), labels.to(device)
+                
+                buffer_mask = labels[:, 3, :, :].unsqueeze(1)  # [B, 1, H, W]
+                _, _, h, w = buffer_mask.shape
 
-    logger.info(f"Mean Dice Score: {iou_results['mean_dice_score']:.3f}")
-    logger.info(f"Mean Precision: {iou_results['mean_precision']:.3f}")
-    logger.info(f"Mean Recall: {iou_results['mean_recall']:.3f}")
-    logger.info(f"Mean F2-Score: {iou_results['mean_f2_score']:.3f}")
-    logger.info(f"Mean IOU Pixels: {iou_results['mean_iou_pixels']:.3f}")
-    logger.info(f"Mean IOU Trees: {iou_results['mean_iou_trees']:.3f}")
-    logger.info(f"Mean IOU: {iou_results['mean_iou']:.3f}")
-    logger.info(f"Mean Balanced IOU: {iou_results['mean_balanced_iou']:.3f}")
-    logger.info(f"Mean MCC: {iou_results['mean_mcc']:.3f}")
+                logits = process_model_output(model, images, conf.model)
+            
+                target_mask = labels[:, 0, :, :].unsqueeze(1)  # [B, 1, h, w]
+                target_centroid = labels[:, 1, :, :].unsqueeze(1)  # [B, 1, h, w]
+                target_hybrid = labels[:, 2, :, :].unsqueeze(1)  # [B, 1, h, w]
+                targets = torch.cat([
+                    target_mask,        # Channel 0
+                    target_centroid,    # Channel 1
+                    target_hybrid,      # Channel 2
+                    buffer_mask         # Channel 3
+                ], dim=1)  # [B, 4, h, w]
+
+                batch_metrics = metrics(logits, targets)
+
+                for key, value in batch_metrics.items():
+                    test_metrics[key] += value.item() if torch.is_tensor(value) else value
+
+        for key in test_metrics:
+            test_metrics[key] /= len(dataloader)
+
+        log_metrics(test_metrics, "Test")
+
+        return model
+
+    except Exception as e:
+        logger.error(f"Error during evaluation: {e}")
+        raise

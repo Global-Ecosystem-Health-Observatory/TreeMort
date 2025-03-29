@@ -7,7 +7,7 @@ from treemort.modeling.builder import resume_or_load
 from treemort.training.trainer import trainer
 from treemort.evaluation.evaluator import evaluator
 from treemort.utils.config import setup
-from treemort.utils.logger import get_logger
+from treemort.utils.logger import get_logger, configure_logger
 
 logger = get_logger(__name__)
 
@@ -27,23 +27,16 @@ def run(conf, eval_only):
     logger.info(f"Using device: {device}")
 
     logger.info("Preparing datasets...")
-    train_dataset, val_dataset, test_dataset = prepare_datasets(conf)
-    logger.info(f"Datasets prepared: Train({len(train_dataset)}), Val({len(val_dataset)}), Test({len(test_dataset)})")
+    train_loader, val_loader, test_loader = prepare_datasets(conf)
+    logger.info(f"Datasets prepared: Train({len(train_loader)}), Val({len(val_loader)}), Test({len(test_loader)})")
 
     logger.info("Loading or resuming model...")
-    model, optimizer, criterion, metrics, callbacks = resume_or_load(conf, id2label, len(train_dataset), device)
+    model, optimizer, schedular, criterion, metrics, callbacks = resume_or_load(conf, id2label, len(train_loader), device)
     logger.info("Model, optimizer, criterion, metrics, and callbacks are set up.")
 
     if eval_only:
         logger.info("Evaluation-only mode started.")
-        evaluator(
-            model,
-            dataset=test_dataset,
-            num_samples=len(test_dataset),
-            batch_size=conf.test_batch_size,
-            threshold=conf.threshold,
-            model_name=conf.model,
-        )
+        evaluator(model, test_loader, len(test_loader), metrics, conf)
         logger.info("Evaluation completed.")
 
     else:
@@ -51,10 +44,11 @@ def run(conf, eval_only):
         trainer(
             model,
             optimizer=optimizer,
+            schedular=schedular,
             criterion=criterion,
             metrics=metrics,
-            train_loader=train_dataset,
-            val_loader=val_dataset,
+            train_loader=train_loader,
+            val_loader=val_loader,
             conf=conf,
             callbacks=callbacks,
         )
@@ -63,38 +57,40 @@ def run(conf, eval_only):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Configuration setup for network.")
-    parser.add_argument(     "config", type=str,            help="Path to the configuration file")
-    parser.add_argument("--eval-only", action="store_true", help="If set, only evaluate the model without training",)
-
+    parser.add_argument("config",        type=str, help="Path to the configuration file")
+    parser.add_argument("--data-config", type=str, required=True, help="Path to the additional data configuration file")
+    parser.add_argument('--verbosity',   type=str, default='info', choices=['info', 'debug', 'warning'])
+    parser.add_argument("--eval-only",   action="store_true", help="If set, only evaluate the model without training")
+    
     args = parser.parse_args()
-
-    conf = setup(args.config)
+    
+    _ = configure_logger(verbosity=args.verbosity)
+    
+    conf = setup(args.config, data_config=args.data_config)
 
     run(conf, args.eval_only)
 
 
 '''
-Usage:
 
-1) Train
+1) Local
 
-python3 -m treemort.main ./configs/flair_unet_bs8_cs256.txt
+Usage: python3 -m treemort.main <config file> --data-config <data config file> [--eval-only]
 
-2) Evaluate
+Example:
 
-python3 -m treemort.main ./configs/flair_unet_bs8_cs256.txt --eval-only
+(Train) python3 -m treemort.main $TREEMORT_REPO_PATH/configs/model/flair_unet.txt --data-config $TREEMORT_REPO_PATH/configs/data/finland.txt
+(Test)  python3 -m treemort.main $TREEMORT_REPO_PATH/configs/model/flair_unet.txt --data-config $TREEMORT_REPO_PATH/configs/data/finland.txt --eval-only
 
-- For Puhti
+2) HPC
 
-export TREEMORT_VENV_PATH="/projappl/project_2004205/rahmanan/venv"
+Usage: ./submit_treemort.sh <hpc_type> <model config file> <data config file> [--eval-only]
+
+Examples:
+
 export TREEMORT_REPO_PATH="/users/rahmanan/TreeMort"
 
-1) Train
-
-sh $TREEMORT_REPO_PATH/scripts/run_treemort.sh $TREEMORT_REPO_PATH/configs/flair_unet_bs8_cs256.txt --eval-only false
-
-2) Evaluate
-
-sh $TREEMORT_REPO_PATH/scripts/run_treemort.sh $TREEMORT_REPO_PATH/configs/flair_unet_bs8_cs256.txt --eval-only true
+(train) bash $TREEMORT_REPO_PATH/scripts/submit_treemort.sh lumi unet finland
+(test)  bash $TREEMORT_REPO_PATH/scripts/submit_treemort.sh lumi unet finland --eval-only
 
 '''

@@ -1,48 +1,93 @@
-import torch
-import torch.nn as nn
-import torch.optim as optim
+import torch.nn.functional as F
 
-from treemort.utils.loss import hybrid_loss, mse_loss, weighted_dice_loss
+from torch.optim import AdamW
+from torch.optim.lr_scheduler import OneCycleLR
+
+from treemort.utils.loss import weighted_dice_loss, hybrid_loss
 from treemort.utils.logger import get_logger
-from treemort.utils.metrics import iou_score, f_score
+from treemort.utils.metrics import masked_iou, masked_f1, apply_activation
 
 logger = get_logger(__name__)
 
 
-def configure_optimizer(model, learning_rate):
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-    logger.info(f"{optimizer.__class__.__name__} optimizer configured with learning rate {learning_rate}.")
-    return optimizer
+def configure_optimizer(model, learning_rate, total_steps):
+    optimizer = AdamW(model.parameters(), lr=learning_rate, weight_decay=1e-4)
+    
+    scheduler = OneCycleLR(
+        optimizer,
+        max_lr=learning_rate,
+        total_steps=total_steps,
+        pct_start=0.3
+    )
+    
+    logger.info(f"Configured {optimizer.__class__.__name__} with OneCycleLR scheduler (max_lr={learning_rate}, total_steps={total_steps}).")
+    return optimizer, scheduler
 
 
-def configure_loss_and_metrics(conf):
-    assert conf.loss in [
-        "mse",
-        "hybrid",
-        "weighted_dice_loss",
-    ], f"[ERROR] Invalid loss function: {conf.loss}."
+def configure_loss_and_metrics(conf, class_weights=None):
+    if conf.loss == "hybrid":
+        def criterion(pred, target):
+            pred_mask = pred[:, 0, :, :]
 
-    if conf.loss == "hybrid": # TODO. plateau-ed in local minima
-        criterion = hybrid_loss
-        metrics = lambda pred, target: {
-            "iou_score": iou_score(pred, target, conf.threshold),
-            "f_score": f_score(pred, target, conf.threshold),
-        }
-        logger.info("Hybrid loss and metrics (IOU, F-Score) configured.")
+            buffer_mask = target[:, 3, :, :]
+            true_mask = target[:, 0, :, :]
+
+            return hybrid_loss(pred_mask, true_mask, buffer_mask)
+
+        def metrics(pred, target):
+            pred_mask = pred[:, 0, :, :]
+
+            buffer_mask = target[:, 3, :, :]
+            true_mask = target[:, 0, :, :]
+
+            pred_probs = apply_activation(pred_mask, activation=conf.activation)
+
+            seg_metrics = {
+                "iou_segments": masked_iou(pred_probs, true_mask, buffer_mask, threshold=conf.segment_threshold),
+                "f_score_segments": masked_f1(pred_probs, true_mask, buffer_mask, threshold=conf.segment_threshold)
+            }
+
+            return {**seg_metrics}
+
+        logger.info("Configured hybrid loss using TreeMortalityLoss class (BCE, MSE, and L1-based hybrid loss).")
+        return criterion, metrics
+
     elif conf.loss == "mse":
-        criterion = mse_loss
-        metrics = lambda pred, target: {
-            "mse": mse_loss(pred, target),
-            "mae": nn.functional.l1_loss(pred, target),
-            "rmse": torch.sqrt(mse_loss(pred, target)),
-        }
-        logger.info("MSE loss and metrics (MSE, MAE, RMSE) configured.")
-    elif conf.loss == "weighted_dice_loss":
-        criterion = weighted_dice_loss
-        metrics = lambda pred, target: {
-            "iou_score": iou_score(pred, target, conf.threshold),
-            "f_score": f_score(pred, target, conf.threshold),
-        }
-        logger.info("Weighted Dice loss and metrics (IOU, F-Score) configured.")
+        def criterion(pred, target):
+            buffer_mask = target[:, 3, :, :].unsqueeze(1)
+            seg_loss = buffer_mask * F.mse_loss(pred[:, 0, :, :], target[:, 0, :, :])
+            point_loss = buffer_mask * F.mse_loss(pred[:, 1, :, :], target[:, 1, :, :])
+            valid_pixels = buffer_mask.sum() + 1e-8
+            return (seg_loss.sum() + point_loss.sum()) / valid_pixels
 
-    return criterion, metrics
+        def metrics(pred, target):
+            buffer_mask = target[:, 3, :, :]
+            return {
+                "mse_segments": masked_iou(pred[:, 0, :, :], target[:, 0, :, :], buffer_mask, threshold=conf.segment_threshold),
+                "mse_points": masked_iou(pred[:, 1, :, :], target[:, 1, :, :], buffer_mask, threshold=conf.segment_threshold),
+            }
+        logger.info("Masked MSE loss configured with buffer weighting.")
+        return criterion, metrics
+
+    elif conf.loss == "weighted_dice_loss":
+        def criterion(pred, target):
+            buffer_mask = target[:, 3, :, :].unsqueeze(1)
+            seg_loss = weighted_dice_loss(
+                pred[:, 0, :, :], target[:, 0, :, :], buffer_mask=buffer_mask, class_weights=class_weights
+            )
+            centroid_loss = weighted_dice_loss(
+                pred[:, 1, :, :], target[:, 1, :, :], buffer_mask=buffer_mask, class_weights=class_weights
+            )
+            return seg_loss + centroid_loss
+
+        def metrics(pred, target):
+            buffer_mask = target[:, 3, :, :]
+            return {
+                "iou_segments": masked_iou(pred[:, 0, :, :], target[:, 0, :, :], buffer_mask, threshold=conf.segment_threshold),
+                "iou_points": masked_iou(pred[:, 1, :, :], target[:, 1, :, :], buffer_mask, threshold=conf.segment_threshold),
+            }
+        logger.info("Buffer-weighted Dice loss configured.")
+        return criterion, metrics
+
+    else:
+        raise ValueError(f"Unsupported loss type: {conf.loss}")

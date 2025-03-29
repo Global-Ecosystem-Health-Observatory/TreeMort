@@ -1,0 +1,9 @@
+# settings for dinov2
+
+include = base_config.txt
+
+model = dinov2
+
+backbone = facebook/dinov2-base
+
+resume = True

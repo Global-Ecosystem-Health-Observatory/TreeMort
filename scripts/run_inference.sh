@@ -1,23 +1,46 @@
 #!/bin/bash
-#SBATCH --job-name=treemort-inference           # Job name (default: treemort-inference)
-#SBATCH --account=project_2004205               # Project account (default: project_2004205)
-#SBATCH --output=output/stdout/%A_%a.out        # Output log path (default)
-#SBATCH --error=output/stderr/%A_%a.err         # Error log path (default)
-#SBATCH --ntasks=1                              # Number of tasks (1 process)
-#SBATCH --cpus-per-task=6                       # Number of CPU cores per task (default: 6)
-#SBATCH --time=05:00:00                         # Time limit (hh:mm:ss) (default: 05:00:00)
-#SBATCH --partition=small                       # Partition to submit to (default: small)
-#SBATCH --mem-per-cpu=6000                      # Memory per CPU in MB (default: 6000MB)
 
-# Usage:
-# export TREEMORT_VENV_PATH="/custom/path/to/venv"
-# export TREEMORT_REPO_PATH="/custom/path/to/treemort/repo"
-# sbatch --export=ALL,CONFIG_PATH="/custom/path/to/config",DATA_PATH="/custom/path/to/data" run_inference.sh
+# Set default HPC type to "puhti"
+HPC_TYPE=${HPC_TYPE:-"puhti"}
 
-MODULE_NAME="pytorch/2.3"
+# Set HPC-specific variables
+if [ "$HPC_TYPE" == "lumi" ]; then
+    PROJECT_NAME="project_462000684"
+    PARTITION_NAME="small-g"
+    MODULE_NAME="pytorch/2.5"
+    MODULE_USE_CMD="module use /appl/local/csc/modulefiles/"
+    GPU_DIRECTIVE="#SBATCH --gpus-per-node=1"
+else
+    PROJECT_NAME="project_2004205"
+    PARTITION_NAME="gpu"
+    MODULE_NAME="pytorch/2.5"
+    MODULE_USE_CMD=""
+    GPU_DIRECTIVE="#SBATCH --gres=gpu:v100:1"
+fi
+
+# Create SBATCH script
+SBATCH_SCRIPT=$(mktemp)
+
+# SLURM Job Configuration
+cat <<EOT > $SBATCH_SCRIPT
+#!/bin/bash
+#SBATCH --job-name=treemort-inference
+#SBATCH --account=$PROJECT_NAME
+#SBATCH --output=output/stdout/%A_%a.out
+#SBATCH --error=output/stderr/%A_%a.err
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=2
+#SBATCH --time=05:00:00
+#SBATCH --partition=$PARTITION_NAME
+#SBATCH --mem-per-cpu=24000
+$GPU_DIRECTIVE
+
+export TRANSFORMERS_CACHE="$TREEMORT_DATA_PATH/huggingface_cache"
+export HF_HOME="$TREEMORT_DATA_PATH/huggingface_cache"
+
+$MODULE_USE_CMD
+echo "Loading module: $MODULE_NAME"
 module load $MODULE_NAME
-
-TREEMORT_VENV_PATH="${TREEMORT_VENV_PATH:-/projappl/project_2004205/rahmanan/venv}"
 
 if [ -d "$TREEMORT_VENV_PATH" ]; then
     echo "[INFO] Activating virtual environment at $TREEMORT_VENV_PATH"
@@ -27,43 +50,63 @@ else
     exit 1
 fi
 
-TREEMORT_REPO_PATH="${TREEMORT_REPO_PATH:-/users/rahmanan/TreeMort}"
-
-ENGINE_PATH="${TREEMORT_REPO_PATH}/inference/engine.py"
-
-if [ ! -f "$ENGINE_PATH" ]; then
-    echo "[ERROR] Inference engine source file not found at $ENGINE_PATH"
+if [ -z "$CONFIG_PATH" ] || [ ! -f "$CONFIG_PATH" ]; then
+    echo "[ERROR] Config file is missing or invalid."
     exit 1
 fi
 
-if [ -z "$CONFIG_PATH" ]; then
-    echo "[ERROR] CONFIG_PATH variable is not set. Please provide a config path using --export."
+if [ -z "$MODEL_CONFIG_PATH" ] || [ ! -f "$MODEL_CONFIG_PATH" ]; then
+    echo "[ERROR] Model config file is missing or invalid."
     exit 1
 fi
 
-if [ ! -f "$CONFIG_PATH" ]; then
-    echo "[ERROR] Config file not found at $CONFIG_PATH"
+if [ -z "$DATA_CONFIG_PATH" ] || [ ! -f "$DATA_CONFIG_PATH" ]; then
+    echo "[ERROR] Data config file is missing or invalid."
     exit 1
 fi
 
-if [ -z "$DATA_PATH" ]; then
-    echo "[ERROR] DATA_PATH variable is not set. Please provide a data path using --export."
+if [ -z "$DATA_PATH" ] || [ ! -d "$DATA_PATH" ]; then
+    echo "[ERROR] Data directory is missing or invalid."
     exit 1
 fi
 
-if [ ! -d "$DATA_PATH" ]; then
-    echo "[ERROR] Data directory not found at $DATA_PATH"
+if [ -z "$OUTPUT_PATH" ]; then
+    echo "[ERROR] Output directory is not set."
     exit 1
+elif [ ! -d "$OUTPUT_PATH" ]; then
+    echo "[WARNING] Output directory not found at $OUTPUT_PATH. Creating it now..."
+    mkdir -p "$OUTPUT_PATH" || { echo "[ERROR] Failed to create output directory."; exit 1; }
 fi
 
-echo "[INFO] Starting inference with the following settings:"
-echo "       Data path: $DATA_PATH"
-echo "       Config file: $CONFIG_PATH"
-echo "       Inference engine: $ENGINE_PATH"
-echo "       CPUs per task: $SLURM_CPUS_PER_TASK"
-echo "       Memory per CPU: $SLURM_MEM_PER_CPU MB"
+POST_PROCESS=""
 
-srun python3 "$ENGINE_PATH" "$DATA_PATH" --config "$CONFIG_PATH"
+while [[ "\$#" -gt 0 ]]; do
+    if [ -z "\$1" ]; then
+        break
+    fi
+    case \$1 in
+        --post-process) POST_PROCESS="--post-process" ;;
+        *) echo "[ERROR] Unknown parameter passed: \$1"; exit 1 ;;
+    esac
+    shift
+done
+
+if [ -n "$POST_PROCESS" ]; then
+    echo "[INFO] Post-processing is enabled"
+fi
+
+echo "[INFO] Pre-downloading Beit and Maskformer models..."
+rm -rf "$TREEMORT_DATA_PATH/huggingface_cache/microsoft/beit-base-finetuned-ade-640-640"
+python3 -c "from transformers import AutoModel; AutoModel.from_pretrained('microsoft/beit-base-finetuned-ade-640-640', cache_dir='$TREEMORT_DATA_PATH/huggingface_cache')"
+
+rm -rf "$TREEMORT_DATA_PATH/huggingface_cache/facebook/maskformer-swin-base-ade"
+python3 -c "from transformers import AutoModel; AutoModel.from_pretrained('facebook/maskformer-swin-base-ade', cache_dir='$TREEMORT_DATA_PATH/huggingface_cache')"
+
+rm -rf "$TREEMORT_DATA_PATH/huggingface_cache/facebook/detr-resnet-50-panoptic"
+python3 -c "from transformers import AutoModel; AutoModel.from_pretrained('facebook/detr-resnet-50-panoptic', cache_dir='$TREEMORT_DATA_PATH/huggingface_cache')"
+
+echo "[INFO] Starting inference..."
+srun python3 "$TREEMORT_REPO_PATH/inference/engine.py" "$DATA_PATH" --config "$CONFIG_PATH" --model-config "$MODEL_CONFIG_PATH" --data-config "$DATA_CONFIG_PATH" --outdir "$OUTPUT_PATH" $POST_PROCESS
 
 EXIT_STATUS=$?
 if [ $EXIT_STATUS -ne 0 ]; then
@@ -73,3 +116,10 @@ else
 fi
 
 exit $EXIT_STATUS
+EOT
+
+echo "Generated SBATCH script:"
+cat $SBATCH_SCRIPT
+
+# Submit SLURM Job
+sbatch $SBATCH_SCRIPT "$@"

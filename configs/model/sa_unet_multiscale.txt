@@ -1,0 +1,7 @@
+# settings for multiscale self attention unet
+
+include = base_config.txt
+
+model = sa_unet_multiscale
+
+resume = True

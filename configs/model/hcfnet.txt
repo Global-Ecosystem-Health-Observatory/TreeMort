@@ -1,0 +1,7 @@
+# settings for HCFNet
+
+include = base_config.txt
+
+model = hcfnet
+
+resume = True

@@ -1,14 +1,17 @@
+import os
+
 import segmentation_models_pytorch as smp
 
 from transformers import (
-    MaskFormerConfig, 
-    DetrConfig, 
+    MaskFormerConfig,
+    DetrConfig,
     BeitConfig,
     MaskFormerForInstanceSegmentation,
     DetrForSegmentation,
     BeitForSemanticSegmentation,
 )
 
+from treemort.modeling.network.unet import UNet
 from treemort.modeling.network.sa_unet import SelfAttentionUNet
 from treemort.modeling.network.sa_unet_multiscale import MultiScaleAttentionUNet
 from treemort.modeling.network.dinov2 import Dinov2ForSemanticSegmentation
@@ -26,10 +29,15 @@ logger = get_logger(__name__)
 
 def configure_model(conf, id2label):
     model_choices = {
+        "baseline": lambda: configure_baseline(conf),
         "unet": lambda: configure_unet(conf),
+        "unetplusplus": lambda: configure_unetplusplus(conf),
+        "fpn": lambda: configure_fpn(conf),
+        "pspnet": lambda: configure_pspnet(conf),
         "sa_unet": lambda: configure_sa_unet(conf),
         "sa_unet_multiscale": lambda: configure_sa_unet_multiscale(conf),
-        "deeplabv3+": lambda: configure_deeplabv3_plus(conf),
+        "deeplabv3": lambda: configure_deeplabv3(conf),
+        "deeplabv3plus": lambda: configure_deeplabv3plus(conf),
         "dinov2": lambda: configure_dinov2(conf, id2label),
         "maskformer": lambda: configure_maskformer(conf, id2label),
         "detr": lambda: configure_detr(conf, id2label),
@@ -45,44 +53,158 @@ def configure_model(conf, id2label):
     return model
 
 
+def configure_baseline(conf):
+    model = UNet(
+        in_channels=conf.input_channels,
+        n_classes=conf.output_channels,
+        padding=True,
+    )
+    return model
+
+
 def configure_unet(conf):
-    model = smp.Unet(encoder_name="resnet34", in_channels=conf.input_channels, classes=conf.output_channels, activation=None,)
+    model = smp.Unet(
+        encoder_name=conf.backbone,
+        encoder_weights='imagenet',
+        in_channels=conf.input_channels,
+        classes=conf.output_channels,
+        activation=None,
+    )
+    return model
+
+
+def configure_unetplusplus(conf):
+    model = smp.UnetPlusPlus(
+        encoder_name=conf.backbone,
+        encoder_weights='imagenet',
+        in_channels=conf.input_channels,
+        classes=conf.output_channels,
+        activation=None,
+    )
+    return model
+
+
+def configure_fpn(conf):
+    model = smp.FPN(
+        encoder_name=conf.backbone,
+        encoder_weights='imagenet',
+        in_channels=conf.input_channels,
+        classes=conf.output_channels,
+        activation=None,
+    )
     return model
 
 
 def configure_sa_unet(conf):
-    model = SelfAttentionUNet(in_channels=conf.input_channels, n_classes=conf.output_channels, depth=4, wf=6, batch_norm=True,)
+    model = SelfAttentionUNet(
+        in_channels=conf.input_channels,
+        n_classes=conf.output_channels,
+        depth=4,
+        wf=6,
+        batch_norm=True,
+    )
     return model
 
 
 def configure_sa_unet_multiscale(conf):
-    model = MultiScaleAttentionUNet(in_channels=conf.input_channels, n_classes=conf.output_channels, depth=4, wf=6, batch_norm=True,)
+    model = MultiScaleAttentionUNet(
+        in_channels=conf.input_channels,
+        n_classes=conf.output_channels,
+        depth=4,
+        wf=6,
+        batch_norm=True,
+    )
     return model
 
 
-def configure_deeplabv3_plus(conf):
-    model = smp.DeepLabV3Plus(encoder_name="resnet50", in_channels=conf.input_channels, encoder_weights="imagenet",)
+def configure_deeplabv3(conf):
+    model = smp.DeepLabV3(
+        encoder_name=conf.backbone,
+        encoder_weights='imagenet',
+        in_channels=conf.input_channels,
+        classes=conf.output_channels,
+        activation=None,
+    )
+    return model
+
+
+def configure_deeplabv3plus(conf):
+    model = smp.DeepLabV3Plus(
+        encoder_name=conf.backbone,
+        encoder_weights='imagenet',
+        in_channels=conf.input_channels,
+        classes=conf.output_channels,
+        activation=None,
+    )
+    return model
+
+
+def configure_pspnet(conf):
+    model = smp.PSPNet(
+        encoder_name=conf.backbone,
+        encoder_weights='imagenet',
+        in_channels=conf.input_channels,
+        classes=conf.output_channels,
+        activation=None,
+    )
     return model
 
 
 def configure_dinov2(conf, id2label):
-    model = Dinov2ForSemanticSegmentation.from_pretrained(conf.backbone, id2label=id2label, num_labels=len(id2label),)
+    model = Dinov2ForSemanticSegmentation.from_pretrained(
+        conf.backbone,
+        id2label=id2label,
+        num_labels=len(id2label),
+    )
     return model
 
 
 def configure_maskformer(conf, id2label):
-    config = MaskFormerConfig.from_pretrained(conf.backbone, num_labels=len(id2label), id2label=id2label, ignore_mismatched_sizes=True,)
+    cache_dir = (
+        conf.cache_dir
+        if hasattr(conf, 'cache_dir') and conf.cache_dir is not None
+        else os.environ.get("TRANSFORMERS_CACHE")
+    )
+
+    config = MaskFormerConfig.from_pretrained(
+        conf.backbone,
+        num_labels=len(id2label),
+        id2label=id2label,
+        ignore_mismatched_sizes=True,
+        cache_dir=cache_dir,
+    )
     model = CustomMaskFormer(config)
-    pretrained_model = MaskFormerForInstanceSegmentation.from_pretrained(conf.backbone)
+    pretrained_model = MaskFormerForInstanceSegmentation.from_pretrained(
+        conf.backbone, cache_dir=cache_dir, local_files_only=True
+    )
     model.model.load_state_dict(pretrained_model.model.state_dict(), strict=False)
     return model
 
 
 def configure_detr(conf, id2label):
-    config = DetrConfig.from_pretrained(conf.backbone, num_labels=len(id2label), id2label=id2label, ignore_mismatched_sizes=True,)
+    cache_dir = (
+        conf.cache_dir
+        if hasattr(conf, 'cache_dir') and conf.cache_dir is not None
+        else os.environ.get("TRANSFORMERS_CACHE")
+    )
+
+    config = DetrConfig.from_pretrained(
+        conf.backbone,
+        num_labels=len(id2label),
+        id2label=id2label,
+        ignore_mismatched_sizes=True,
+        cache_dir=cache_dir,
+    )
     model = CustomDetr(config)
-    
-    pretrained_model = DetrForSegmentation.from_pretrained(conf.backbone, num_labels=len(id2label), id2label=id2label, ignore_mismatched_sizes=True,)
+
+    pretrained_model = DetrForSegmentation.from_pretrained(
+        conf.backbone,
+        num_labels=len(id2label),
+        id2label=id2label,
+        ignore_mismatched_sizes=True,
+        cache_dir=cache_dir,
+        local_files_only=True,
+    )
 
     state_dict = pretrained_model.detr.state_dict()
     del state_dict["class_labels_classifier.weight"]
@@ -93,9 +215,20 @@ def configure_detr(conf, id2label):
 
 
 def configure_beit(conf, id2label):
-    config = BeitConfig.from_pretrained(conf.backbone, num_labels=len(id2label), id2label=id2label, ignore_mismatched_sizes=True,)
+    # Use conf.cache_dir if defined; otherwise, fall back to TRANSFORMERS_CACHE
+    cache_dir = (
+        conf.cache_dir
+        if hasattr(conf, 'cache_dir') and conf.cache_dir is not None
+        else os.environ.get("TRANSFORMERS_CACHE")
+    )
+
+    config = BeitConfig.from_pretrained(
+        conf.backbone, num_labels=len(id2label), id2label=id2label, ignore_mismatched_sizes=True, cache_dir=cache_dir
+    )
     model = CustomBeit(config)
-    pretrained_model = BeitForSemanticSegmentation.from_pretrained(conf.backbone)
+    pretrained_model = BeitForSemanticSegmentation.from_pretrained(
+        conf.backbone, cache_dir=cache_dir, local_files_only=True
+    )
     model.beit.load_state_dict(pretrained_model.beit.state_dict(), strict=False)
     return model
 
@@ -116,7 +249,7 @@ def configure_flair_unet(conf):
 
     model = CombinedModel(
         pretrained_model=pretrained_model,
-        n_classes=1,
+        n_classes=conf.output_channels,
         output_size=conf.test_crop_size,
     )
     return model

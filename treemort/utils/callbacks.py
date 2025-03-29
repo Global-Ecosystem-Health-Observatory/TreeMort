@@ -6,16 +6,8 @@ logger = get_logger(__name__)
 
 
 class ModelCheckpoint:
-    def __init__(
-        self,
-        filepath,
-        save_weights_only=True,
-        save_freq=1,
-        monitor=None,
-        mode="min",
-        save_best_only=False,
-        verbose=1,
-    ):
+    def __init__(self, filepath, save_weights_only=True, save_freq=1, 
+                 monitor='val_loss', mode="min", save_best_only=False, verbose=1):
         self.filepath = filepath
         self.save_weights_only = save_weights_only
         self.save_freq = save_freq
@@ -28,15 +20,20 @@ class ModelCheckpoint:
             self.best = float("inf")
         elif self.mode == "max":
             self.best = -float("inf")
+        self.monitor = monitor
 
     def __call__(self, epoch, model, optimizer, val_loss=None):
+        current_value = val_loss
+        
+        if self.monitor != 'val_loss' and hasattr(self, 'val_metrics'):
+            current_value = self.val_metrics.get(self.monitor, val_loss)
+
         if self.save_best_only:
-            if (self.mode == "min" and val_loss < self.best) or (
-                self.mode == "max" and val_loss > self.best
-            ):
-                self.best = val_loss
+            if (self.mode == "min" and current_value < self.best) or \
+               (self.mode == "max" and current_value > self.best):
+                self.best = current_value
                 if self.verbose:
-                    logger.info(f"Saving best model with {self.monitor}: {val_loss}")
+                    logger.info(f"Saving best model with {self.monitor}: {current_value}")
                 torch.save(model.state_dict(), self.filepath)
         else:
             if epoch % self.save_freq == 0:
@@ -50,6 +47,7 @@ class ReduceLROnPlateau:
         self,
         optimizer,
         monitor="val_loss",
+        mode="min",
         factor=0.1,
         patience=10,
         min_lr=1e-6,
@@ -57,6 +55,7 @@ class ReduceLROnPlateau:
     ):
         self.optimizer = optimizer
         self.monitor = monitor
+        self.mode = mode
         self.factor = factor
         self.patience = patience
         self.min_lr = min_lr
@@ -64,9 +63,19 @@ class ReduceLROnPlateau:
         self.best = None
         self.num_bad_epochs = 0
 
-    def __call__(self, val_loss):
-        if self.best is None or val_loss < self.best:
-            self.best = val_loss
+    def __call__(self, current_value):
+        if self.best is None:
+            self.best = current_value
+            self.num_bad_epochs = 0
+            return
+
+        if self.mode == "min":
+            is_better = current_value < self.best
+        else:  # mode == "max"
+            is_better = current_value > self.best
+
+        if is_better:
+            self.best = current_value
             self.num_bad_epochs = 0
         else:
             self.num_bad_epochs += 1
@@ -84,23 +93,31 @@ class ReduceLROnPlateau:
 
 
 class EarlyStopping:
-    def __init__(self, patience=10, verbose=1):
+    def __init__(self, patience=10, mode="min", verbose=1):  # Add mode
         self.patience = patience
+        self.mode = mode
         self.verbose = verbose
         self.best = None
         self.num_bad_epochs = 0
-        self.stopped_epoch = 0
         self.stop_training = False
 
-    def __call__(self, epoch, val_loss):
-        if self.best is None or val_loss < self.best:
-            self.best = val_loss
+    def __call__(self, epoch, current_value):
+        if self.best is None:
+            self.best = current_value
+            return
+
+        if self.mode == "min":
+            is_better = current_value < self.best
+        else:
+            is_better = current_value > self.best
+
+        if is_better:
+            self.best = current_value
             self.num_bad_epochs = 0
         else:
             self.num_bad_epochs += 1
 
         if self.num_bad_epochs >= self.patience:
-            self.stopped_epoch = epoch
             self.stop_training = True
             if self.verbose:
                 logger.info(f"Early stopping at epoch {epoch}")

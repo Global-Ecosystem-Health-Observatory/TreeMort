@@ -1,69 +1,107 @@
 import torch
 import torch.nn.functional as F
 
+from typing import Optional, List, Tuple
 
-def dice_loss(logits, target, smooth=1.0):
-    pred = torch.sigmoid(logits)
-    
-    iflat = pred.contiguous().view(-1)
-    tflat = target.contiguous().view(-1)
-    
-    intersection = (iflat * tflat).sum()
-    A_sum = torch.sum(iflat * iflat)
-    B_sum = torch.sum(tflat * tflat)
-    
-    dice_score = (2.0 * intersection + smooth) / (A_sum + B_sum + smooth)
-    dice_loss = 1 - dice_score
-    return dice_loss
+from treemort.utils.metrics import apply_activation
 
 
-def weighted_dice_loss(logits, target, class_weights, smooth=1.0):
-    probs = torch.sigmoid(logits)
-    target = target.float()
+def hybrid_loss(
+    logits: torch.Tensor,
+    target: torch.Tensor,
+    buffer_mask: Optional[torch.Tensor] = None,
+    class_weights: Optional[List[float]] = None,
+    dice_weight: float = 0.5,
+    focal_alpha: float = 0.25,
+    focal_gamma: float = 2.0,
+    smooth: float = 1e-8,
+    activation: str = "sigmoid",
+) -> torch.Tensor:
+    if buffer_mask is not None:
+        logits = logits * buffer_mask
+        target = target * buffer_mask
 
-    intersection = (probs * target).sum(dim=(2, 3))
-    union = (probs + target).sum(dim=(2, 3))
+    if class_weights is not None:
+        assert len(class_weights) == 2, "Class weights must be [background, foreground]"
+        weights = torch.where(
+            target > 0.5,
+            torch.tensor(class_weights[1], device=target.device),
+            torch.tensor(class_weights[0], device=target.device),
+        )
+    else:
+        weights = torch.ones_like(target)
 
-    dice_score = (2 * intersection + smooth) / (union + smooth)
-    dice_loss = 1 - dice_score
+    if buffer_mask is not None:
+        weights = weights * buffer_mask
 
-    weights = target * class_weights[1] + (1 - target) * class_weights[0]
-    weights = weights.mean(dim=(2, 3))
+    bce_loss = F.binary_cross_entropy_with_logits(logits, target, weight=weights, reduction='mean')
 
-    weighted_dice_loss = (dice_loss * weights).mean()
-    weighted_dice_loss = torch.clamp(weighted_dice_loss, min=0)
-    return weighted_dice_loss
+    pred = apply_activation(logits, activation=activation)
+    intersection = (pred * target * weights).sum()
+    union = (pred * weights).sum() + (target * weights).sum()
+    dice_loss = 1 - (2.0 * intersection + smooth) / (union + smooth)
+
+    focal_loss = focal_loss_fn(logits, target, focal_alpha, focal_gamma, weights, buffer_mask, smooth)
+
+    return dice_weight * dice_loss + (1 - dice_weight) * focal_loss + bce_loss
 
 
-def focal_loss(logits, target, alpha=0.25, gamma=2):
-    bce_loss = F.binary_cross_entropy_with_logits(logits, target.float(), reduction='none')
-    
-    probas = torch.sigmoid(logits)
-    
-    pt = torch.where(target == 1, probas, 1 - probas)
+def focal_loss_fn(
+    logits: torch.Tensor,
+    target: torch.Tensor,
+    alpha: float,
+    gamma: float,
+    weights: torch.Tensor,
+    buffer_mask: Optional[torch.Tensor],
+    smooth: float,
+) -> torch.Tensor:
+    bce_loss = F.binary_cross_entropy_with_logits(logits, target, reduction='none')
+    pt = torch.exp(-bce_loss)
     focal_loss = alpha * (1 - pt) ** gamma * bce_loss
-    return focal_loss.mean()
+
+    if buffer_mask is not None:
+        focal_loss = focal_loss * buffer_mask
+        valid_pixels = buffer_mask.sum() + smooth
+        return (focal_loss * weights).sum() / valid_pixels
+    return (focal_loss * weights).mean()
 
 
-def hybrid_loss(logits, target, dice_weight=0.5, alpha=0.25, gamma=2, class_weights=None):
+def center_crop(tensor: torch.Tensor, target_size: Tuple[int, int]) -> torch.Tensor:
+    _, _, h, w = tensor.size()
+    th, tw = target_size
+    i = (h - th) // 2
+    j = (w - tw) // 2
+    return tensor[..., i : i + th, j : j + tw]
+
+
+def dice_loss(logits, target, smooth=1.0, activation="sigmoid"):
+    pred = apply_activation(logits, activation=activation)
+    if pred.shape[-2:] != target.shape[-2:]:
+        raise RuntimeError(f"Dice size mismatch: {pred.shape} vs {target.shape}")
+
+    intersection = (pred * target).sum()
+    union = pred.sum() + target.sum()
+    return 1 - (2.0 * intersection + smooth) / (union + smooth)
+
+
+def weighted_dice_loss(logits, target, buffer_mask=None, class_weights=None, smooth=1e-8, activation="sigmoid"):
+    if buffer_mask is not None:
+        logits = logits * buffer_mask
+        target = target * buffer_mask
+
     if class_weights is not None:
-        weight = torch.ones_like(target) * class_weights[1]
-        weight[target == 0] = class_weights[0]
-        bce_loss = F.binary_cross_entropy_with_logits(logits, target.float(), weight=weight)
+        weights = target * class_weights[1] + (1 - target) * class_weights[0]
     else:
-        bce_loss = F.binary_cross_entropy_with_logits(logits, target.float())
+        weights = 1.0
 
-    if class_weights is not None:
-        dice = weighted_dice_loss(logits, target, class_weights)
-    else:
-        dice = dice_loss(logits, target)
+    pred = apply_activation(logits, activation=activation)
+    intersection = (pred * target * weights).sum()
+    union = (pred * weights).sum() + (target * weights).sum()
 
-    fl = focal_loss(logits, target, alpha=alpha, gamma=gamma)
-
-    total_loss = dice_weight * dice + (1 - dice_weight) * fl + bce_loss
-    return total_loss
+    return 1 - (2.0 * intersection + smooth) / (union + smooth)
 
 
-def mse_loss(logits, target):
-    pred = torch.sigmoid(logits)
-    return F.mse_loss(pred, target.float())
+def mse_loss(logits, target, activation="sigmoid"):
+    if logits.shape[-2:] != target.shape[-2:]:
+        raise RuntimeError(f"MSE size mismatch: {logits.shape} vs {target.shape}")
+    return F.mse_loss(apply_activation(logits, activation=activation), target.float())
