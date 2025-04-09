@@ -217,4 +217,4 @@ class CombinedModel(nn.Module):
         encoder_features = self.feature_extractor(x)
         decoder_output = self.decoder(encoder_features[-1], encoder_features)
         upsampled_output = self.upsample(decoder_output)
-        return upsampled_output
+        return upsampled_output, encoder_features

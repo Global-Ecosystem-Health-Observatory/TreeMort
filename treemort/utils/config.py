@@ -25,9 +25,12 @@ def setup(config_file_path=None):
     model_group.add("-th", "--threshold",     type=float, default=0.5,          help="threshold for classifier")
     model_group.add("-cw", "--class-weights", type=float, nargs="+", default=[0.5, 0.5], help="class weights for imbalanced classes")
 
-    model_group.add("--teacher-model-name",       type=str,   default=None, help="weight file of pre-trained teacher model")
-    model_group.add("--distillation-alpha",       type=float, default=0.5,  help="alpha value for blending distillation and standard loss")
-    model_group.add("--distillation-temperature", type=float, default=2.0,  help="temperature for softening logits during distillation")
+    model_group.add("--teacher-model-name",       type=str,   default=None,    help="weight file of pre-trained teacher model")
+    model_group.add("--distillation-alpha",       type=float, default=0.5,     help="alpha value for blending distillation and standard loss")
+    model_group.add("--distillation-temperature", type=float, default=2.0,     help="temperature for softening logits during distillation")
+    model_group.add("--distillation-beta",        type=float, default=0.999,   help="beta value for decay factor for EMA update")
+    model_group.add("--distillation-lambda",      type=float, default=1.0,     help="lambda value for weight for feature distillation loss")
+    model_group.add("--distillation-method",      type=str,   default="basic", help="weight file of pre-trained teacher model")
 
     train_group = parser.add_argument_group('Training')
     train_group.add( "-e", "--epochs",           type=int,   required=True, help="number of epochs for training")

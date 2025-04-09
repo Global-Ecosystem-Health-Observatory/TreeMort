@@ -32,10 +32,17 @@ def run(conf, eval_only):
     logger.info("Preparing datasets...")
     train_dataset, val_dataset, test_dataset = prepare_datasets(conf)
     logger.info(f"Datasets prepared: Train({len(train_dataset)}), Val({len(val_dataset)}), Test({len(test_dataset)})")
+    # Set default distillation method if not provided in configuration
+    if not hasattr(conf, 'distillation_method'):
+        conf.distillation_method = 'basic'
+    logger.info(f"Using distillation method: {conf.distillation_method}")
 
     logger.info("Loading or resuming models (student and teacher)...")
     student_model, teacher_model, optimizer, criterion, metrics, callbacks = resume_or_load(conf, id2label, len(train_dataset), device)
     logger.info("Student and teacher models, optimizer, criterion, metrics, and callbacks are set up.")
+    # Wrap teacher model in a list if ensemble distillation is used and teacher_model is not already a list
+    if conf.distillation_method == 'ensemble' and not isinstance(teacher_model, list):
+        teacher_model = [teacher_model]
 
     if eval_only:
         logger.info("Evaluation-only mode started.")
@@ -56,7 +63,7 @@ def run(conf, eval_only):
 
         trainer(
             student_model=student_model,
-            teacher_model=teacher_model,
+            teacher_model_or_ema=teacher_model,
             optimizer=optimizer,
             criterion=criterion,
             kd_criterion=kd_criterion,
