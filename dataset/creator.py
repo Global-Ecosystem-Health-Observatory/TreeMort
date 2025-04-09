@@ -262,6 +262,7 @@ Usage:
 
 - Local
 
+export TREEMORT_REPO_PATH="/Users/anisr/Documents/TreeSeg"
 export TREEMORT_DATA_PATH="/Users/anisr/Documents/dead_trees" 
 
 python3 -m dataset.creator ${TREEMORT_REPO_PATH}/configs/data/finland.txt
