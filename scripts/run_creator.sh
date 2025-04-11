@@ -1,3 +1,21 @@
+#!/bin/bash
+
+# Set default HPC type to "puhti"
+HPC_TYPE=${HPC_TYPE:-"puhti"}
+
+# Set HPC-specific variables
+if [ "$HPC_TYPE" == "lumi" ]; then
+    PROJECT_NAME="project_462000684"
+    PARTITION_NAME="small"
+    MODULE_NAME="pytorch/2.5"
+    MODULE_USE_CMD="module use /appl/local/csc/modulefiles/"
+else
+    PROJECT_NAME="project_2004205"
+    PARTITION_NAME="small"
+    MODULE_NAME="pytorch/2.5"
+    MODULE_USE_CMD=""
+fi
+
 # Create SBATCH script
 SBATCH_SCRIPT=$(mktemp)
 
