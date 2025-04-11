@@ -62,7 +62,7 @@ if [ -z "$SLURM_CPUS_PER_TASK" ]; then
     SLURM_CPUS_PER_TASK=1
 fi
 
-srun python3 "$TREEMORT_REPO_PATH/dataset/creator.py" "$DATA_CONFIG_PATH" --num-workers "$SLURM_CPUS_PER_TASK"
+srun python3 "$TREEMORT_REPO_PATH/dataset/creator.py" "$DATA_CONFIG_PATH" --num-workers 6
 
 EXIT_STATUS=$?
 if [ "${EXIT_STATUS:-0}" -ne 0 ]; then
