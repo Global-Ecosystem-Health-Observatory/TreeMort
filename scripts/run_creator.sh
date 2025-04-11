@@ -55,12 +55,12 @@ if [ -z "$TREEMORT_REPO_PATH" ]; then
     exit 1
 fi
 
-if [ -z "$SLURM_CPUS_PER_TASK" ]; then
+if [ -z "\$SLURM_CPUS_PER_TASK" ]; then
     echo "[WARNING] SLURM_CPUS_PER_TASK is not set. Defaulting to 1."
     SLURM_CPUS_PER_TASK=1
 fi
 
-srun python3 "$TREEMORT_REPO_PATH/dataset/creator.py" "$DATA_CONFIG_PATH" --num-workers "$SLURM_CPUS_PER_TASK"
+srun python3 "$TREEMORT_REPO_PATH/dataset/creator.py" "$DATA_CONFIG_PATH" --num-workers "\$SLURM_CPUS_PER_TASK"
 
 EXIT_STATUS=$?
 if [ "${EXIT_STATUS:-0}" -ne 0 ]; then
