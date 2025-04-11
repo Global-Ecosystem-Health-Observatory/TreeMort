@@ -53,7 +53,7 @@ echo "[INFO] Starting creator..."
 srun python3 "$TREEMORT_REPO_PATH/dataset/creator.py" "$DATA_CONFIG_PATH" --num-workers "$SLURM_CPUS_PER_TASK"
 
 EXIT_STATUS=$?
-if [ $EXIT_STATUS -ne 0 ]; then
+if [ "${EXIT_STATUS:-0}" -ne 0 ]; then
     echo "[ERROR] Job failed with exit status $EXIT_STATUS"
 else
     echo "[INFO] Job completed successfully"
