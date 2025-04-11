@@ -101,7 +101,7 @@ def loss_fn_basic(
     loss_standard = criterion(student_logits, labels)
 
     loss_distillation = kd_criterion(
-        torch.sigmoid(student_logits / temperature),
+        F.logsigmoid(student_logits / temperature),
         torch.sigmoid(teacher_logits / temperature),
     )
 
@@ -130,7 +130,7 @@ def loss_fn_self(
     loss_standard = criterion(student_logits, labels)
 
     loss_distillation = kd_criterion(
-        torch.sigmoid(student_logits / temperature),
+        F.logsigmoid(student_logits / temperature),
         torch.sigmoid(teacher_logits / temperature),
     )
 
@@ -159,10 +159,10 @@ def loss_fn_feature(
 
     loss_standard = criterion(student_logits, labels)
 
-    student_probs = torch.sigmoid(student_logits / temperature)
-    teacher_probs = torch.sigmoid(teacher_logits / temperature)
-
-    loss_distillation = kd_criterion(student_probs.log(), teacher_probs)
+    loss_distillation = kd_criterion(
+        F.logsigmoid(student_logits / temperature),
+        torch.sigmoid(teacher_logits / temperature),
+    )
 
     loss_feature = sum(
         F.mse_loss(s_feat, t_feat)
@@ -198,10 +198,11 @@ def loss_fn_ensemble(
     ensemble_logits = torch.mean(torch.stack(teacher_predictions), dim=0)
     
     loss_standard = criterion(student_logits, labels)
-    
-    student_probs = torch.sigmoid(student_logits / temperature)
-    ensemble_probs = torch.sigmoid(ensemble_logits / temperature)
-    loss_distillation = kd_criterion(student_probs.log(), ensemble_probs)
+
+    loss_distillation = kd_criterion(
+        F.logsigmoid(student_logits / temperature),
+        torch.sigmoid(ensemble_logits / temperature),
+    )
     
     loss = alpha * loss_distillation + (1 - alpha) * loss_standard
     
@@ -402,7 +403,7 @@ def train_one_epoch_self_distillation(
         loss_standard = criterion(student_logits, labels)
 
         loss_distillation = kd_criterion(
-            torch.sigmoid(student_logits / temperature),
+            F.logsigmoid(student_logits / temperature),
             torch.sigmoid(teacher_logits / temperature),
         )
 
@@ -474,9 +475,10 @@ def train_one_epoch_feature_level_distillation(
 
         loss_standard = criterion(student_logits, labels)
 
-        student_probs = torch.sigmoid(student_logits / temperature)
-        teacher_probs = torch.sigmoid(teacher_logits / temperature)
-        loss_distillation = kd_criterion(student_probs.log(), teacher_probs)
+        loss_distillation = kd_criterion(
+            F.logsigmoid(student_logits / temperature),
+            torch.sigmoid(teacher_logits / temperature),
+        )
 
         loss_feature = 0.0
         for s_feat, t_feat in zip(student_features, teacher_features):
@@ -550,10 +552,11 @@ def train_one_epoch_ensemble_distillation(
 
         loss_standard = criterion(student_logits, labels)
 
-        student_probs = torch.sigmoid(student_logits / temperature)
-        ensemble_probs = torch.sigmoid(ensemble_logits / temperature)
-        loss_distillation = kd_criterion(student_probs.log(), ensemble_probs)
-
+        loss_distillation = kd_criterion(
+            F.logsigmoid(student_logits / temperature),
+            torch.sigmoid(ensemble_logits / temperature),
+        )
+        
         loss = alpha * loss_distillation + (1 - alpha) * loss_standard
 
         loss.backward()

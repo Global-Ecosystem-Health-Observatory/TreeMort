@@ -52,7 +52,7 @@ def run(conf, eval_only):
     else:
         logger.info("Training mode started.")
 
-        kd_criterion = torch.nn.MSELoss()  # Or torch.nn.KLDivLoss()
+        kd_criterion = torch.nn.KLDivLoss()
 
         trainer(
             student_model=student_model,
