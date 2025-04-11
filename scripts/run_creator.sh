@@ -94,4 +94,4 @@ echo "Generated SBATCH script:"
 cat $SBATCH_SCRIPT
 
 # Submit SLURM Job with minimal environment
-sbatch --export=NONE $SBATCH_SCRIPT
+sbatch $SBATCH_SCRIPT
