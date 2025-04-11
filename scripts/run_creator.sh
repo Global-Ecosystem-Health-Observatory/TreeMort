@@ -1,21 +1,3 @@
-#!/bin/bash
-
-# Set default HPC type to "puhti"
-HPC_TYPE=${HPC_TYPE:-"puhti"}
-
-# Set HPC-specific variables
-if [ "$HPC_TYPE" == "lumi" ]; then
-    PROJECT_NAME="project_462000684"
-    PARTITION_NAME="small"
-    MODULE_NAME="pytorch/2.5"
-    MODULE_USE_CMD="module use /appl/local/csc/modulefiles/"
-else
-    PROJECT_NAME="project_2004205"
-    PARTITION_NAME="small"
-    MODULE_NAME="pytorch/2.5"
-    MODULE_USE_CMD=""
-fi
-
 # Create SBATCH script
 SBATCH_SCRIPT=$(mktemp)
 
@@ -32,14 +14,56 @@ cat <<EOT > $SBATCH_SCRIPT
 #SBATCH --partition=$PARTITION_NAME
 #SBATCH --mem-per-cpu=6000
 
-# Set SLURM_CPUS_PER_TASK
-# export SLURM_CPUS_PER_TASK=${SLURM_CPUS_PER_TASK:-6}
-
 # If on Lumi, set the module path
 $MODULE_USE_CMD
 echo "Loading module: $MODULE_NAME"
 module load $MODULE_NAME
 
+EOT
+
+# Add HPC-specific execution logic
+if [ "$HPC_TYPE" == "lumi" ]; then
+    cat <<EOT >> $SBATCH_SCRIPT
+# Determine Python version
+PYTHON_VERSION=\$(python3 -c "import sys; print(f'python{sys.version_info.major}.{sys.version_info.minor}')")
+
+# Set site-packages path from the virtual environment
+SITE_PACKAGES="$TREEMORT_VENV_PATH/lib/\$PYTHON_VERSION/site-packages"
+
+# Set PYTHONPATH to include virtual environment packages
+export PYTHONPATH="\$SITE_PACKAGES:\$PYTHONPATH"
+
+# Verify PATH and PYTHONPATH (for debugging)
+echo "Current PATH: \$PATH"
+echo "Current PYTHONPATH: \$PYTHONPATH"
+
+# Check if DATA_CONFIG_PATH is set and exists
+if [ -z "$DATA_CONFIG_PATH" ] || [ ! -f "$DATA_CONFIG_PATH" ]; then
+    echo "[ERROR] Data config file is missing or invalid."
+    exit 1
+fi
+
+echo "[INFO] Starting creator..."
+if [ -z "$TREEMORT_REPO_PATH" ]; then
+    echo "[ERROR] TREEMORT_REPO_PATH is not set."
+    exit 1
+fi
+
+# Run the Python script with the system's python3
+srun python3 "$TREEMORT_REPO_PATH/dataset/creator.py" "$DATA_CONFIG_PATH" --num-workers 6
+
+EXIT_STATUS=\$?
+if [ "\${EXIT_STATUS:-0}" -ne 0 ]; then
+    echo "[ERROR] Job failed with exit status \$EXIT_STATUS"
+else
+    echo "[INFO] Job completed successfully"
+fi
+
+exit \$EXIT_STATUS
+EOT
+else
+    # Original method for Puhti
+    cat <<EOT >> $SBATCH_SCRIPT
 # Reset PATH to minimal system directories
 export PATH="/usr/bin:/bin"
 
@@ -48,7 +72,7 @@ if [ -d "$TREEMORT_VENV_PATH" ]; then
     echo "[INFO] Activating virtual environment at $TREEMORT_VENV_PATH"
     source "$TREEMORT_VENV_PATH/bin/activate"
     # Prepend virtual environment's bin directory to PATH
-    export PATH="$TREEMORT_VENV_PATH/bin:$PATH"
+    export PATH="$TREEMORT_VENV_PATH/bin:\$PATH"
 else
     echo "[ERROR] Virtual environment not found at $TREEMORT_VENV_PATH"
     exit 1
@@ -77,15 +101,16 @@ fi
 # Run the Python script using the virtual environment's python3
 srun python3 "$TREEMORT_REPO_PATH/dataset/creator.py" "$DATA_CONFIG_PATH" --num-workers 6
 
-EXIT_STATUS=$?
-if [ "${EXIT_STATUS:-0}" -ne 0 ]; then
-    echo "[ERROR] Job failed with exit status $EXIT_STATUS"
+EXIT_STATUS=\$?
+if [ "\${EXIT_STATUS:-0}" -ne 0 ]; then
+    echo "[ERROR] Job failed with exit status \$EXIT_STATUS"
 else
     echo "[INFO] Job completed successfully"
 fi
 
-exit $EXIT_STATUS
+exit \$EXIT_STATUS
 EOT
+fi
 
 echo "Generated SBATCH script:"
 cat $SBATCH_SCRIPT
