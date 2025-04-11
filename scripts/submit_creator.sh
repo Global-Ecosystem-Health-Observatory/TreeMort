@@ -31,4 +31,4 @@ fi
 export DATA_CONFIG_PATH="$TREEMORT_REPO_PATH/configs/data/${DATA_TYPE}.txt"
 
 # Call the inference script with the filtered flag.
-bash --export=NONE $TREEMORT_REPO_PATH/scripts/run_creator.sh
+bash $TREEMORT_REPO_PATH/scripts/run_creator.sh
