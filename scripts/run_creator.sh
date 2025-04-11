@@ -33,7 +33,7 @@ cat <<EOT > $SBATCH_SCRIPT
 #SBATCH --mem-per-cpu=6000
 
 # Set SLURM_CPUS_PER_TASK
-export SLURM_CPUS_PER_TASK=${SLURM_CPUS_PER_TASK:-6}
+# export SLURM_CPUS_PER_TASK=${SLURM_CPUS_PER_TASK:-6}
 
 # If on Lumi, set the module path
 $MODULE_USE_CMD
@@ -69,13 +69,13 @@ if [ -z "$TREEMORT_REPO_PATH" ]; then
     exit 1
 fi
 
-if [ -z "$SLURM_CPUS_PER_TASK" ]; then
-    echo "[WARNING] SLURM_CPUS_PER_TASK is not set. Defaulting to 1."
-    SLURM_CPUS_PER_TASK=1
+if [ -z "$SLURM_TRES_PER_TASK" ]; then
+    echo "[WARNING] SLURM_TRES_PER_TASK is not set. Defaulting to 1."
+    SLURM_TRES_PER_TASK=1
 fi
 
 # Run the Python script using the virtual environment's python3
-srun python3 "$TREEMORT_REPO_PATH/dataset/creator.py" "$DATA_CONFIG_PATH" --num-workers 6
+srun python3 "$TREEMORT_REPO_PATH/dataset/creator.py" "$DATA_CONFIG_PATH" --num-workers "$SLURM_TRES_PER_TASK"
 
 EXIT_STATUS=$?
 if [ "${EXIT_STATUS:-0}" -ne 0 ]; then
