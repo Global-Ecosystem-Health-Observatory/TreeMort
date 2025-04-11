@@ -78,7 +78,7 @@ if [ -z "$SLURM_CPUS_PER_TASK" ]; then
 fi
 
 # Run the Python script using the virtual environment's python3
-srun "$TREEMORT_VENV_PATH/bin/python3" "$TREEMORT_REPO_PATH/dataset/creator.py" "$DATA_CONFIG_PATH" --num-workers 6
+srun python3 "$TREEMORT_REPO_PATH/dataset/creator.py" "$DATA_CONFIG_PATH" --num-workers 6
 
 EXIT_STATUS=$?
 if [ "${EXIT_STATUS:-0}" -ne 0 ]; then
