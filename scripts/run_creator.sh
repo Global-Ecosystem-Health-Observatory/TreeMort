@@ -50,6 +50,16 @@ if [ -z "$DATA_CONFIG_PATH" ] || [ ! -f "$DATA_CONFIG_PATH" ]; then
 fi
 
 echo "[INFO] Starting creator..."
+if [ -z "$TREEMORT_REPO_PATH" ]; then
+    echo "[ERROR] TREEMORT_REPO_PATH is not set."
+    exit 1
+fi
+
+if [ -z "$SLURM_CPUS_PER_TASK" ]; then
+    echo "[WARNING] SLURM_CPUS_PER_TASK is not set. Defaulting to 1."
+    SLURM_CPUS_PER_TASK=1
+fi
+
 srun python3 "$TREEMORT_REPO_PATH/dataset/creator.py" "$DATA_CONFIG_PATH" --num-workers "$SLURM_CPUS_PER_TASK"
 
 EXIT_STATUS=$?
