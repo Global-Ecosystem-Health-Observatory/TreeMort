@@ -1,6 +1,5 @@
 import os
 import h5py
-
 import rasterio
 import argparse
 import concurrent.futures
@@ -69,9 +68,6 @@ def process_image(image_path, label_path, conf):
 
     image_name = os.path.basename(image_path)
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    nir_model = load_model_if_needed(conf.predict_nir, device)
-
     try:
         with rasterio.open(image_path) as src:
             transform = src.transform
@@ -134,10 +130,6 @@ def process_image(image_path, label_path, conf):
         logger.error(f"Failed to process {image_path}: {e}")
         return image_name, []
 
-    except Exception as e:
-        print(f"[ERROR] Failed to process {image_path}: {type(e).__name__}: {e}")
-        return image_name, []
-    
 
 def write_to_hdf5(hdf5_file, data):
     logger = get_logger()
@@ -258,8 +250,6 @@ if __name__ == "__main__":
 
     _ = configure_logger(verbosity=args.verbosity)
 
-    print(conf)
-
     convert_to_hdf5(
         conf,
         no_of_samples=args.no_of_samples,
@@ -272,7 +262,6 @@ Usage:
 
 - Local
 
-export TREEMORT_REPO_PATH="/Users/anisr/Documents/TreeSeg"
 export TREEMORT_DATA_PATH="/Users/anisr/Documents/dead_trees" 
 
 python3 -m dataset.creator ${TREEMORT_REPO_PATH}/configs/data/finland.txt

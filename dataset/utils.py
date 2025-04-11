@@ -170,6 +170,7 @@ def load_geotiff(
            
     with rasterio.open(filename) as img:
         img_arr = np.moveaxis(img.read(), 0, -1).astype(np.float32)
+
         img_arr = img_arr[:,:,nir_rgb_order]
 
         if img.nodata is not None:
