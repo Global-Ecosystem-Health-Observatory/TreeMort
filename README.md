@@ -17,7 +17,19 @@ bash $TREEMORT_REPO_PATH/scripts/install_treemort.sh
 
 1. Download aerial image and label data to scratch.
 
+- Puhti
+
 ```bash
+module load allas
+allas-conf
+
+swift download <container_name> -p <remote_directory> -D <local_directory>
+```
+
+- Lumi
+
+```bash
+module use /appl/local/csc/modulefiles
 module load allas
 allas-conf
 
@@ -26,8 +38,16 @@ swift download <container_name> -p <remote_directory> -D <local_directory>
 
 e.g. download Finnish aerial imagery from Allas
 
+- Puhti
+
 ```bash
 swift download DRYTREE_Annotations -p dead_trees/Finland -D /scratch/project_2008436/rahmanan
+```
+
+- Lumi
+
+```bash
+swift download DRYTREE_Annotations -p dead_trees/Poland -D /scratch/project_462000684/rahmanan
 ```
 
 2. Run script to create the HDF5 dataset.
