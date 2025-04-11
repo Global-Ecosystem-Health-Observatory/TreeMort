@@ -76,4 +76,4 @@ echo "Generated SBATCH script:"
 cat $SBATCH_SCRIPT
 
 # Submit SLURM Job
-sbatch $SBATCH_SCRIPT
+# sbatch $SBATCH_SCRIPT
