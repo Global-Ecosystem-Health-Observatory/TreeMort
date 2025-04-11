@@ -41,7 +41,7 @@ e.g. download Finnish aerial imagery from Allas
 - Puhti
 
 ```bash
-swift download DRYTREE_Annotations -p dead_trees/Finland -D /scratch/project_2008436/rahmanan
+swift download DRYTREE_Annotations -p dead_trees/Poland -D /scratch/project_2008436/rahmanan
 ```
 
 - Lumi

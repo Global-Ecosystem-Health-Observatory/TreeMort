@@ -32,9 +32,6 @@ cat <<EOT > $SBATCH_SCRIPT
 #SBATCH --partition=$PARTITION_NAME
 #SBATCH --mem-per-cpu=6000
 
-# Start with a clean environment by unloading all modules
-module purge
-
 # Set SLURM_CPUS_PER_TASK
 export SLURM_CPUS_PER_TASK=${SLURM_CPUS_PER_TASK:-6}
 
