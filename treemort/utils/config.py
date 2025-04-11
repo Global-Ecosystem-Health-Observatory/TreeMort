@@ -85,6 +85,14 @@ def build_parser(config_files):
     model_group.add("--hybrid-threshold", type=float, default=-0.5, help="Threshold for filtering contours based on the hybrid map.")
     model_group.add("--class-weights", type=float, nargs="+", default=[0.5, 0.5], help="class weights for imbalanced classes")
 
+    model_group.add("--teacher-model-names",      type=str,   default="flair_unet", help="teacher neural network model name for training")
+    model_group.add("--teacher-model-file-names", type=str,   default=None,         help="weight file of pre-trained teacher model")
+    model_group.add("--distillation-alpha",       type=float, default=0.5,          help="alpha value for blending distillation and standard loss")
+    model_group.add("--distillation-temperature", type=float, default=2.0,          help="temperature for softening logits during distillation")
+    model_group.add("--distillation-beta",        type=float, default=0.999,        help="beta value for decay factor for EMA update")
+    model_group.add("--distillation-lambda",      type=float, default=1.0,          help="lambda value for weight for feature distillation loss")
+    model_group.add("--distillation-method",      type=str,   default="basic",      help="weight file of pre-trained teacher model")
+
     train_group = parser.add_argument_group('Training')
     train_group.add("--epochs", type=int, required=True, help="number of epochs for training")
     train_group.add("--train-batch-size", type=int, required=True, help="batch size for training")
@@ -139,6 +147,16 @@ def setup(config_file_path, model_config=None, data_config=None):
 
     conf.data_folder = expand_path(conf.data_folder)
     conf.output_dir = expand_path(conf.output_dir)
+
+    if hasattr(conf, 'teacher_model_names') and conf.teacher_model_names:
+        if isinstance(conf.teacher_model_names, str):
+            teacher_models = [x.strip() for x in conf.teacher_model_names.split(',')]
+            conf.teacher_model_names = teacher_models[0] if len(teacher_models) == 1 else teacher_models
+    
+    if hasattr(conf, 'teacher_model_file_names') and conf.teacher_model_file_names:
+        if isinstance(conf.teacher_model_file_names, str):
+            teacher_models = [x.strip() for x in conf.teacher_model_file_names.split(',')]
+            conf.teacher_model_file_names = teacher_models[0] if len(teacher_models) == 1 else teacher_models
 
     conf.min_area_pixels = conf.min_area / 0.0625
 

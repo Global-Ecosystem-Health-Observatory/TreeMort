@@ -27,7 +27,7 @@ from treemort.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
-def configure_model(conf, id2label):
+def configure_model(conf, model_name, id2label):
     model_choices = {
         "baseline": lambda: configure_baseline(conf),
         "unet": lambda: configure_unet(conf),
@@ -46,10 +46,10 @@ def configure_model(conf, id2label):
         "hcfnet": lambda: configure_hcfnet(conf),
     }
 
-    assert conf.model in model_choices, f"[ERROR] Invalid model: {conf.model}."
+    assert model_name in model_choices, f"[ERROR] Invalid model: {model_name}."
 
-    model = model_choices[conf.model]()
-    logger.info(f"{conf.model} model configured.")
+    model = model_choices[model_name]()
+    logger.info(f"{model_name} model configured.")
     return model
 
 

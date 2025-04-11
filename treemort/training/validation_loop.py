@@ -6,7 +6,7 @@ from collections import defaultdict
 from treemort.training.output_processing import process_model_output
 
 
-def validate_one_epoch(model, criterion, metrics, val_loader, conf, device):
+def validate_one_epoch(model, criterion, metrics, val_loader, model_name, device):
     model.eval()
     val_loss = 0.0
     val_metrics = defaultdict(float)
@@ -20,7 +20,7 @@ def validate_one_epoch(model, criterion, metrics, val_loader, conf, device):
             buffer_mask = labels[:, 3, :, :].unsqueeze(1)  # [B, 1, H, W]
             _, _, h, w = buffer_mask.shape
 
-            logits = process_model_output(model, images, conf.model)
+            logits, _ = process_model_output(model, images, model_name)
             
             target_mask = labels[:, 0, :, :].unsqueeze(1)  # [B, 1, h, w]
             target_centroid = labels[:, 1, :, :].unsqueeze(1)  # [B, 1, h, w]

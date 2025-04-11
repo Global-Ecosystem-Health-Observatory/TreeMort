@@ -12,37 +12,79 @@ logger = get_logger(__name__)
 
 
 def resume_or_load(conf, id2label, n_batches, device):
-    logger.info("Building model...")
+    logger.info("Building student and teacher models...")
 
-    model, optimizer, schedular, criterion, metrics = build_model(conf, id2label, device, total_steps=conf.epochs * n_batches)
+    student_model, teacher_model, optimizer, schedular, criterion, metrics = build_model(conf, id2label, device, total_steps=conf.epochs * n_batches)
 
-    callbacks = build_callbacks(n_batches, os.path.join(conf.output_dir, conf.model), optimizer)
+    callbacks = build_callbacks(n_batches, os.path.join(conf.output_dir, conf.model), optimizer, "best.weights."+ conf.distillation_method + ".pth")
+
+    if conf.teacher_model_file_names:
+        load_teacher_weights(teacher_model, conf, device)
 
     if conf.resume:
-        load_checkpoint_if_available(model, conf)
+        load_checkpoint_if_available(student_model, conf, device)
     else:
-        logger.info("Training model from scratch.")
+        logger.info("Training student model from scratch.")
 
-    return model, optimizer, schedular, criterion, metrics, callbacks
+    return student_model, teacher_model, optimizer, schedular, criterion, metrics, callbacks
 
 
-def load_checkpoint_if_available(model, conf):
-    checkpoint_path = get_checkpoint(conf.model_weights, os.path.join(conf.output_dir, conf.model))
+def load_teacher_weights(teacher_model, conf, device):
+    # If teacher_model is a list, load weights for each teacher
+    if isinstance(teacher_model, list):
+        # Ensure teacher_model_names and teacher_model_file_name are lists
+        if not isinstance(conf.teacher_model_names, list):
+            conf.teacher_model_names = [conf.teacher_model_names]
+        if not isinstance(conf.teacher_model_file_names, list):
+            conf.teacher_model_file_names = [conf.teacher_model_file_names]
+        for t_model, t_name, t_file in zip(teacher_model, conf.teacher_model_names, conf.teacher_model_file_names):
+            checkpoint_path = get_checkpoint(conf.output_dir, model_name=t_name, model_file_name=t_file)
+            if checkpoint_path:
+                t_model.load_state_dict(torch.load(checkpoint_path, map_location=device, weights_only=True))
+                logger.info(f"Loaded teacher model weights for {t_name} from {checkpoint_path}.")
+            else:
+                raise FileNotFoundError(f"Teacher model checkpoint not found for {t_name}.")
+    else:
+        # Single teacher model case
+        t_name = conf.teacher_model_names[0] if isinstance(conf.teacher_model_names, list) else conf.teacher_model_names
+        t_file = conf.teacher_model_file_names[0] if isinstance(conf.teacher_model_file_names, list) else conf.teacher_model_file_names
+        checkpoint_path = get_checkpoint(conf.output_dir, model_name=t_name, model_file_name=t_file)
+        if checkpoint_path:
+            teacher_model.load_state_dict(torch.load(checkpoint_path, map_location=device, weights_only=True))
+            logger.info(f"Loaded teacher model weights for {t_name} from {checkpoint_path}.")
+        else:
+            raise FileNotFoundError("Teacher model checkpoint not found.")
+
+
+def load_checkpoint_if_available(model, conf, device):
+    checkpoint_path = get_checkpoint(conf.output_dir, model_name=conf.model)
 
     if checkpoint_path:
-        device = next(model.parameters()).device  # Get the device of the model
         model.load_state_dict(torch.load(checkpoint_path, map_location=device, weights_only=True))
-        logger.info(f"Loaded weights from {checkpoint_path}.")
+        logger.info(f"Loaded student model weights from {checkpoint_path}.")
     else:
-        logger.info("No checkpoint found. Training from scratch.")
+        logger.info("No student model checkpoint found. Training from scratch.")
 
 
 def build_model(conf, id2label, device, total_steps=1):
-    model = configure_model(conf, id2label)
-    model.to(device)
-    logger.info(f"Model successfully moved to {device}.")
+    student_model = configure_model(conf, conf.model, id2label)
+    student_model.to(device)
+    logger.info("Student model successfully moved to device.")
 
-    optimizer, scheduler = configure_optimizer(model, conf.learning_rate, total_steps)
+    # Create teacher model(s)
+    if hasattr(conf, 'teacher_model_names') and isinstance(conf.teacher_model_names, list):
+        teacher_model = []
+        for model_name in conf.teacher_model_names:
+            t_model = configure_model(conf, model_name, id2label)
+            t_model.to(device)
+            teacher_model.append(t_model)
+        logger.info(f"{len(teacher_model)} teacher models successfully moved to device.")
+    else:
+        teacher_model = configure_model(conf, conf.teacher_model_names, id2label)
+        teacher_model.to(device)
+        logger.info("Teacher model successfully moved to device.")
+
+    optimizer, schedular = configure_optimizer(student_model, conf.learning_rate, total_steps)
     criterion, metrics = configure_loss_and_metrics(conf)
 
-    return model, optimizer, scheduler, criterion, metrics
+    return student_model, teacher_model, optimizer, schedular, criterion, metrics

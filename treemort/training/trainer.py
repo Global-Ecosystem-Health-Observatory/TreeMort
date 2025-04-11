@@ -1,6 +1,17 @@
-from tqdm import tqdm
+import torch
 
-from treemort.training.train_loop import train_one_epoch
+from tqdm import tqdm
+from typing import Callable, Any, List, Union
+
+from torch.utils.data import DataLoader
+
+from treemort.training.train_loop import (
+    train_one_epoch_distillation,
+    train_one_epoch_self_distillation,
+    train_one_epoch_feature_level_distillation,
+    train_one_epoch_ensemble_distillation,
+)
+
 from treemort.training.validation_loop import validate_one_epoch
 from treemort.training.callback_handler import handle_callbacks
 
@@ -9,43 +20,76 @@ from treemort.utils.metrics import log_metrics
 
 
 def trainer(
-    model,
-    optimizer,
-    schedular,
-    criterion,
-    metrics,
-    train_loader,
-    val_loader,
-    conf,
-    callbacks,
-):
+    student_model: torch.nn.Module,
+    teacher_model_or_ema: Union[torch.nn.Module, List[torch.nn.Module]],
+    optimizer: torch.optim.Optimizer,
+    scheduler: torch.optim.lr_scheduler._LRScheduler,
+    criterion: Callable,
+    kd_criterion: Callable,
+    metrics: Callable,
+    train_loader: DataLoader,
+    val_loader: DataLoader,
+    conf: Any,
+    callbacks: List[Any],
+) -> None:
+
     logger = get_logger()
 
-    device = next(model.parameters()).device
+    if conf.distillation_method == "basic":
+        training_loop = train_one_epoch_distillation
+    elif conf.distillation_method == "self":
+        training_loop = train_one_epoch_self_distillation
+    elif conf.distillation_method == "feature":
+        training_loop = train_one_epoch_feature_level_distillation
+    elif conf.distillation_method == "ensemble":
+        training_loop = train_one_epoch_ensemble_distillation
+    else:
+        raise ValueError("Unknown distillation method specified.")
+
+    if isinstance(teacher_model_or_ema, list):
+        for m in teacher_model_or_ema:
+            m.eval()
+    else:
+        teacher_model_or_ema.eval()
+
+    device = next(student_model.parameters()).device
     best_metric = float('inf')
 
     for epoch in tqdm(range(conf.epochs), desc="Epochs", unit="epoch"):
-        
-        train_loss, train_metrics = train_one_epoch(
-            model, optimizer, schedular, criterion, metrics, 
-            train_loader, conf, device
-        )
+        logger.info(f"Epoch {epoch + 1}/{conf.epochs} - Training ({conf.distillation_method} KD) started.")
 
-        # logger.info(f"[Train] Loss: {train_loss:.4f}")
-        # log_metrics(train_metrics, "Train")
+        extra_params = {}
+        if conf.distillation_method == "self":
+            extra_params["beta"] = conf.distillation_beta
+        elif conf.distillation_method == "feature":
+            extra_params["lambda_feature"] = conf.distillation_lambda
+
+        train_loss, train_metrics = training_loop(
+            student_model,
+            teacher_model_or_ema,
+            optimizer,
+            scheduler,
+            criterion,
+            kd_criterion,
+            metrics,
+            train_loader,
+            conf.model,
+            conf.teacher_model_names,
+            device,
+            alpha=conf.distillation_alpha,
+            temperature=conf.distillation_temperature,
+            **extra_params
+        )
 
         val_loss, val_metrics = validate_one_epoch(
-            model, criterion, metrics, 
-            val_loader, conf, device
+            student_model, criterion, metrics, 
+            val_loader, conf.model, device
         )
-
-        # logger.info(f"[Val] Loss: {val_loss:.4f}")
-        # log_metrics(val_metrics, "Val")
 
         stop_training = handle_callbacks(
             callbacks,
             epoch=epoch,
-            model=model,
+            model=student_model,
             optimizer=optimizer,
             val_loss=val_loss,
             val_metrics=val_metrics
@@ -56,4 +100,4 @@ def trainer(
             break
 
     logger.info("Training completed successfully.")
-    return model
+    return student_model

@@ -24,6 +24,6 @@ def process_model_output(model, images, model_name):
         logits = outputs.logits[:, 1:2, :, :]
     
     else:
-        logits = model(images)
+        logits, features = model(images)
     
-    return logits
+    return logits, features
