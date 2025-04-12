@@ -18,6 +18,7 @@ fi
 export HPC_TYPE="$1"
 export MODEL_TYPE="$2"
 export DATA_TYPE="$3"
+export DISTILL_TYPE="$4"
 
 export TREEMORT_REPO_PATH="/users/rahmanan/TreeMort"
 
@@ -38,7 +39,7 @@ export CONFIG_PATH="$TREEMORT_REPO_PATH/configs/inference/${DATA_TYPE}.txt"
 export DATA_CONFIG_PATH="$TREEMORT_REPO_PATH/configs/data/${DATA_TYPE}.txt"
 export MODEL_CONFIG_PATH="$TREEMORT_REPO_PATH/configs/model/${MODEL_TYPE}.txt"
 
-export PREDICTIONS_FOLDER="Predictions_${MODEL_TYPE}"
+export PREDICTIONS_FOLDER="Predictions_${MODEL_TYPE}_${DISTILL_TYPE}"
 if [[ "$@" == *"--post-process"* ]]; then
     PREDICTIONS_FOLDER="${PREDICTIONS_FOLDER}_post_process"
 fi
