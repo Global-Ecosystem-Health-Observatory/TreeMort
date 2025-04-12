@@ -238,7 +238,7 @@ def _infer_patches(patches: list[torch.Tensor], model: torch.nn.Module, activati
     batch_tensor = torch.stack(patches).to(device)
     
     with torch.no_grad():
-        logits = process_model_output(model, batch_tensor, model_name)
+        logits, _ = process_model_output(model, batch_tensor, model_name)
         predictions = apply_activation(logits[:, 0:1, ...], activation=activation)
 
     return predictions
