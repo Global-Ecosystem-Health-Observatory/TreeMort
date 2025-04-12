@@ -67,20 +67,20 @@ def load_checkpoint_if_available(model, conf, device):
 
 
 def build_model(conf, id2label, device, total_steps=1):
-    student_model = configure_model(conf, conf.model, id2label)
+    student_model = configure_model(conf.model, conf.input_channels, conf.output_channels, conf.backbone, conf.test_crop_size, conf.cache_dir, id2label)
     student_model.to(device)
     logger.info("Student model successfully moved to device.")
 
     # Create teacher model(s)
     if hasattr(conf, 'teacher_model_names') and isinstance(conf.teacher_model_names, list):
         teacher_model = []
-        for model_name in conf.teacher_model_names:
-            t_model = configure_model(conf, model_name, id2label)
+        for model_name, backbone in zip(conf.teacher_model_names, conf.teacher_backbones):
+            t_model = configure_model(model_name, conf.input_channels, conf.output_channels, backbone, conf.test_crop_size, conf.cache_dir, id2label)
             t_model.to(device)
             teacher_model.append(t_model)
         logger.info(f"{len(teacher_model)} teacher models successfully moved to device.")
     else:
-        teacher_model = configure_model(conf, conf.teacher_model_names, id2label)
+        teacher_model = configure_model(conf.teacher_model_names, conf.input_channels, conf.output_channels, conf.teacher_backbones, conf.test_crop_size, conf.cache_dir, id2label)
         teacher_model.to(device)
         logger.info("Teacher model successfully moved to device.")
 
