@@ -127,7 +127,7 @@ def run_inference(
         (image_path, conf, output_dir, id2label, post_process)
         for image_path in image_paths
         # Uncomment the following line to skip images already processed:
-        if not os.path.exists(os.path.join(output_dir, f"{os.path.splitext(os.path.basename(image_path))[0]}.geojson"))
+        # if not os.path.exists(os.path.join(output_dir, f"{os.path.splitext(os.path.basename(image_path))[0]}.geojson"))
     ]
 
     try:
@@ -189,11 +189,11 @@ python -m inference.engine \
     --outdir ${TREEMORT_DATA_PATH}/Finland/Predictions
 
 python -m inference.engine \
-    ${TREEMORT_DATA_PATH}/Finland/RGBNIR/25cm/2011/Images/M3442B_2011_1.tiff \
-    --config ${TREEMORT_REPO_PATH}/configs/inference/finland.txt \
+    ${TREEMORT_DATA_PATH}/Poland/RGBNIR/25cm/2021/Images/M-33-21-B-d-2-3_0.tif \
+    --config ${TREEMORT_REPO_PATH}/configs/inference/poland.txt \
     --model-config ${TREEMORT_REPO_PATH}/configs/model/flair_unet.txt \
-    --data-config ${TREEMORT_REPO_PATH}/configs/data/finland.txt \
-    --outdir ${TREEMORT_DATA_PATH}/Finland/Predictions \
+    --data-config ${TREEMORT_REPO_PATH}/configs/data/poland.txt \
+    --outdir ${TREEMORT_DATA_PATH}/Poland/Predictions \
     --post-process --verbosity debug
 
 - For entire folder
@@ -238,7 +238,7 @@ export TREEMORT_REPO_PATH="/users/rahmanan/TreeMort"
 - Download model
 
 (puhti) scp -O -r rahmanan@puhti.csc.fi:/scratch/project_2008436/rahmanan/output/flair_unet output
-(lumi)  scp -O -r rahmanan@lumi.csc.fi:/scratch/project_2008436/rahmanan/output/flair_unet output
+(lumi)  scp -O -r rahmanan@lumi.csc.fi:/scratch/project_462000684/rahmanan/output/flair_unet output
 
 '''
 

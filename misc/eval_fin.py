@@ -74,7 +74,6 @@ test_keys = [
     'V4341C_2022_1_ITD.geojson',
 ]
 
-# test_keys = ['L2344D_2022_1_ITD.geojson']
 
 def process_prediction_file(
     image_path: str, ground_truth_path: str, prediction_path: str

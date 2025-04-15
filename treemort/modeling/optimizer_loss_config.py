@@ -24,7 +24,7 @@ def configure_optimizer(model, learning_rate, total_steps):
     return optimizer, scheduler
 
 
-def configure_loss_and_metrics(conf, class_weights=None):
+def configure_loss_and_metrics(conf):
     if conf.loss == "hybrid":
         def criterion(pred, target):
             pred_mask = pred[:, 0, :, :]
@@ -32,7 +32,7 @@ def configure_loss_and_metrics(conf, class_weights=None):
             buffer_mask = target[:, 3, :, :]
             true_mask = target[:, 0, :, :]
 
-            return hybrid_loss(pred_mask, true_mask, buffer_mask)
+            return hybrid_loss(pred_mask, true_mask, buffer_mask=buffer_mask, class_weights=conf.class_weights)
 
         def metrics(pred, target):
             pred_mask = pred[:, 0, :, :]
@@ -73,10 +73,10 @@ def configure_loss_and_metrics(conf, class_weights=None):
         def criterion(pred, target):
             buffer_mask = target[:, 3, :, :].unsqueeze(1)
             seg_loss = weighted_dice_loss(
-                pred[:, 0, :, :], target[:, 0, :, :], buffer_mask=buffer_mask, class_weights=class_weights
+                pred[:, 0, :, :], target[:, 0, :, :], buffer_mask=buffer_mask, class_weights=conf.class_weights
             )
             centroid_loss = weighted_dice_loss(
-                pred[:, 1, :, :], target[:, 1, :, :], buffer_mask=buffer_mask, class_weights=class_weights
+                pred[:, 1, :, :], target[:, 1, :, :], buffer_mask=buffer_mask, class_weights=conf.class_weights
             )
             return seg_loss + centroid_loss
 

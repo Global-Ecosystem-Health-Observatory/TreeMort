@@ -71,7 +71,6 @@ def build_model(conf, id2label, device, total_steps=1):
     student_model.to(device)
     logger.info("Student model successfully moved to device.")
 
-    # Create teacher model(s)
     if hasattr(conf, 'teacher_model_names') and isinstance(conf.teacher_model_names, list):
         teacher_model = []
         for model_name, backbone in zip(conf.teacher_model_names, conf.teacher_backbones):

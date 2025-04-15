@@ -41,6 +41,7 @@ def find_file_pairs(
             }
             # Match files by name
             common_files = image_files.keys() & gt_files.keys() & pred_files.keys()
+            
             for fname in common_files:
                 pairs.append((image_files[fname], gt_files[fname], pred_files[fname]))
     return pairs
@@ -85,39 +86,34 @@ def calculate_iou_metrics(prediction_gdf: gpd.GeoDataFrame, ground_truth_gdf: gp
         try:
             if prediction_gdf.empty or ground_truth_gdf.empty:
                 return 0.0
-
-            ious = []
-            matched_gt_ids = set()
-
-            for _, pred_row in prediction_gdf.iterrows():
-                pred_geom = pred_row["geometry"]
-                intersecting_gts = ground_truth_gdf[ground_truth_gdf.intersects(pred_geom)]
-
-                if intersecting_gts.empty:
-                    ious.append(0.0)
-                    continue
-
+            
+            # For each ground truth, compute the best IoU achieved with any predicted segment
+            gt_ious = []
+            for gt_idx, gt_row in ground_truth_gdf.iterrows():
+                gt_geom = gt_row["geometry"]
                 best_iou = 0.0
-                best_gt_id = None
-                for gt_idx, gt_row in intersecting_gts.iterrows():
-                    gt_geom = gt_row["geometry"]
+                for _, pred_row in prediction_gdf.iterrows():
+                    pred_geom = pred_row["geometry"]
+                    if not pred_geom.intersects(gt_geom):
+                        continue
                     intersect_area = pred_geom.intersection(gt_geom).area
                     union_area = pred_geom.area + gt_geom.area - intersect_area
                     iou = intersect_area / union_area if union_area > 0 else 0.0
-                    
-                    if iou > best_iou:
-                        best_iou = iou
-                        best_gt_id = gt_idx
-
-                ious.append(best_iou)
-                if best_gt_id is not None:
-                    matched_gt_ids.add(best_gt_id)
-
-            unmatched_gt_count = len(ground_truth_gdf) - len(matched_gt_ids)
-            ious.extend([0.0] * unmatched_gt_count)
-
-            return np.mean(ious) if ious else 0.0
-
+                    best_iou = max(best_iou, iou)
+                gt_ious.append(best_iou)
+            
+            # Additionally, count predictions that do not overlap any ground truth and treat them as zeros
+            unmatched_pred = 0
+            for _, pred_row in prediction_gdf.iterrows():
+                pred_geom = pred_row["geometry"]
+                if not any(pred_geom.intersects(gt_row["geometry"]) for _, gt_row in ground_truth_gdf.iterrows()):
+                    unmatched_pred += 1
+            
+            total_count = len(gt_ious) + unmatched_pred
+            total_sum = sum(gt_ious)  # unmatched predictions contribute 0
+            
+            return total_sum / total_count if total_count > 0 else 0.0
+    
         except Exception as e:
             print(f"Error in calculate_pixel_iou: {e}")
             return 0.0
@@ -126,36 +122,39 @@ def calculate_iou_metrics(prediction_gdf: gpd.GeoDataFrame, ground_truth_gdf: gp
         if prediction_gdf.empty or ground_truth_gdf.empty:
             return 0.0  # Return 0 IoU if either is empty
 
-        matched_preds = set()
-        matched_gts = set()
+        # Many-to-One Matching Strategy:
+        # For each ground truth, check if any predicted segment overlaps sufficiently (IoU >= overlap_threshold).
+        detected_gts = set()
+        for gt_idx, gt_row in ground_truth_gdf.iterrows():
+            gt_geom = gt_row["geometry"]
+            for _, pred_row in prediction_gdf.iterrows():
+                pred_geom = pred_row["geometry"]
+                intersect_area = pred_geom.intersection(gt_geom).area
+                union_area = pred_geom.area + gt_geom.area - intersect_area
+                iou = intersect_area / union_area if union_area > 0 else 0.0
+                if iou >= overlap_threshold:
+                    detected_gts.add(gt_idx)
+                    break
 
-        for pred_idx, pred_row in prediction_gdf.iterrows():
+        TP = len(detected_gts)
+        FN = len(ground_truth_gdf) - TP
+
+        # Count predicted segments that have at least one matching ground truth.
+        valid_preds = 0
+        for _, pred_row in prediction_gdf.iterrows():
             pred_geom = pred_row["geometry"]
-            best_overlap = 0.0
-            best_match = None
-
-            for gt_idx, gt_row in ground_truth_gdf.iterrows():
+            for _, gt_row in ground_truth_gdf.iterrows():
                 gt_geom = gt_row["geometry"]
                 intersect_area = pred_geom.intersection(gt_geom).area
-                pred_area = pred_geom.area
+                union_area = pred_geom.area + gt_geom.area - intersect_area
+                iou = intersect_area / union_area if union_area > 0 else 0.0
+                if iou >= overlap_threshold:
+                    valid_preds += 1
+                    break
 
-                overlap_ratio = intersect_area / pred_area if pred_area > 0 else 0.0
+        FP = len(prediction_gdf) - valid_preds
 
-                if overlap_ratio > best_overlap:
-                    best_overlap = overlap_ratio
-                    best_match = gt_idx
-
-            if best_overlap >= overlap_threshold and best_match not in matched_gts:
-                matched_preds.add(pred_idx)
-                matched_gts.add(best_match)
-
-        tp = len(matched_gts)
-        fp = len(prediction_gdf) - len(matched_preds)
-        fn = len(ground_truth_gdf) - len(matched_gts)
-
-        tree_iou = tp / (tp + fp + fn) if (tp + fp + fn) > 0 else 0.0
-        
-        return tree_iou
+        return TP / (TP + FP + FN) if (TP + FP + FN) > 0 else 0.0
     
     return calculate_pixel_iou(), calculate_tree_iou()
 

@@ -4,11 +4,11 @@ include = base_config.txt
 
 best-model = best.weights.ensemble.pth
 
-min-area = 1.5            # Larger and less uniformly small compared to Finnish boreal species in sq. m
+min-area = 1.0            # Larger and less uniformly small compared to Finnish boreal species in sq. m
 max-aspect-ratio = 4.0    # More varied and sometimes elongated due to a wider diversity of species or forest structures
 min-solidity = 0.80       # More open or irregular outlines
 
-min-distance = 5
+min-distance = 3
 dilation-radius = 1
 erosion-radius = 1
 blur-sigma = 1.0
