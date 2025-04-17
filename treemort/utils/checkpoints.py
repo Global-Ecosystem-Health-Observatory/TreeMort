@@ -1,11 +1,11 @@
 import os
 
 
-def get_checkpoint(model_weights, output_dir):
+def get_checkpoint(model_weights, output_dir, best_weights_path="best.weights.pth"):
     checkpoint = None
 
     if model_weights == "best":
-        checkpoint = os.path.join(output_dir, "best.weights.pth")
+        checkpoint = os.path.join(output_dir, best_weights_path)
         if not os.path.exists(checkpoint):
             checkpoint = None
 

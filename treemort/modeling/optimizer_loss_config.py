@@ -11,7 +11,7 @@ logger = get_logger(__name__)
 
 
 def configure_optimizer(model, learning_rate, total_steps):
-    optimizer = AdamW(model.parameters(), lr=learning_rate, weight_decay=1e-4)
+    optimizer = AdamW(filter(lambda p: p.requires_grad, model.parameters()), lr=learning_rate, weight_decay=1e-4)
     
     scheduler = OneCycleLR(
         optimizer,
