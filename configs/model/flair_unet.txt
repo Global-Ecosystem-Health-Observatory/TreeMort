@@ -14,7 +14,7 @@ teacher-model-names = flair_unet
 teacher-model-file-names = best.weights.pth
 teacher-backbones = None
 
-distillation-alpha = 0.3
+distillation-alpha = 0.5
 distillation-temperature = 4.0
 distillation-beta = 0.999
 distillation-method = basic
