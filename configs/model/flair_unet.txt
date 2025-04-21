@@ -11,7 +11,7 @@ resume = True
 # teacher-backbones = None, None, efficientnet-b7, efficientnet-b7, efficientnet-b7, efficientnet-b7, efficientnet-b7
 
 teacher-model-names = flair_unet
-teacher-model-file-names = best.weights.pth
+teacher-model-file-names = best.weights.transfer.pth
 teacher-backbones = None
 
 distillation-alpha = 0.5
