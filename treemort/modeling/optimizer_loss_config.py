@@ -32,7 +32,7 @@ def configure_loss_and_metrics(conf):
             buffer_mask = target[:, 3, :, :]
             true_mask = target[:, 0, :, :]
 
-            return hybrid_loss(pred_mask, true_mask, buffer_mask=buffer_mask, class_weights=conf.class_weights)
+            return hybrid_loss(pred_mask, true_mask, buffer_mask=buffer_mask)
 
         def metrics(pred, target):
             pred_mask = pred[:, 0, :, :]
