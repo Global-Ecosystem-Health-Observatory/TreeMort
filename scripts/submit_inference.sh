@@ -54,11 +54,6 @@ else
     exit 1
 fi
 
-# Filter and forward only the --post-process flag to the inference script.
-POST_PROCESS_FLAG=""
-if [[ "$@" == *"--post-process"* ]]; then
-    POST_PROCESS_FLAG="--post-process"
-fi
-
-# Call the inference script with the filtered flag.
-bash $TREEMORT_REPO_PATH/scripts/run_inference.sh "$POST_PROCESS_FLAG"
+# Forward any optional flags (e.g., --post-process, --list-file) to the inference script.
+# Positional args $1-$3 are HPC_TYPE, MODEL_TYPE, DATA_TYPE; flags start from $4.
+bash "$TREEMORT_REPO_PATH/scripts/run_inference.sh" "${@:4}"

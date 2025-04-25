@@ -79,20 +79,35 @@ elif [ ! -d "$OUTPUT_PATH" ]; then
 fi
 
 POST_PROCESS=""
+LIST_FILE=""
 
 while [[ "\$#" -gt 0 ]]; do
-    if [ -z "\$1" ]; then
-        break
-    fi
-    case \$1 in
-        --post-process) POST_PROCESS="--post-process" ;;
-        *) echo "[ERROR] Unknown parameter passed: \$1"; exit 1 ;;
+    case "\$1" in
+        --post-process)
+            POST_PROCESS="--post-process"
+            shift
+            ;;
+        --list-file)
+            if [[ -n "\$2" ]]; then
+                LIST_FILE="\$2"
+                shift 2
+            else
+                echo "[ERROR] --list-file requires a filename argument."
+                exit 1
+            fi
+            ;;
+        *)
+            echo "[ERROR] Unknown parameter passed: \$1"
+            exit 1
+            ;;
     esac
-    shift
 done
 
 if [ -n "$POST_PROCESS" ]; then
     echo "[INFO] Post-processing is enabled"
+fi
+if [[ -n "$LIST_FILE" ]]; then
+    echo "[INFO] Processing only files listed in: $LIST_FILE"
 fi
 
 echo "[INFO] Pre-downloading Beit and Maskformer models..."
@@ -106,7 +121,14 @@ rm -rf "$TREEMORT_DATA_PATH/huggingface_cache/facebook/detr-resnet-50-panoptic"
 python3 -c "from transformers import AutoModel; AutoModel.from_pretrained('facebook/detr-resnet-50-panoptic', cache_dir='$TREEMORT_DATA_PATH/huggingface_cache')"
 
 echo "[INFO] Starting inference..."
-srun python3 "$TREEMORT_REPO_PATH/inference/engine.py" "$DATA_PATH" --config "$CONFIG_PATH" --model-config "$MODEL_CONFIG_PATH" --data-config "$DATA_CONFIG_PATH" --outdir "$OUTPUT_PATH" $POST_PROCESS
+srun python3 "$TREEMORT_REPO_PATH/inference/engine.py" \
+    "$DATA_PATH" \
+    --config "$CONFIG_PATH" \
+    --model-config "$MODEL_CONFIG_PATH" \
+    --data-config "$DATA_CONFIG_PATH" \
+    --outdir "$OUTPUT_PATH" \
+    $POST_PROCESS \
+    ${LIST_FILE:+--list-file "$LIST_FILE"}
 
 EXIT_STATUS=$?
 if [ $EXIT_STATUS -ne 0 ]; then
