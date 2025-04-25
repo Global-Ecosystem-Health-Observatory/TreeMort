@@ -114,6 +114,7 @@ def run_inference(
     post_process: bool = False,
     verbosity: str = "info",
     num_processes: int = 4,
+    list_file: str = None,
 ) -> None:
     logger = configure_logger(verbosity=verbosity)
     validate_path(logger, data_path)
@@ -123,12 +124,27 @@ def run_inference(
     id2label = {0: "alive", 1: "dead"}
     conf = parse_config(config_file_path)
 
-    data_path = Path(data_path)
-    image_paths = (
-        list(data_path.rglob("*.tiff")) + list(data_path.rglob("*.tif")) + list(data_path.rglob("*.jp2"))
-        if data_path.is_dir()
-        else [data_path]
-    )
+    # Select images either from a provided list file or by directory scan
+    if list_file:
+        data_path = Path(data_path)
+        if not os.path.isfile(list_file):
+            get_logger().error(f"List file not found: {list_file}")
+            return
+        with open(list_file, 'r') as f:
+            lines = [line.strip() for line in f if line.strip() and not line.strip().startswith('#')]
+        image_paths = []
+        for p in lines:
+            p_path = Path(p)
+            if not p_path.is_absolute():
+                p_path = data_path / p_path
+            image_paths.append(p_path)
+    else:
+        data_path = Path(data_path)
+        image_paths = (
+            list(data_path.rglob("*.tiff")) + list(data_path.rglob("*.tif")) + list(data_path.rglob("*.jp2"))
+            if data_path.is_dir()
+            else [data_path]
+        )
 
     if not image_paths:
         logger.warning(f"No images found in the specified path: {data_path}")
@@ -192,10 +208,22 @@ def main():
     parser.add_argument('--outdir', type=str, help="Directory to save GeoJSON predictions (default: same as input)")
     parser.add_argument('--post-process', action="store_true", help="Enable or disable post-processing")
     parser.add_argument('--verbosity', type=str, choices=['info', 'debug', 'warning'], default='info')
+    parser.add_argument(
+        '--list-file',
+        type=str,
+        help="Path to text file with list of image filenames to process"
+    )
 
     args = parser.parse_args()
     logger = configure_logger(verbosity=args.verbosity)
-    run_inference(args.data_path, args.config, args.outdir, args.post_process, verbosity=args.verbosity)
+    run_inference(
+        args.data_path,
+        args.config,
+        args.outdir,
+        args.post_process,
+        verbosity=args.verbosity,
+        list_file=args.list_file
+    )
 
 
 if __name__ == "__main__":
