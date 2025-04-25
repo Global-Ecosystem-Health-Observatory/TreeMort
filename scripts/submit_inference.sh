@@ -1,0 +1,62 @@
+#!/bin/bash
+
+if [ -z "$1" ]; then
+    echo "Error: HPC_TYPE argument is required (e.g., 'puhti' or 'lumi')."
+    exit 1
+fi
+
+if [ -z "$2" ]; then
+    echo "Error: MODEL_TYPE argument is required (e.g., 'flair_unet')."
+    exit 1
+fi
+
+if [ -z "$3" ]; then
+    echo "Error: DATA_TYPE argument is required (e.g., 'finland' or 'poland')."
+    exit 1
+fi
+
+export HPC_TYPE="$1"
+export MODEL_TYPE="$2"
+export DATA_TYPE="$3"
+
+export TREEMORT_REPO_PATH="/users/rahmanan/TreeMort"
+
+# Set global environment variables based on HPC type.
+if [ "$HPC_TYPE" == "puhti" ]; then
+    export TREEMORT_VENV_PATH="/projappl/project_2004205/rahmanan/venv"
+    export TREEMORT_DATA_PATH="/scratch/project_2008436/rahmanan"
+elif [ "$HPC_TYPE" == "lumi" ]; then
+    export TREEMORT_VENV_PATH="/projappl/project_462000684/rahmanan/venv"
+    export TREEMORT_DATA_PATH="/scratch/project_462000684/rahmanan"
+else
+    echo "Error: Unsupported HPC_TYPE '$HPC_TYPE'."
+    exit 1
+fi
+
+# Set necessary environment variables for inference.
+export CONFIG_PATH="$TREEMORT_REPO_PATH/configs/Finland_RGBNIR_25cm_inference_sdt.txt"
+export DATA_CONFIG_PATH="$TREEMORT_REPO_PATH/configs/Finland_RGBNIR_25cm_inference_sdt.txt"
+export MODEL_CONFIG_PATH="$TREEMORT_REPO_PATH/configs/Finland_RGBNIR_25cm_inference_sdt.txt"
+
+export PREDICTIONS_FOLDER="Predictions_${MODEL_TYPE}"
+if [[ "$@" == *"--post-process"* ]]; then
+    PREDICTIONS_FOLDER="${PREDICTIONS_FOLDER}_post_process"
+fi
+
+if [ "$DATA_TYPE" == "finland" ]; then
+    export DATA_PATH="$TREEMORT_DATA_PATH/dead_trees/Finland/RGBNIR/25cm"
+    export OUTPUT_PATH="$TREEMORT_DATA_PATH/dead_trees/Finland/$PREDICTIONS_FOLDER"
+elif [ "$DATA_TYPE" == "poland" ]; then
+    export DATA_PATH="$TREEMORT_DATA_PATH/dead_trees/Poland/RGBNIR/25cm"
+    export OUTPUT_PATH="$TREEMORT_DATA_PATH/dead_trees/Poland/$PREDICTIONS_FOLDER"
+elif [ "$DATA_TYPE" == "all" ]; then
+    export DATA_PATH="${TREEMORT_DATA_PATH}/DRYTREE_Orthoimagery_Finland"
+    export OUTPUT_PATH="$TREEMORT_DATA_PATH/Predictions_DRYTREE_Orthoimagery_Finland"
+else
+    echo "Error: Unsupported DATA_TYPE '$DATA_TYPE'."
+    exit 1
+fi
+
+# Forward any optional flags (e.g., --post-process, --list-file) to the inference script.
+# Positional args $1-$3 are HPC_TYPE, MODEL_TYPE, DATA_TYPE; flags start from $4.
+bash "$TREEMORT_REPO_PATH/scripts/run_inference.sh" "${@:4}"

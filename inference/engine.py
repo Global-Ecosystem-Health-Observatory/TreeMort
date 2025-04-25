@@ -300,19 +300,24 @@ sbatch \
     OUTPUT_PATH="$TREEMORT_DATA_PATH/Finland/Predictions_r" \
     $TREEMORT_REPO_PATH/scripts/run_inference.sh --post-process
 
-    
+scp -O -r rahmanan@puhti.csc.fi:/scratch/project_2008436/rahmanan/dead_trees/Finland/Predictions ~/Documents/dead_trees/Finland
+scp -O -r rahmanan@puhti.csc.fi:/scratch/project_2008436/rahmanan/dead_trees/Finland/Predictions_r ~/Documents/dead_trees/Finland
+
+'''
+
+'''
+
+scp -O -r rahmanan@puhti.csc.fi:/scratch/project_2008436/rahmanan/output/flair_unet_sdt output
+scp -O -r output/flair_unet_sdt rahmanan@lumi.csc.fi:/scratch/project_462000684/rahmanan/output
+
 export TREEMORT_VENV_PATH="/projappl/project_462000684/rahmanan/venv"
 export TREEMORT_REPO_PATH="/users/rahmanan/TreeMort"
 export TREEMORT_DATA_PATH="/scratch/project_462000684/rahmanan"
 
 sbatch \
-    --export=ALL,CONFIG_PATH="$TREEMORT_REPO_PATH/configs/Finland_RGBNIR_25cm_inference.txt",\
-    DATA_PATH="$TREEMORT_DATA_PATH/DRYTREE_Orthoimagery_Finland",\
-    OUTPUT_PATH="$TREEMORT_DATA_PATH/Predictions_DRYTREE_Orthoimagery_Finland" \
-    $TREEMORT_REPO_PATH/scripts/run_inference.sh --post-process \
+  --export=ALL,CONFIG_PATH="${TREEMORT_REPO_PATH}/configs/Finland_RGBNIR_25cm_inference_sdt.txt",DATA_PATH="${TREEMORT_DATA_PATH}/DRYTREE_Orthoimagery_Finland",OUTPUT_PATH="${TREEMORT_DATA_PATH}/Predictions_DRYTREE_Orthoimagery_Finland" \
+  "${TREEMORT_REPO_PATH}/scripts/run_inference.sh" \
+    --post-process \
     --list-file a3s.fi.2023.txt
-
-scp -O -r rahmanan@puhti.csc.fi:/scratch/project_2008436/rahmanan/dead_trees/Finland/Predictions ~/Documents/dead_trees/Finland
-scp -O -r rahmanan@puhti.csc.fi:/scratch/project_2008436/rahmanan/dead_trees/Finland/Predictions_r ~/Documents/dead_trees/Finland
 
 '''
