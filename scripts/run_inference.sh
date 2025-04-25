@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=treemort-inference
-#SBATCH --account=project_2004205
+#SBATCH --account=project_462000684
 #SBATCH --output=output/stdout/%A_%a.out
 #SBATCH --error=output/stderr/%A_%a.err
 #SBATCH --ntasks=1
@@ -15,10 +15,11 @@
 # export TREEMORT_REPO_PATH="/custom/path/to/treemort/repo"
 # sbatch --export=ALL,CONFIG_PATH="/custom/path/to/config",DATA_PATH="/custom/path/to/data",OUTPUT_PATH="/custom/path/to/output" run_inference.sh
 
-MODULE_NAME="pytorch/2.3"
+MODULE_NAME="pytorch/2.4"
+module use /appl/local/csc/modulefiles/
 module load $MODULE_NAME
 
-TREEMORT_VENV_PATH="${TREEMORT_VENV_PATH:-/projappl/project_2004205/rahmanan/venv}"
+TREEMORT_VENV_PATH="${TREEMORT_VENV_PATH:-/projappl/project_462000684/rahmanan/venv}"
 
 if [ -d "$TREEMORT_VENV_PATH" ]; then
     echo "[INFO] Activating virtual environment at $TREEMORT_VENV_PATH"
@@ -68,16 +69,36 @@ if [ ! -d "$OUTPUT_PATH" ]; then
 fi
 
 POST_PROCESS=""
+LIST_FILE=""
 
 while [[ "$#" -gt 0 ]]; do
-    case $1 in
-        --post-process) POST_PROCESS="--post-process"; shift ;;
-        *) echo "[ERROR] Unknown parameter passed: $1"; exit 1 ;;
+    case "$1" in
+        --post-process)
+            POST_PROCESS="--post-process"
+            shift
+            ;;
+        --list-file)
+            if [[ -n "$2" ]]; then
+                LIST_FILE="$2"
+                shift 2
+            else
+                echo "[ERROR] --list-file requires a filename argument."
+                exit 1
+            fi
+            ;;
+        *)
+            echo "[ERROR] Unknown parameter passed: $1"
+            exit 1
+            ;;
     esac
 done
 
 if [ -n "$POST_PROCESS" ]; then
     echo "[INFO] Post-processing is enabled"
+fi
+
+if [ -n "$LIST_FILE" ]; then
+    echo "[INFO] Only processing files listed in: $LIST_FILE"
 fi
 
 echo "[INFO] Starting inference with the following settings:"
@@ -88,7 +109,7 @@ echo "       Inference engine: $ENGINE_PATH"
 echo "       CPUs per task: $SLURM_CPUS_PER_TASK"
 echo "       Memory per CPU: $SLURM_MEM_PER_CPU MB"
 
-srun python3 "$ENGINE_PATH" "$DATA_PATH" --config "$CONFIG_PATH" --outdir "$OUTPUT_PATH" $POST_PROCESS
+srun python3 "$ENGINE_PATH" "$DATA_PATH" --config "$CONFIG_PATH" --outdir "$OUTPUT_PATH" $POST_PROCESS ${LIST_FILE:+--list-file "$LIST_FILE"}
 
 EXIT_STATUS=$?
 if [ $EXIT_STATUS -ne 0 ]; then
