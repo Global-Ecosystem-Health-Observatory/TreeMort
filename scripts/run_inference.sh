@@ -124,8 +124,6 @@ echo "[INFO] Starting inference..."
 srun python3 "$TREEMORT_REPO_PATH/inference/engine.py" \
     "$DATA_PATH" \
     --config "$CONFIG_PATH" \
-    --model-config "$MODEL_CONFIG_PATH" \
-    --data-config "$DATA_CONFIG_PATH" \
     --outdir "$OUTPUT_PATH" \
     \$POST_PROCESS \
     \${LIST_FILE:+--list-file "\$LIST_FILE"}
