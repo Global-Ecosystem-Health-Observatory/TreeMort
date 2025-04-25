@@ -6,9 +6,9 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
 #SBATCH --time=05:00:00
-#SBATCH --partition=gpu
+#SBATCH --partition=small-g
 #SBATCH --mem-per-cpu=24000
-#SBATCH --gres=gpu:v100:1
+#SBATCH --gpus-per-node=1
 
 # Usage:
 # export TREEMORT_VENV_PATH="/custom/path/to/venv"
