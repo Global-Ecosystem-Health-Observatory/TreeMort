@@ -15,7 +15,7 @@
 # export TREEMORT_REPO_PATH="/custom/path/to/treemort/repo"
 # sbatch --export=ALL,CONFIG_PATH="/custom/path/to/config",DATA_PATH="/custom/path/to/data",OUTPUT_PATH="/custom/path/to/output" run_inference.sh
 
-MODULE_NAME="pytorch/2.4"
+MODULE_NAME="pytorch/2.5"
 module use /appl/local/csc/modulefiles/
 module load $MODULE_NAME
 
