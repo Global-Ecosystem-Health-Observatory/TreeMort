@@ -4,6 +4,8 @@ import json
 import torch
 import rasterio
 import rasterio.features
+from rasterio.enums import Resampling
+from rasterio.warp import reproject
 
 import numpy as np
 
@@ -74,7 +76,9 @@ def load_model(
 
 
 def load_and_preprocess_image(
-    tiff_file: str, nir_rgb_order: Optional[List[int]] = None
+    tiff_file: str,
+    nir_rgb_order: Optional[List[int]] = None,
+    target_resolution: float = 0.25,
 ) -> Tuple[torch.Tensor, Affine, CRS]:
     logger = get_logger()
 
@@ -84,6 +88,32 @@ def load_and_preprocess_image(
         image = src.read()
         transform = src.transform
         crs = src.crs
+
+        # Resample to target resolution if needed
+        current_res_x, current_res_y = src.res
+        if (current_res_x != target_resolution) or (current_res_y != target_resolution):
+            scale_x = current_res_x / target_resolution
+            scale_y = current_res_y / target_resolution
+            new_width = int(src.width * scale_x)
+            new_height = int(src.height * scale_y)
+            dst_transform = Affine(
+                target_resolution, transform.b, transform.c,
+                transform.d, -target_resolution, transform.f
+            )
+            resampled = np.empty((image.shape[0], new_height, new_width), dtype=image.dtype)
+            for i in range(image.shape[0]):
+                reproject(
+                    source=image[i],
+                    destination=resampled[i],
+                    src_transform=transform,
+                    src_crs=crs,
+                    dst_transform=dst_transform,
+                    dst_crs=crs,
+                    resampling=Resampling.bilinear
+                )
+            image = resampled
+            transform = dst_transform
+
         max_pixel_value = _get_max_pixel_value(src.dtypes[0])
 
     _validate_image_channels(image, nir_rgb_order)

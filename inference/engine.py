@@ -208,11 +208,7 @@ def main():
     parser.add_argument('--outdir', type=str, help="Directory to save GeoJSON predictions (default: same as input)")
     parser.add_argument('--post-process', action="store_true", help="Enable or disable post-processing")
     parser.add_argument('--verbosity', type=str, choices=['info', 'debug', 'warning'], default='info')
-    parser.add_argument(
-        '--list-file',
-        type=str,
-        help="Path to text file with list of image filenames to process"
-    )
+    parser.add_argument('--list-file', type=str, help="Path to text file with list of image filenames to process")
 
     args = parser.parse_args()
     logger = configure_logger(verbosity=args.verbosity)
@@ -252,6 +248,11 @@ python -m inference.engine \
     --config ${TREEMORT_REPO_PATH}/configs/Finland_RGBNIR_25cm_inference_sdt.txt \
     --outdir ${TREEMORT_DATA_PATH}/Finland/Predictions_sdt_r --post-process
 
+python -m inference.engine \
+    ./output/M4231B_2023_RGBNIR.tif \
+    --config ${TREEMORT_REPO_PATH}/configs/Finland_RGBNIR_25cm_inference_sdt.txt \
+    --outdir ./output/M4231B_2023_RGBNIR.geojson --post-process
+    
 python -m inference.engine \
     ${TREEMORT_DATA_PATH}/Finland/RGBNIR/25cm/2011/Images/M3442B_2011_1.tiff \
     --config ${TREEMORT_REPO_PATH}/configs/Finland_RGBNIR_25cm_inference.txt \
@@ -306,6 +307,22 @@ scp -O -r rahmanan@puhti.csc.fi:/scratch/project_2008436/rahmanan/dead_trees/Fin
 '''
 
 '''
+
+with open('/Users/anisr/Downloads/a3s.fi.txt', 'r') as file:
+    filenames = file.read().splitlines()
+
+# Filter filenames containing '2023'
+filtered_filenames = [f for f in filenames if '2023' in f]
+with open('/Users/anisr/Downloads/a3s.fi.2023.txt', 'w') as f:
+    f.write('\n'.join(filtered_filenames))
+
+scp ~/Downloads/a3s.fi.2023.txt rahmanan@lumi.csc.fi:/scratch/project_462000684/rahmanan
+
+swift download \
+    --skip-identical \
+    DRYTREE_Orthoimagery_Finland \
+    $(grep -vE '^(#|$)' a3s.fi.2023.txt) \
+    -D /scratch/project_462000684/rahmanan/DRYTREE_Orthoimagery_Finland
 
 scp -O -r rahmanan@puhti.csc.fi:/scratch/project_2008436/rahmanan/output/flair_unet_sdt output
 scp -O -r output/flair_unet_sdt rahmanan@lumi.csc.fi:/scratch/project_462000684/rahmanan/output
