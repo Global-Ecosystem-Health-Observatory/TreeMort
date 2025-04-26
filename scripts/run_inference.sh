@@ -29,10 +29,10 @@ cat <<EOT > $SBATCH_SCRIPT
 #SBATCH --output=output/stdout/%A_%a.out
 #SBATCH --error=output/stderr/%A_%a.err
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=6
+#SBATCH --cpus-per-task=4
 #SBATCH --time=24:00:00
 #SBATCH --partition=$PARTITION_NAME
-#SBATCH --mem=96G
+#SBATCH --mem-per-cpu=24000
 $GPU_DIRECTIVE
 
 export TRANSFORMERS_CACHE="$TREEMORT_DATA_PATH/huggingface_cache"
