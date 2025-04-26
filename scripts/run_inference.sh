@@ -29,10 +29,10 @@ cat <<EOT > $SBATCH_SCRIPT
 #SBATCH --output=output/stdout/%A_%a.out
 #SBATCH --error=output/stderr/%A_%a.err
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=4
+#SBATCH --cpus-per-task=2
 #SBATCH --time=24:00:00
 #SBATCH --partition=$PARTITION_NAME
-#SBATCH --mem-per-cpu=24000
+#SBATCH --mem-per-cpu=32000
 $GPU_DIRECTIVE
 
 export TRANSFORMERS_CACHE="$TREEMORT_DATA_PATH/huggingface_cache"
@@ -109,16 +109,6 @@ fi
 if [[ -n "\$LIST_FILE" ]]; then
     echo "[INFO] Processing only files listed in: \$LIST_FILE"
 fi
-
-echo "[INFO] Pre-downloading Beit and Maskformer models..."
-rm -rf "$TREEMORT_DATA_PATH/huggingface_cache/microsoft/beit-base-finetuned-ade-640-640"
-python3 -c "from transformers import AutoModel; AutoModel.from_pretrained('microsoft/beit-base-finetuned-ade-640-640', cache_dir='$TREEMORT_DATA_PATH/huggingface_cache')"
-
-rm -rf "$TREEMORT_DATA_PATH/huggingface_cache/facebook/maskformer-swin-base-ade"
-python3 -c "from transformers import AutoModel; AutoModel.from_pretrained('facebook/maskformer-swin-base-ade', cache_dir='$TREEMORT_DATA_PATH/huggingface_cache')"
-
-rm -rf "$TREEMORT_DATA_PATH/huggingface_cache/facebook/detr-resnet-50-panoptic"
-python3 -c "from transformers import AutoModel; AutoModel.from_pretrained('facebook/detr-resnet-50-panoptic', cache_dir='$TREEMORT_DATA_PATH/huggingface_cache')"
 
 echo "[INFO] Starting inference..."
 srun python3 "$TREEMORT_REPO_PATH/inference/engine.py" \
