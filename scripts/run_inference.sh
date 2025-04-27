@@ -1,8 +1,5 @@
 #!/bin/bash
 
-################################################################################
-# <<< ADDED: parse flags and compute array size BEFORE creating SBATCH script
-################################################################################
 # Parse input flags
 POST_PROCESS=""
 LIST_FILE=""
@@ -43,7 +40,6 @@ if [[ -n "$LIST_FILE" ]]; then
 else
     ARRAY_DIRECTIVE=""
 fi
-################################################################################
 
 # Set default HPC type to "puhti"
 HPC_TYPE=${HPC_TYPE:-"puhti"}
@@ -63,14 +59,8 @@ else
     GPU_DIRECTIVE="#SBATCH --gres=gpu:v100:1"
 fi
 
-################################################################################
-# Create SBATCH script
-################################################################################
 SBATCH_SCRIPT=$(mktemp)
 
-################################################################################
-# <<< MODIFIED: inject array directive right under ntasks
-################################################################################
 cat <<EOT > $SBATCH_SCRIPT
 #!/bin/bash
 #SBATCH --job-name=treemort-inference
@@ -82,7 +72,7 @@ $ARRAY_DIRECTIVE             ### <<< ADDED
 #SBATCH --cpus-per-task=2
 #SBATCH --time=04:00:00
 #SBATCH --partition=$PARTITION_NAME
-#SBATCH --mem-per-cpu=12000
+#SBATCH --mem-per-cpu=24000
 $GPU_DIRECTIVE
 
 export TRANSFORMERS_CACHE="$TREEMORT_DATA_PATH/huggingface_cache"
@@ -128,9 +118,6 @@ elif [ ! -d "$OUTPUT_PATH" ]; then
     mkdir -p "$OUTPUT_PATH" || { echo "[ERROR] Failed to create output directory."; exit 1; }
 fi
 
-################################################################################
-# <<< ADDED: handle array‐task execution
-################################################################################
 # If running as an array task, process only one image
 if [[ -n "$SLURM_ARRAY_TASK_ID" ]] && [[ -n "$LIST_FILE" ]]; then
     IMAGE_REL_PATH=$(sed -n "${SLURM_ARRAY_TASK_ID}p" "$LIST_FILE")
@@ -143,11 +130,7 @@ if [[ -n "$SLURM_ARRAY_TASK_ID" ]] && [[ -n "$LIST_FILE" ]]; then
         $POST_PROCESS
     exit \$?
 fi
-################################################################################
 
-################################################################################
-# <<< MODIFIED: wrap the default bundle-run in a guard
-################################################################################
 if [[ -z "$SLURM_ARRAY_TASK_ID" ]]; then
     echo "[INFO] Starting batch inference on $DATA_PATH"
     srun python3 "$TREEMORT_REPO_PATH/inference/engine.py" \
@@ -171,5 +154,4 @@ EOT
 echo "Generated SBATCH script:"
 cat $SBATCH_SCRIPT
 
-# Submit SLURM Job (flags already parsed above, so no need for "$@")
 sbatch $SBATCH_SCRIPT
