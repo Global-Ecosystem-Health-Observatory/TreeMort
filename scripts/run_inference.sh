@@ -123,16 +123,16 @@ elif [ ! -d "$OUTPUT_PATH" ]; then
 fi
 
 # If running as an array task, process only one image
-if [[ -n "$SLURM_ARRAY_TASK_ID" ]] && [[ -n "$LIST_FILE" ]]; then
-    IMAGE_REL_PATH=$(sed -n "${SLURM_ARRAY_TASK_ID}p" "$LIST_FILE")
-    IMAGE_PATH="$DATA_PATH/$IMAGE_REL_PATH"
-    echo "[INFO] Array task #$SLURM_ARRAY_TASK_ID → $IMAGE_PATH"
-    srun python3 "$TREEMORT_REPO_PATH/inference/engine.py" \
-        "$IMAGE_PATH" \
-        --config "$CONFIG_PATH" \
-        --outdir "$OUTPUT_PATH" \
-        $POST_PROCESS
-    exit $?
+if [[ -n "\$SLURM_ARRAY_TASK_ID" ]] && [[ -n "\$LIST_FILE" ]]; then
+    IMAGE_REL_PATH=\$(sed -n "\${SLURM_ARRAY_TASK_ID}p" "\$LIST_FILE")
+    IMAGE_PATH="\$DATA_PATH/\$IMAGE_REL_PATH"
+    echo "[INFO] Array task #\${SLURM_ARRAY_TASK_ID} → \$IMAGE_PATH"
+    srun python3 "\$TREEMORT_REPO_PATH/inference/engine.py" \
+        "\$IMAGE_PATH" \
+        --config "\$CONFIG_PATH" \
+        --outdir "\$OUTPUT_PATH" \
+        \$POST_PROCESS
+    exit \$?
 fi
 
 # Otherwise (no array OR missing LIST_FILE), run on full $DATA_PATH
@@ -156,4 +156,4 @@ EOT
 echo "Generated SBATCH script:"
 cat $SBATCH_SCRIPT
 
-# sbatch $SBATCH_SCRIPT
+sbatch $SBATCH_SCRIPT
