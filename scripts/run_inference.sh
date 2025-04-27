@@ -35,8 +35,18 @@ fi
 
 # Configure job array for individual image processing if list-file is provided
 if [[ -n "$LIST_FILE" ]]; then
-    NUM_FILES=$(wc -l < "$LIST_FILE")
-    ARRAY_DIRECTIVE="#SBATCH --array=1-$NUM_FILES"
+    if [[ ! -f "$LIST_FILE" ]]; then
+        echo "[ERROR] List file not found: $LIST_FILE"
+        exit 1
+    fi
+    NUM_FILES=$(wc -l < "$LIST_FILE" | tr -d ' ')
+    if (( NUM_FILES > 1 )); then
+        ARRAY_DIRECTIVE="#SBATCH --array=1-$NUM_FILES"
+        echo "[INFO] Using Slurm array for $NUM_FILES tasks"
+    else
+        echo "[INFO] Only $NUM_FILES image in list; running single-task job"
+        ARRAY_DIRECTIVE=""
+    fi
 else
     ARRAY_DIRECTIVE=""
 fi
