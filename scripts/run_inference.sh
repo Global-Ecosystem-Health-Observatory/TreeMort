@@ -72,7 +72,7 @@ $ARRAY_DIRECTIVE
 #SBATCH --cpus-per-task=2
 #SBATCH --time=04:00:00
 #SBATCH --partition=$PARTITION_NAME
-#SBATCH --mem=64G
+#SBATCH --mem=32G
 $GPU_DIRECTIVE
 
 export TRANSFORMERS_CACHE="$TREEMORT_DATA_PATH/huggingface_cache"
