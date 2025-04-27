@@ -1,5 +1,50 @@
 #!/bin/bash
 
+################################################################################
+# <<< ADDED: parse flags and compute array size BEFORE creating SBATCH script
+################################################################################
+# Parse input flags
+POST_PROCESS=""
+LIST_FILE=""
+
+while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+        --post-process)
+            POST_PROCESS="--post-process"
+            shift
+            ;;
+        --list-file)
+            if [[ -n "$2" ]]; then
+                LIST_FILE="$2"
+                shift 2
+            else
+                echo "[ERROR] --list-file requires a filename argument."
+                exit 1
+            fi
+            ;;
+        *)
+            echo "[ERROR] Unknown parameter passed: $1"
+            exit 1
+            ;;
+    esac
+done
+
+if [[ -n "$POST_PROCESS" ]]; then
+    echo "[INFO] Post-processing is enabled"
+fi
+if [[ -n "$LIST_FILE" ]]; then
+    echo "[INFO] Processing only files listed in: $LIST_FILE"
+fi
+
+# Configure job array for individual image processing if list-file is provided
+if [[ -n "$LIST_FILE" ]]; then
+    NUM_FILES=$(wc -l < "$LIST_FILE")
+    ARRAY_DIRECTIVE="#SBATCH --array=1-$NUM_FILES"
+else
+    ARRAY_DIRECTIVE=""
+fi
+################################################################################
+
 # Set default HPC type to "puhti"
 HPC_TYPE=${HPC_TYPE:-"puhti"}
 
@@ -7,7 +52,7 @@ HPC_TYPE=${HPC_TYPE:-"puhti"}
 if [ "$HPC_TYPE" == "lumi" ]; then
     PROJECT_NAME="project_462000684"
     PARTITION_NAME="small-g"
-    MODULE_NAME="pytorch/2.4"
+    MODULE_NAME="pytorch/2.5"
     MODULE_USE_CMD="module use /appl/local/csc/modulefiles/"
     GPU_DIRECTIVE="#SBATCH --gpus-per-node=1"
 else
@@ -18,10 +63,14 @@ else
     GPU_DIRECTIVE="#SBATCH --gres=gpu:v100:1"
 fi
 
+################################################################################
 # Create SBATCH script
+################################################################################
 SBATCH_SCRIPT=$(mktemp)
 
-# SLURM Job Configuration
+################################################################################
+# <<< MODIFIED: inject array directive right under ntasks
+################################################################################
 cat <<EOT > $SBATCH_SCRIPT
 #!/bin/bash
 #SBATCH --job-name=treemort-inference
@@ -29,10 +78,11 @@ cat <<EOT > $SBATCH_SCRIPT
 #SBATCH --output=output/stdout/%A_%a.out
 #SBATCH --error=output/stderr/%A_%a.err
 #SBATCH --ntasks=1
+$ARRAY_DIRECTIVE             ### <<< ADDED
 #SBATCH --cpus-per-task=2
-#SBATCH --time=24:00:00
+#SBATCH --time=04:00:00
 #SBATCH --partition=$PARTITION_NAME
-#SBATCH --mem-per-cpu=32000
+#SBATCH --mem-per-cpu=12000
 $GPU_DIRECTIVE
 
 export TRANSFORMERS_CACHE="$TREEMORT_DATA_PATH/huggingface_cache"
@@ -78,58 +128,48 @@ elif [ ! -d "$OUTPUT_PATH" ]; then
     mkdir -p "$OUTPUT_PATH" || { echo "[ERROR] Failed to create output directory."; exit 1; }
 fi
 
-POST_PROCESS=""
-LIST_FILE=""
-
-while [[ "\$#" -gt 0 ]]; do
-    case "\$1" in
-        --post-process)
-            POST_PROCESS="--post-process"
-            shift
-            ;;
-        --list-file)
-            if [[ -n "\$2" ]]; then
-                LIST_FILE="\$2"
-                shift 2
-            else
-                echo "[ERROR] --list-file requires a filename argument."
-                exit 1
-            fi
-            ;;
-        *)
-            echo "[ERROR] Unknown parameter passed: \$1"
-            exit 1
-            ;;
-    esac
-done
-
-if [ -n "\$POST_PROCESS" ]; then
-    echo "[INFO] Post-processing is enabled"
+################################################################################
+# <<< ADDED: handle array‐task execution
+################################################################################
+# If running as an array task, process only one image
+if [[ -n "$SLURM_ARRAY_TASK_ID" ]] && [[ -n "$LIST_FILE" ]]; then
+    IMAGE_REL_PATH=$(sed -n "${SLURM_ARRAY_TASK_ID}p" "$LIST_FILE")
+    IMAGE_PATH="$DATA_PATH/$IMAGE_REL_PATH"
+    echo "[INFO] Array task #$SLURM_ARRAY_TASK_ID → processing: $IMAGE_PATH"
+    srun python3 "$TREEMORT_REPO_PATH/inference/engine.py" \
+        "$IMAGE_PATH" \
+        --config "$CONFIG_PATH" \
+        --outdir "$OUTPUT_PATH" \
+        $POST_PROCESS
+    exit \$?
 fi
-if [[ -n "\$LIST_FILE" ]]; then
-    echo "[INFO] Processing only files listed in: \$LIST_FILE"
+################################################################################
+
+################################################################################
+# <<< MODIFIED: wrap the default bundle-run in a guard
+################################################################################
+if [[ -z "$SLURM_ARRAY_TASK_ID" ]]; then
+    echo "[INFO] Starting batch inference on $DATA_PATH"
+    srun python3 "$TREEMORT_REPO_PATH/inference/engine.py" \
+        "$DATA_PATH" \
+        --config "$CONFIG_PATH" \
+        --outdir "$OUTPUT_PATH" \
+        $POST_PROCESS \
+        ${LIST_FILE:+--list-file "$LIST_FILE"}
 fi
 
-echo "[INFO] Starting inference..."
-srun python3 "$TREEMORT_REPO_PATH/inference/engine.py" \
-    "$DATA_PATH" \
-    --config "$CONFIG_PATH" \
-    --outdir "$OUTPUT_PATH" \
-    \$POST_PROCESS \
-    \${LIST_FILE:+--list-file "\$LIST_FILE"}
-
-EXIT_STATUS=$?
-if [ $EXIT_STATUS -ne 0 ]; then
-    echo "[ERROR] Job failed with exit status $EXIT_STATUS"
+EXIT_STATUS=\$?
+if [ \$EXIT_STATUS -ne 0 ]; then
+    echo "[ERROR] Job failed with exit status \$EXIT_STATUS"
 else
     echo "[INFO] Job completed successfully"
 fi
 
-exit $EXIT_STATUS
+exit \$EXIT_STATUS
 EOT
 
 echo "Generated SBATCH script:"
 cat $SBATCH_SCRIPT
 
-# Submit SLURM Job
-sbatch $SBATCH_SCRIPT "$@"
+# Submit SLURM Job (flags already parsed above, so no need for "$@")
+sbatch $SBATCH_SCRIPT
