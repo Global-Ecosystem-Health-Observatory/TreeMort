@@ -75,6 +75,10 @@ $ARRAY_DIRECTIVE
 #SBATCH --mem=48G
 $GPU_DIRECTIVE
 
+# Preserve flags in the job environment
+export LIST_FILE="$LIST_FILE"
+export POST_PROCESS="$POST_PROCESS"
+
 export TRANSFORMERS_CACHE="$TREEMORT_DATA_PATH/huggingface_cache"
 export HF_HOME="$TREEMORT_DATA_PATH/huggingface_cache"
 
@@ -122,24 +126,22 @@ fi
 if [[ -n "$SLURM_ARRAY_TASK_ID" ]] && [[ -n "$LIST_FILE" ]]; then
     IMAGE_REL_PATH=$(sed -n "${SLURM_ARRAY_TASK_ID}p" "$LIST_FILE")
     IMAGE_PATH="$DATA_PATH/$IMAGE_REL_PATH"
-    echo "[INFO] Array task #$SLURM_ARRAY_TASK_ID → processing: $IMAGE_PATH"
+    echo "[INFO] Array task #$SLURM_ARRAY_TASK_ID → $IMAGE_PATH"
     srun python3 "$TREEMORT_REPO_PATH/inference/engine.py" \
         "$IMAGE_PATH" \
         --config "$CONFIG_PATH" \
         --outdir "$OUTPUT_PATH" \
         $POST_PROCESS
-    exit \$?
+    exit $?
 fi
 
-if [[ -z "$SLURM_ARRAY_TASK_ID" ]]; then
-    echo "[INFO] Starting batch inference on $DATA_PATH"
-    srun python3 "$TREEMORT_REPO_PATH/inference/engine.py" \
-        "$DATA_PATH" \
-        --config "$CONFIG_PATH" \
-        --outdir "$OUTPUT_PATH" \
-        $POST_PROCESS \
-        ${LIST_FILE:+--list-file "$LIST_FILE"}
-fi
+# Otherwise (no array OR missing LIST_FILE), run on full $DATA_PATH
+srun python3 "$TREEMORT_REPO_PATH/inference/engine.py" \
+    "$DATA_PATH" \
+    --config "$CONFIG_PATH" \
+    --outdir "$OUTPUT_PATH" \
+    $POST_PROCESS \
+    ${LIST_FILE:+--list-file "$LIST_FILE"}
 
 EXIT_STATUS=\$?
 if [ \$EXIT_STATUS -ne 0 ]; then
@@ -154,4 +156,4 @@ EOT
 echo "Generated SBATCH script:"
 cat $SBATCH_SCRIPT
 
-sbatch $SBATCH_SCRIPT
+# sbatch $SBATCH_SCRIPT
