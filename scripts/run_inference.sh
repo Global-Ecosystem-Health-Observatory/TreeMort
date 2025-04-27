@@ -68,11 +68,11 @@ cat <<EOT > $SBATCH_SCRIPT
 #SBATCH --output=output/stdout/%A_%a.out
 #SBATCH --error=output/stderr/%A_%a.err
 #SBATCH --ntasks=1
-$ARRAY_DIRECTIVE             ### <<< ADDED
+$ARRAY_DIRECTIVE
 #SBATCH --cpus-per-task=2
 #SBATCH --time=04:00:00
 #SBATCH --partition=$PARTITION_NAME
-#SBATCH --mem-per-cpu=24000
+#SBATCH --mem=64G
 $GPU_DIRECTIVE
 
 export TRANSFORMERS_CACHE="$TREEMORT_DATA_PATH/huggingface_cache"
