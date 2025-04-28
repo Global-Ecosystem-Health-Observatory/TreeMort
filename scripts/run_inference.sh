@@ -44,6 +44,8 @@ if [[ -n "$LIST_FILE" && -n "$CHUNKS" ]]; then
     CHUNK_SIZE=$(( (TOTAL_LINES + CHUNKS - 1) / CHUNKS ))
     CHUNK_DIR=$(mktemp -d)
     split -l "$CHUNK_SIZE" "$LIST_FILE" "$CHUNK_DIR/chunk_"
+    SUFFIX_LENGTH=${#CHUNKS}
+    export SUFFIX_LENGTH
 fi
 
 if [[ -n "$POST_PROCESS" ]]; then
@@ -111,6 +113,7 @@ export LIST_FILE="$LIST_FILE"
 export POST_PROCESS="$POST_PROCESS"
 export CHUNKS="$CHUNKS"
 export CHUNK_DIR="$CHUNK_DIR"
+export SUFFIX_LENGTH="$SUFFIX_LENGTH"
 
 export TRANSFORMERS_CACHE="$TREEMORT_DATA_PATH/huggingface_cache"
 export HF_HOME="$TREEMORT_DATA_PATH/huggingface_cache"
@@ -158,7 +161,7 @@ fi
 # If running as an array task and a list file is provided
 if [[ -n "\$SLURM_ARRAY_TASK_ID" && -n "\$LIST_FILE" ]]; then
     if [[ -n "\$CHUNKS" ]]; then
-        CHUNK_FILE="\$CHUNK_DIR/chunk_\${SLURM_ARRAY_TASK_ID}"
+        CHUNK_FILE="\$CHUNK_DIR/chunk_\$(printf \"%0\${SUFFIX_LENGTH}d\" \"\${SLURM_ARRAY_TASK_ID}\")"
         echo "[INFO] Array task #\${SLURM_ARRAY_TASK_ID} → processing chunk file \$CHUNK_FILE"
         srun python3 "\$TREEMORT_REPO_PATH/inference/engine.py" \
             "\$DATA_PATH" \
