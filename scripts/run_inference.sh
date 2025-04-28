@@ -44,8 +44,8 @@ if [[ -n "$LIST_FILE" && -n "$CHUNKS" ]]; then
     CHUNK_SIZE=$(( (TOTAL_LINES + CHUNKS - 1) / CHUNKS ))
     mkdir -p "$TREEMORT_DATA_PATH/tmp"
     CHUNK_DIR=$(mktemp -d "$TREEMORT_DATA_PATH/tmp/chunk_dir.XXXXXX")
-    split -l "$CHUNK_SIZE" "$LIST_FILE" "$CHUNK_DIR/chunk_"
     SUFFIX_LENGTH=${#CHUNKS}
+    split -d -a "${SUFFIX_LENGTH}" -l "$CHUNK_SIZE" "$LIST_FILE" "$CHUNK_DIR/chunk_"
     export SUFFIX_LENGTH
 fi
 
