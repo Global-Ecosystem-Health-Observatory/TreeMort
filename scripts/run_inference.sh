@@ -95,7 +95,7 @@ fi
 
 SBATCH_SCRIPT=$(mktemp)
 
-cat <<EOT > $SBATCH_SCRIPT
+cat <<'EOT' > $SBATCH_SCRIPT
 #!/bin/bash
 #SBATCH --job-name=treemort-inference
 #SBATCH --account=$PROJECT_NAME
@@ -161,7 +161,7 @@ fi
 # If running as an array task and a list file is provided
 if [[ -n "\$SLURM_ARRAY_TASK_ID" && -n "\$LIST_FILE" ]]; then
     if [[ -n "\$CHUNKS" ]]; then
-        CHUNK_FILE="\$CHUNK_DIR/chunk_\$(printf \"%0\${SUFFIX_LENGTH}d\" \"\${SLURM_ARRAY_TASK_ID}\")"
+        CHUNK_FILE="\$CHUNK_DIR/chunk_\$(printf "%0${SUFFIX_LENGTH}d" "${SLURM_ARRAY_TASK_ID}")"
         echo "[INFO] Array task #\${SLURM_ARRAY_TASK_ID} → processing chunk file \$CHUNK_FILE"
         srun python3 "\$TREEMORT_REPO_PATH/inference/engine.py" \
             "\$DATA_PATH" \
