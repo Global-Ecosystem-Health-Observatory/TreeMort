@@ -80,9 +80,9 @@ cat <<EOT > $SBATCH_SCRIPT
 #SBATCH --ntasks=1
 $ARRAY_DIRECTIVE
 #SBATCH --cpus-per-task=2
-#SBATCH --time=04:00:00
+#SBATCH --time=08:00:00
 #SBATCH --partition=$PARTITION_NAME
-#SBATCH --mem=48G
+#SBATCH --mem=32G
 $GPU_DIRECTIVE
 
 # Preserve flags in the job environment
