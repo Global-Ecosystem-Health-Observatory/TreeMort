@@ -42,7 +42,8 @@ if [[ -n "$LIST_FILE" && -n "$CHUNKS" ]]; then
     echo "[INFO] Splitting $LIST_FILE into $CHUNKS chunks"
     TOTAL_LINES=$(wc -l < "$LIST_FILE" | tr -d ' ')
     CHUNK_SIZE=$(( (TOTAL_LINES + CHUNKS - 1) / CHUNKS ))
-    CHUNK_DIR=$(mktemp -d)
+    mkdir -p "$TREEMORT_DATA_PATH/tmp"
+    CHUNK_DIR=$(mktemp -d "$TREEMORT_DATA_PATH/tmp/chunk_dir.XXXXXX")
     split -l "$CHUNK_SIZE" "$LIST_FILE" "$CHUNK_DIR/chunk_"
     SUFFIX_LENGTH=${#CHUNKS}
     export SUFFIX_LENGTH
