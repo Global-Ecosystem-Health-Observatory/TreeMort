@@ -161,6 +161,7 @@ if [[ -n "\$SLURM_ARRAY_TASK_ID" && -n "\$LIST_FILE" ]]; then
         CHUNK_FILE="\$CHUNK_DIR/chunk_\${SLURM_ARRAY_TASK_ID}"
         echo "[INFO] Array task #\${SLURM_ARRAY_TASK_ID} → processing chunk file \$CHUNK_FILE"
         srun python3 "\$TREEMORT_REPO_PATH/inference/engine.py" \
+            "\$DATA_PATH" \
             --list-file "\$CHUNK_FILE" \
             --config "\$CONFIG_PATH" \
             --outdir "\$OUTPUT_PATH" \
