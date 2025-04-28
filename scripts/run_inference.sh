@@ -3,6 +3,8 @@
 # Parse input flags
 POST_PROCESS=""
 LIST_FILE=""
+CHUNKS=""
+CHUNK_DIR=""
 
 while [[ "$#" -gt 0 ]]; do
     case "$1" in
@@ -19,12 +21,30 @@ while [[ "$#" -gt 0 ]]; do
                 exit 1
             fi
             ;;
+        --chunks)
+            if [[ -n "$2" && "$2" =~ ^[0-9]+$ ]]; then
+                CHUNKS="$2"
+                shift 2
+            else
+                echo "[ERROR] --chunks requires a numeric argument."
+                exit 1
+            fi
+            ;;
         *)
             echo "[ERROR] Unknown parameter passed: $1"
             exit 1
             ;;
     esac
 done
+
+# If chunking is requested, split the list file into CHUNKS parts
+if [[ -n "$LIST_FILE" && -n "$CHUNKS" ]]; then
+    echo "[INFO] Splitting $LIST_FILE into $CHUNKS chunks"
+    TOTAL_LINES=$(wc -l < "$LIST_FILE" | tr -d ' ')
+    CHUNK_SIZE=$(( (TOTAL_LINES + CHUNKS - 1) / CHUNKS ))
+    CHUNK_DIR=$(mktemp -d)
+    split -l "$CHUNK_SIZE" "$LIST_FILE" "$CHUNK_DIR/chunk_"
+fi
 
 if [[ -n "$POST_PROCESS" ]]; then
     echo "[INFO] Post-processing is enabled"
@@ -34,7 +54,9 @@ if [[ -n "$LIST_FILE" ]]; then
 fi
 
 # Configure job array for individual image processing if list-file is provided
-if [[ -n "$LIST_FILE" ]]; then
+if [[ -n "$LIST_FILE" && -n "$CHUNKS" ]]; then
+    ARRAY_DIRECTIVE="#SBATCH --array=1-$CHUNKS"
+elif [[ -n "$LIST_FILE" ]]; then
     if [[ ! -f "$LIST_FILE" ]]; then
         echo "[ERROR] List file not found: $LIST_FILE"
         exit 1
@@ -85,9 +107,10 @@ $ARRAY_DIRECTIVE
 #SBATCH --mem=32G
 $GPU_DIRECTIVE
 
-# Preserve flags in the job environment
 export LIST_FILE="$LIST_FILE"
 export POST_PROCESS="$POST_PROCESS"
+export CHUNKS="$CHUNKS"
+export CHUNK_DIR="$CHUNK_DIR"
 
 export TRANSFORMERS_CACHE="$TREEMORT_DATA_PATH/huggingface_cache"
 export HF_HOME="$TREEMORT_DATA_PATH/huggingface_cache"
@@ -132,17 +155,28 @@ elif [ ! -d "$OUTPUT_PATH" ]; then
     mkdir -p "$OUTPUT_PATH" || { echo "[ERROR] Failed to create output directory."; exit 1; }
 fi
 
-# If running as an array task, process only one image
-if [[ -n "\$SLURM_ARRAY_TASK_ID" ]] && [[ -n "\$LIST_FILE" ]]; then
-    IMAGE_REL_PATH=\$(sed -n "\${SLURM_ARRAY_TASK_ID}p" "\$LIST_FILE")
-    IMAGE_PATH="\$DATA_PATH/\$IMAGE_REL_PATH"
-    echo "[INFO] Array task #\${SLURM_ARRAY_TASK_ID} → \$IMAGE_PATH"
-    srun python3 "\$TREEMORT_REPO_PATH/inference/engine.py" \
-        "\$IMAGE_PATH" \
-        --config "\$CONFIG_PATH" \
-        --outdir "\$OUTPUT_PATH" \
-        \$POST_PROCESS
-    exit \$?
+# If running as an array task and a list file is provided
+if [[ -n "\$SLURM_ARRAY_TASK_ID" && -n "\$LIST_FILE" ]]; then
+    if [[ -n "\$CHUNKS" ]]; then
+        CHUNK_FILE="\$CHUNK_DIR/chunk_\${SLURM_ARRAY_TASK_ID}"
+        echo "[INFO] Array task #\${SLURM_ARRAY_TASK_ID} → processing chunk file \$CHUNK_FILE"
+        srun python3 "\$TREEMORT_REPO_PATH/inference/engine.py" \
+            --list-file "\$CHUNK_FILE" \
+            --config "\$CONFIG_PATH" \
+            --outdir "\$OUTPUT_PATH" \
+            \$POST_PROCESS
+        exit \$?
+    else
+        IMAGE_REL_PATH=\$(sed -n "\${SLURM_ARRAY_TASK_ID}p" "\$LIST_FILE")
+        IMAGE_PATH="\$DATA_PATH/\$IMAGE_REL_PATH"
+        echo "[INFO] Array task #\${SLURM_ARRAY_TASK_ID} → \$IMAGE_PATH"
+        srun python3 "\$TREEMORT_REPO_PATH/inference/engine.py" \
+            "\$IMAGE_PATH" \
+            --config "\$CONFIG_PATH" \
+            --outdir "\$OUTPUT_PATH" \
+            \$POST_PROCESS
+        exit \$?
+    fi
 fi
 
 # Otherwise (no array OR missing LIST_FILE), run on full $DATA_PATH
