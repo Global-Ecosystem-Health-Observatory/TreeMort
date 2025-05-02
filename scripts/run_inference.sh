@@ -104,10 +104,10 @@ cat <<EOT > "$SBATCH_SCRIPT"
 #SBATCH --error=output/stderr/%A_%a.err
 #SBATCH --ntasks=1
 $ARRAY_DIRECTIVE
-#SBATCH --cpus-per-task=8
-#SBATCH --time=02:00:00
+#SBATCH --cpus-per-task=2
+#SBATCH --time=05:00:00
 #SBATCH --partition=$PARTITION_NAME
-#SBATCH --mem=96G
+#SBATCH --mem=48G
 $GPU_DIRECTIVE
 
 export LIST_FILE="$LIST_FILE"
