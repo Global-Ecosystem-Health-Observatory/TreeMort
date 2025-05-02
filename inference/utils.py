@@ -378,7 +378,7 @@ def _postprocess_labels(labels_ws, min_region_size=50, dilation_radius=1):
     return new_labels
 
 
-from multiprocessing import Pool
+from concurrent.futures import ThreadPoolExecutor
 
 def _process_single_region(args):
     region_label, region_mask, transform, conf, num_points = args
@@ -456,8 +456,8 @@ def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
         for region in regionprops(labels_ws)
         if region.area >= conf.min_area_pixels
     ]
-    with Pool() as pool:
-        results = pool.map(_process_single_region, regions)
+    with ThreadPoolExecutor(max_workers=conf.max_workers if hasattr(conf, "max_workers") else 4) as executor:
+        results = list(executor.map(_process_single_region, regions))
     return [r for r in results if r is not None]
 
 
