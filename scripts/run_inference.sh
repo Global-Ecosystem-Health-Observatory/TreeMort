@@ -104,7 +104,7 @@ cat <<EOT > "$SBATCH_SCRIPT"
 #SBATCH --error=output/stderr/%A_%a.err
 #SBATCH --ntasks=1
 $ARRAY_DIRECTIVE
-#SBATCH --cpus-per-task=2
+#SBATCH --cpus-per-task=8
 #SBATCH --time=48:00:00
 #SBATCH --partition=$PARTITION_NAME
 #SBATCH --mem=48G
