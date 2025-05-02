@@ -452,6 +452,7 @@ def _process_single_region(args):
 def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
     from skimage.measure import regionprops
     from concurrent.futures import ThreadPoolExecutor
+    import gc
 
     regions = [
         (region.label, labels_ws == region.label, transform, conf, num_points)
@@ -460,7 +461,7 @@ def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
     ]
 
     max_workers = getattr(conf, "max_workers", 4)
-    chunk_size = 100  # process 100 regions at a time to limit memory usage
+    chunk_size = 10  # reduce chunk size to lower memory usage
 
     results = []
     for i in range(0, len(regions), chunk_size):
@@ -468,6 +469,8 @@ def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             chunk_results = list(executor.map(_process_single_region, chunk))
         results.extend(r for r in chunk_results if r is not None)
+        del chunk_results
+        gc.collect()
 
     return results
 
