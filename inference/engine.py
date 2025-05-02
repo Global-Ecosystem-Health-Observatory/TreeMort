@@ -1,4 +1,5 @@
 import os
+import time
 import torch
 import argparse
 import configargparse
@@ -41,8 +42,11 @@ def process_image(
     logger.debug(f"Processing image: {os.path.basename(image_path)}")
 
     try:
+        total_start_time = time.time()
+        start_time = time.time()
         image, transform, crs = load_and_preprocess_image(image_path, conf.nir_rgb_order)
-        logger.debug(f"Loaded and preprocessed image: {os.path.basename(image_path)}")
+        logger.info(f"Image loaded in {time.time() - start_time:.2f} seconds.")
+        start_time = time.time()
 
         prediction_maps = sliding_window_inference(
             model,
@@ -52,33 +56,61 @@ def process_image(
             threshold=conf.segment_threshold,
             output_channels=conf.output_channels,
         )
+        logger.info(f"Sliding window inference completed in {time.time() - start_time:.2f} seconds.")
+        start_time = time.time()
         segment_map, centroid_map, hybrid_map = prediction_maps
 
         image_np = image.cpu().numpy()
         segment_map_np = segment_map.cpu().numpy()
         centroid_map_np = centroid_map.cpu().numpy()
         hybrid_map_np = hybrid_map.cpu().numpy()
-    
+        logger.info(f"Converted prediction maps to numpy in {time.time() - start_time:.2f} seconds.")
+
         if post_process:
+            start_time = time.time()
             labels_ws = compute_watershed(segment_map_np, centroid_map_np, hybrid_map_np, conf)
+            logger.info(f"Watershed segmentation took {time.time() - start_time:.2f} seconds.")
+            start_time = time.time()
             features = extract_ellipses(labels_ws, transform, conf)
+            logger.info(f"Ellipse extraction took {time.time() - start_time:.2f} seconds.")
+            start_time = time.time()
             save_geojson(features, geojson_path, crs, transform, name="FittedEllipses")
+            logger.info(f"GeoJSON saved in {time.time() - start_time:.2f} seconds.")
 
             # # Filtering-only variant
+            # start_time = time.time()
             # filtered_mask = segment_filtering_only(segment_map_np, conf)
+            # logger.info(f"Segment filtering took {time.time() - start_time:.2f} seconds.")
+            # start_time = time.time()
             # features = extract_contours(filtered_mask, transform)
+            # logger.info(f"Contour extraction took {time.time() - start_time:.2f} seconds.")
+            # start_time = time.time()
             # save_geojson(features, geojson_path, crs, transform, name="FilteredContours")
+            # logger.info(f"GeoJSON saved in {time.time() - start_time:.2f} seconds.")
 
             # # Watershed-only variant
+            # start_time = time.time()
             # labels_ws = watershed_segmentation_only(segment_map_np, centroid_map_np, hybrid_map_np, conf)
+            # logger.info(f"Watershed segmentation took {time.time() - start_time:.2f} seconds.")
+            # start_time = time.time()
             # features = extract_contours_from_labels(labels_ws, transform)
+            # logger.info(f"Contour extraction took {time.time() - start_time:.2f} seconds.")
+            # start_time = time.time()
             # save_geojson(features, geojson_path, crs, transform, name="WatershedContours")
+            # logger.info(f"GeoJSON saved in {time.time() - start_time:.2f} seconds.")
 
         else:
+            start_time = time.time()
             binary_mask = threshold_prediction_map(segment_map_np, conf.segment_threshold)
+            logger.info(f"Thresholded prediction map in {time.time() - start_time:.2f} seconds.")
+            start_time = time.time()
             features = extract_contours(binary_mask, transform)
+            logger.info(f"Contour extraction took {time.time() - start_time:.2f} seconds.")
+            start_time = time.time()
             save_geojson(features, geojson_path, crs, transform, name="Contours")
+            logger.info(f"GeoJSON saved in {time.time() - start_time:.2f} seconds.")
 
+        logger.info(f"Total processing time for {os.path.basename(image_path)}: {time.time() - total_start_time:.2f} seconds.")
         logger.info(f"Successfully processed and saved GeoJSON for: {os.path.basename(image_path)}")
     except Exception as e:
         log_and_raise(logger, RuntimeError(f"Error processing image {os.path.basename(image_path)}: {e}"))
