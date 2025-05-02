@@ -105,9 +105,9 @@ cat <<EOT > "$SBATCH_SCRIPT"
 #SBATCH --ntasks=1
 $ARRAY_DIRECTIVE
 #SBATCH --cpus-per-task=8
-#SBATCH --time=48:00:00
+#SBATCH --time=02:00:00
 #SBATCH --partition=$PARTITION_NAME
-#SBATCH --mem=48G
+#SBATCH --mem=64G
 $GPU_DIRECTIVE
 
 export LIST_FILE="$LIST_FILE"
