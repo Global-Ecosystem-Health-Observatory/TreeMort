@@ -451,14 +451,25 @@ def _process_single_region(args):
 
 def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
     from skimage.measure import regionprops
+    from concurrent.futures import ThreadPoolExecutor
+
     regions = [
         (region.label, labels_ws == region.label, transform, conf, num_points)
         for region in regionprops(labels_ws)
         if region.area >= conf.min_area_pixels
     ]
-    with ThreadPoolExecutor(max_workers=conf.max_workers if hasattr(conf, "max_workers") else 4) as executor:
-        results = list(executor.map(_process_single_region, regions))
-    return [r for r in results if r is not None]
+
+    max_workers = getattr(conf, "max_workers", 4)
+    chunk_size = 100  # process 100 regions at a time to limit memory usage
+
+    results = []
+    for i in range(0, len(regions), chunk_size):
+        chunk = regions[i:i + chunk_size]
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            chunk_results = list(executor.map(_process_single_region, chunk))
+        results.extend(r for r in chunk_results if r is not None)
+
+    return results
 
 
 def extract_contours(binary_mask: np.ndarray, transform: Affine) -> List[Dict]:
