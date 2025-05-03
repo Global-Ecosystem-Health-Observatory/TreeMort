@@ -502,17 +502,22 @@ def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
         if region.area < conf.min_area_pixels:
             continue
 
-        # Define extended bounding box to include erosion radius, clamped to image bounds
+        # Calculate extended bounding box with padding for erosion
         extended_min_row = max(0, region.bbox[0] - conf.erosion_radius)
         extended_max_row = min(labels_ws.shape[0], region.bbox[2] + conf.erosion_radius)
         extended_min_col = max(0, region.bbox[1] - conf.erosion_radius)
         extended_max_col = min(labels_ws.shape[1], region.bbox[3] + conf.erosion_radius)
 
-        # Crop labels to the extended bounding box
+        # Crop labels_ws to the extended bounding box
         cropped_labels = labels_ws[extended_min_row:extended_max_row, extended_min_col:extended_max_col]
+
+        # Create mask within the cropped area
         mask = cropped_labels == region.label
+
+        # Erode the mask
         eroded_mask = erosion(mask, disk(conf.erosion_radius))
 
+        # Find contours in the eroded mask
         eroded_contours = find_contours(eroded_mask, level=0.5)
         if not eroded_contours:
             continue
@@ -523,15 +528,15 @@ def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
         if len(pts) < 5:
             continue
 
-        # Sample contour points if too many, to reduce memory usage
+        # Sample contour points if there are too many
         if len(pts) > 200:
             indices = np.linspace(0, len(pts)-1, 200, dtype=int)
             pts = pts[indices]
 
-        # Fit ellipse to the (possibly sampled) contour points
+        # Fit ellipse to the contour points
         ellipse = cv2.fitEllipse(pts)
-        center = ellipse[0]  # (x0, y0)
-        axes = ellipse[1]  # (major, minor)
+        center = ellipse[0]
+        axes = ellipse[1]
         angle_deg = ellipse[2]
         orientation = np.deg2rad(angle_deg)
 
@@ -549,22 +554,18 @@ def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
         if ellipse_coords[0] != ellipse_coords[-1]:
             ellipse_coords.append(ellipse_coords[0])
 
-        # Convert ellipse coordinates to spatial coordinates
+        # Apply transform to ellipse coordinates
         ellipse_arr = np.array(ellipse_coords)
         transformed_ellipse = _apply_transform(ellipse_arr, transform)
 
-        # Create Polygon and validate
+        # Create and validate polygon
         ellipse_poly = Polygon(transformed_ellipse.tolist())
-
-        def is_valid_geometry(geometry, area, convex_hull):
-            aspect_ratio = convex_hull.length / (4 * np.sqrt(area)) if area > 0 else float("inf")
-            solidity = area / convex_hull.area if convex_hull.area > 0 else 0
-            return area >= conf.min_area and aspect_ratio <= conf.max_aspect_ratio and solidity >= conf.min_solidity
-
         if ellipse_poly.is_valid and not ellipse_poly.is_empty:
             convex_hull = ellipse_poly.convex_hull
             area = ellipse_poly.area
-            if is_valid_geometry(ellipse_poly, area, convex_hull):
+            aspect_ratio = convex_hull.length / (4 * np.sqrt(area)) if area > 0 else float("inf")
+            solidity = area / convex_hull.area if convex_hull.area > 0 else 0
+            if area >= conf.min_area and aspect_ratio <= conf.max_aspect_ratio and solidity >= conf.min_solidity:
                 ellipse_center_geo = list(_apply_transform(np.array([center]), transform)[0])
                 feature = {
                     "type": "Feature",
@@ -581,7 +582,7 @@ def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
                     }
                 }
                 yield feature
-
+                
 # def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
 #     features = []
 
