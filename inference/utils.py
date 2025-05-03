@@ -451,7 +451,6 @@ def _process_single_region(args):
 
 def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
     from skimage.measure import regionprops
-    from concurrent.futures import ThreadPoolExecutor
     import gc
 
     regions = [
@@ -460,18 +459,22 @@ def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
         if region.area >= conf.min_area_pixels
     ]
 
-    max_workers = getattr(conf, "max_workers", 4)
-    chunk_size = 10  # reduce chunk size to lower memory usage
+    import psutil, os
+    logger = get_logger()
+    logger.debug(f"Number of regions to process: {len(regions)}")
+    logger.debug(f"Memory before processing regions: {psutil.Process(os.getpid()).memory_info().rss / 1e9:.2f} GB")
 
     results = []
-    for i in range(0, len(regions), chunk_size):
-        chunk = regions[i:i + chunk_size]
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            chunk_results = list(executor.map(_process_single_region, chunk))
-        results.extend(r for r in chunk_results if r is not None)
-        del chunk_results
+    for args in regions:
+        logger.debug(f"Processing region label: {args[0]}")
+        feature = _process_single_region(args)
+        if feature:
+            results.append(feature)
+        logger.debug(f"Memory after processing region {args[0]}: {psutil.Process(os.getpid()).memory_info().rss / 1e9:.2f} GB")
         gc.collect()
 
+    logger.debug(f"Total extracted ellipse features: {len(results)}")
+    logger.debug(f"Memory after processing all regions: {psutil.Process(os.getpid()).memory_info().rss / 1e9:.2f} GB")
     return results
 
 
