@@ -451,30 +451,28 @@ def _process_single_region(args):
 
 def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
     from skimage.measure import regionprops
-    import gc
+    import psutil, os, gc
 
-    regions = [
-        (region.label, labels_ws == region.label, transform, conf, num_points)
-        for region in regionprops(labels_ws)
-        if region.area >= conf.min_area_pixels
-    ]
-
-    import psutil, os
     logger = get_logger()
-    logger.debug(f"Number of regions to process: {len(regions)}")
-    logger.debug(f"Memory before processing regions: {psutil.Process(os.getpid()).memory_info().rss / 1e9:.2f} GB")
+    props = regionprops(labels_ws)
+    logger.debug(f"Number of candidate regions: {len(props)}")
+    logger.debug(f"Memory before region loop: {psutil.Process(os.getpid()).memory_info().rss / 1e9:.2f} GB")
 
     results = []
-    for args in regions:
-        logger.debug(f"Processing region label: {args[0]}")
-        feature = _process_single_region(args)
+    for region in props:
+        if region.area < conf.min_area_pixels:
+            continue
+        region_label = region.label
+        region_mask = labels_ws == region_label
+        logger.debug(f"Processing label {region_label} | Mem: {psutil.Process(os.getpid()).memory_info().rss / 1e9:.2f} GB")
+        feature = _process_single_region((region_label, region_mask, transform, conf, num_points))
         if feature:
             results.append(feature)
-        logger.debug(f"Memory after processing region {args[0]}: {psutil.Process(os.getpid()).memory_info().rss / 1e9:.2f} GB")
+        del region_mask, feature
         gc.collect()
 
     logger.debug(f"Total extracted ellipse features: {len(results)}")
-    logger.debug(f"Memory after processing all regions: {psutil.Process(os.getpid()).memory_info().rss / 1e9:.2f} GB")
+    logger.debug(f"Memory after processing: {psutil.Process(os.getpid()).memory_info().rss / 1e9:.2f} GB")
     return results
 
 
