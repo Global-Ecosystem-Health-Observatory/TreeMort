@@ -390,6 +390,9 @@ def _process_single_region(args):
     if region_mask.sum() < conf.min_area_pixels:
         return None
 
+    # Ensure region_mask is binary uint8 for morphological operations
+    region_mask = region_mask.astype(np.uint8)
+
     eroded_mask = erosion(region_mask, disk(conf.erosion_radius))
     contours = find_contours(eroded_mask, 0.5)
     if not contours:
@@ -398,7 +401,8 @@ def _process_single_region(args):
     contour = max(contours, key=lambda c: c.shape[0])
     pts = np.array([[pt[1], pt[0]] for pt in contour], dtype=np.float32)
     if len(pts) > 20:
-        pts = pts[::len(pts) // 20]
+        idx = np.linspace(0, len(pts) - 1, 20, dtype=int)
+        pts = pts[idx]
     if len(pts) < 5:
         return None
     if pts.dtype != np.float32:
