@@ -107,7 +107,7 @@ $ARRAY_DIRECTIVE
 #SBATCH --cpus-per-task=2
 #SBATCH --time=05:00:00
 #SBATCH --partition=$PARTITION_NAME
-#SBATCH --mem=48G
+#SBATCH --mem=96G
 $GPU_DIRECTIVE
 
 export LIST_FILE="$LIST_FILE"
