@@ -457,6 +457,36 @@ def _process_single_region(args):
     }
 
 
+# def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
+#     from skimage.measure import regionprops
+#     import psutil, os, gc
+
+#     logger = get_logger()
+#     props = regionprops(labels_ws)
+#     logger.debug(f"Number of candidate regions: {len(props)}")
+#     logger.debug(f"Memory before region loop: {psutil.Process(os.getpid()).memory_info().rss / 1e9:.2f} GB")
+
+#     results = []
+#     for region in props:
+#         if region.area < conf.min_area_pixels:
+#             continue
+#         region_label = region.label
+#         minr, minc, maxr, maxc = region.bbox
+#         subregion = labels_ws[minr:maxr, minc:maxc]
+#         region_mask = subregion == region_label
+#         offset = (minc, minr)
+#         logger.debug(f"Processing label {region_label} | Mem: {psutil.Process(os.getpid()).memory_info().rss / 1e9:.2f} GB")
+#         feature = _process_single_region((region_label, region_mask, offset, transform, conf, num_points))
+#         if feature:
+#             results.append(feature)
+#         del region_mask, feature
+#         gc.collect()
+
+#     logger.debug(f"Total extracted ellipse features: {len(results)}")
+#     logger.debug(f"Memory after processing: {psutil.Process(os.getpid()).memory_info().rss / 1e9:.2f} GB")
+#     return results
+
+
 def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
     from skimage.measure import regionprops
     import psutil, os, gc
