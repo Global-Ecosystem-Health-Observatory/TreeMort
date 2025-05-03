@@ -365,4 +365,7 @@ sbatch \
     --post-process \
     --list-file a3s.fi.2023.txt
 
+scp rahmanan@lumi.csc.fi:/scratch/project_462000684/rahmanan/DRYTREE_Orthoimagery_Finland/K3423G_2023_RGBNIR.geojson.tif ~/Downloads
+scp rahmanan@lumi.csc.fi:/scratch/project_462000684/rahmanan/Predictions_DRYTREE_Orthoimagery_Finland/K3423G_2023_RGBNIR.geojson ~/Downloads
+
 '''
