@@ -1,7 +1,7 @@
 # configurations for inference creation
 
 window-size = 256
-stride = 192
+stride = 128
 nir-rgb-order = [3, 0, 1, 2]
 
 input-channels = 4
