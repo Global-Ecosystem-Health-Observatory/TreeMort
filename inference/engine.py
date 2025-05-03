@@ -71,7 +71,7 @@ def process_image(
             labels_ws = compute_watershed(segment_map_np, centroid_map_np, hybrid_map_np, conf)
             logger.info(f"Watershed segmentation took {time.time() - start_time:.2f} seconds.")
             start_time = time.time()
-            features = extract_ellipses(labels_ws, transform, conf)
+            features = list(extract_ellipses(labels_ws, transform, conf))
             logger.info(f"Ellipse extraction took {time.time() - start_time:.2f} seconds.")
             start_time = time.time()
             save_geojson(features, geojson_path, crs, transform, name="FittedEllipses")
