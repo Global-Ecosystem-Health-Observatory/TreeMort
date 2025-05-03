@@ -401,8 +401,13 @@ def _process_single_region(args):
         pts = pts[::len(pts) // 20]
     if len(pts) < 5:
         return None
+    if pts.dtype != np.float32:
+        pts = pts.astype(np.float32)
 
-    ellipse = cv2.fitEllipse(pts)
+    try:
+        ellipse = cv2.fitEllipse(pts)
+    except cv2.error:
+        return None
     center = ellipse[0]
     axes = ellipse[1]
     angle_deg = ellipse[2]
