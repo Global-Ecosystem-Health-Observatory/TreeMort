@@ -491,49 +491,69 @@ def _process_single_region(args):
 #     return results
 
 
-def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
-    features = []
+from skimage.measure import regionprops, find_contours
+from skimage.morphology import erosion, disk
+import numpy as np
+import cv2
+from shapely.geometry import Polygon
 
+def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
     for region in regionprops(labels_ws):
         if region.area < conf.min_area_pixels:
             continue
 
-        mask = labels_ws == region.label
+        # Define extended bounding box to include erosion radius, clamped to image bounds
+        extended_min_row = max(0, region.bbox[0] - conf.erosion_radius)
+        extended_max_row = min(labels_ws.shape[0], region.bbox[2] + conf.erosion_radius)
+        extended_min_col = max(0, region.bbox[1] - conf.erosion_radius)
+        extended_max_col = min(labels_ws.shape[1], region.bbox[3] + conf.erosion_radius)
+
+        # Crop labels to the extended bounding box
+        cropped_labels = labels_ws[extended_min_row:extended_max_row, extended_min_col:extended_max_col]
+        mask = cropped_labels == region.label
         eroded_mask = erosion(mask, disk(conf.erosion_radius))
 
         eroded_contours = find_contours(eroded_mask, level=0.5)
         if not eroded_contours:
             continue
         eroded_contour = max(eroded_contours, key=lambda c: c.shape[0])
-        pts = np.array([[pt[1], pt[0]] for pt in eroded_contour], dtype=np.float32)
+
+        # Adjust contour points to original image coordinates
+        pts = np.array([[pt[1] + extended_min_col, pt[0] + extended_min_row] for pt in eroded_contour], dtype=np.float32)
         if len(pts) < 5:
             continue
 
+        # Sample contour points if too many, to reduce memory usage
+        if len(pts) > 200:
+            indices = np.linspace(0, len(pts)-1, 200, dtype=int)
+            pts = pts[indices]
+
+        # Fit ellipse to the (possibly sampled) contour points
         ellipse = cv2.fitEllipse(pts)
         center = ellipse[0]  # (x0, y0)
         axes = ellipse[1]  # (major, minor)
         angle_deg = ellipse[2]
         orientation = np.deg2rad(angle_deg)
 
-        # Compute semi-axes with tightness factor.
+        # Compute semi-axes with tightness factor
         a = (axes[0] / 2.0) * conf.tightness
         b = (axes[1] / 2.0) * conf.tightness
 
-        # Generate ellipse points.
+        # Generate ellipse points
         t = np.linspace(0, 2 * np.pi, num_points)
         ellipse_x = center[0] + a * np.cos(t) * np.cos(orientation) - b * np.sin(t) * np.sin(orientation)
         ellipse_y = center[1] + a * np.cos(t) * np.sin(orientation) + b * np.sin(t) * np.cos(orientation)
         ellipse_coords = list(zip(ellipse_x.tolist(), ellipse_y.tolist()))
 
-        # Ensure the polygon is closed.
+        # Ensure the polygon is closed
         if ellipse_coords[0] != ellipse_coords[-1]:
             ellipse_coords.append(ellipse_coords[0])
 
-        # Convert ellipse coordinates to spatial coordinates.
+        # Convert ellipse coordinates to spatial coordinates
         ellipse_arr = np.array(ellipse_coords)
         transformed_ellipse = _apply_transform(ellipse_arr, transform)
 
-        # After obtaining transformed_ellipse as a NumPy array of coordinates:
+        # Create Polygon and validate
         ellipse_poly = Polygon(transformed_ellipse.tolist())
 
         def is_valid_geometry(geometry, area, convex_hull):
@@ -560,9 +580,80 @@ def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
                         "coordinates": [transformed_ellipse.tolist()]
                     }
                 }
-                features.append(feature)
+                yield feature
 
-    return features
+# def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
+#     features = []
+
+#     for region in regionprops(labels_ws):
+#         if region.area < conf.min_area_pixels:
+#             continue
+
+#         mask = labels_ws == region.label
+#         eroded_mask = erosion(mask, disk(conf.erosion_radius))
+
+#         eroded_contours = find_contours(eroded_mask, level=0.5)
+#         if not eroded_contours:
+#             continue
+#         eroded_contour = max(eroded_contours, key=lambda c: c.shape[0])
+#         pts = np.array([[pt[1], pt[0]] for pt in eroded_contour], dtype=np.float32)
+#         if len(pts) < 5:
+#             continue
+
+#         ellipse = cv2.fitEllipse(pts)
+#         center = ellipse[0]  # (x0, y0)
+#         axes = ellipse[1]  # (major, minor)
+#         angle_deg = ellipse[2]
+#         orientation = np.deg2rad(angle_deg)
+
+#         # Compute semi-axes with tightness factor.
+#         a = (axes[0] / 2.0) * conf.tightness
+#         b = (axes[1] / 2.0) * conf.tightness
+
+#         # Generate ellipse points.
+#         t = np.linspace(0, 2 * np.pi, num_points)
+#         ellipse_x = center[0] + a * np.cos(t) * np.cos(orientation) - b * np.sin(t) * np.sin(orientation)
+#         ellipse_y = center[1] + a * np.cos(t) * np.sin(orientation) + b * np.sin(t) * np.cos(orientation)
+#         ellipse_coords = list(zip(ellipse_x.tolist(), ellipse_y.tolist()))
+
+#         # Ensure the polygon is closed.
+#         if ellipse_coords[0] != ellipse_coords[-1]:
+#             ellipse_coords.append(ellipse_coords[0])
+
+#         # Convert ellipse coordinates to spatial coordinates.
+#         ellipse_arr = np.array(ellipse_coords)
+#         transformed_ellipse = _apply_transform(ellipse_arr, transform)
+
+#         # After obtaining transformed_ellipse as a NumPy array of coordinates:
+#         ellipse_poly = Polygon(transformed_ellipse.tolist())
+
+#         def is_valid_geometry(geometry, area, convex_hull):
+#             aspect_ratio = convex_hull.length / (4 * np.sqrt(area)) if area > 0 else float("inf")
+#             solidity = area / convex_hull.area if convex_hull.area > 0 else 0
+#             return area >= conf.min_area and aspect_ratio <= conf.max_aspect_ratio and solidity >= conf.min_solidity
+
+#         if ellipse_poly.is_valid and not ellipse_poly.is_empty:
+#             convex_hull = ellipse_poly.convex_hull
+#             area = ellipse_poly.area
+#             if is_valid_geometry(ellipse_poly, area, convex_hull):
+#                 ellipse_center_geo = list(_apply_transform(np.array([center]), transform)[0])
+#                 feature = {
+#                     "type": "Feature",
+#                     "properties": {
+#                         "region_label": region.label,
+#                         "area": area,
+#                         "ellipse_center": ellipse_center_geo,
+#                         "ellipse_axes": axes,
+#                         "ellipse_angle_deg": angle_deg
+#                     },
+#                     "geometry": {
+#                         "type": "Polygon",
+#                         "coordinates": [transformed_ellipse.tolist()]
+#                     }
+#                 }
+#                 features.append(feature)
+
+#     return features
 
 
 def extract_contours(binary_mask: np.ndarray, transform: Affine) -> List[Dict]:
