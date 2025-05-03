@@ -381,7 +381,7 @@ def _postprocess_labels(labels_ws, min_region_size=50, dilation_radius=1):
 from concurrent.futures import ThreadPoolExecutor
 
 def _process_single_region(args):
-    region_label, region_mask, transform, conf, num_points = args
+    region_label, region_mask, offset, transform, conf, num_points = args
     from shapely.geometry import Polygon
     import cv2, numpy as np
     from skimage.morphology import erosion, disk
@@ -409,6 +409,9 @@ def _process_single_region(args):
     except cv2.error:
         return None
     center = ellipse[0]
+    # Adjust center if offset is provided (for cropped region mask)
+    if offset is not None and isinstance(offset, tuple) and len(offset) == 2:
+        center = (center[0] + offset[0], center[1] + offset[1])
     axes = ellipse[1]
     angle_deg = ellipse[2]
     orientation = np.deg2rad(angle_deg)
@@ -423,8 +426,8 @@ def _process_single_region(args):
         coords = np.vstack([coords, coords[0]])
 
     affine_matrix = np.array([[transform.a, transform.b], [transform.d, transform.e]])
-    offset = np.array([transform.c, transform.f])
-    coords = coords @ affine_matrix.T + offset
+    geo_offset = np.array([transform.c, transform.f])
+    coords = coords @ affine_matrix.T + geo_offset
     poly = Polygon(coords.tolist())
 
     if not poly.is_valid or poly.is_empty:
@@ -437,7 +440,7 @@ def _process_single_region(args):
     if area < conf.min_area or aspect_ratio > conf.max_aspect_ratio or solidity < conf.min_solidity:
         return None
 
-    center_geo = np.array(center) @ affine_matrix.T + offset
+    center_geo = np.array(center) @ affine_matrix.T + geo_offset
     return {
         "type": "Feature",
         "properties": {
@@ -468,9 +471,12 @@ def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
         if region.area < conf.min_area_pixels:
             continue
         region_label = region.label
-        region_mask = labels_ws == region_label
+        minr, minc, maxr, maxc = region.bbox
+        subregion = labels_ws[minr:maxr, minc:maxc]
+        region_mask = subregion == region_label
+        offset = (minc, minr)
         logger.debug(f"Processing label {region_label} | Mem: {psutil.Process(os.getpid()).memory_info().rss / 1e9:.2f} GB")
-        feature = _process_single_region((region_label, region_mask, transform, conf, num_points))
+        feature = _process_single_region((region_label, region_mask, offset, transform, conf, num_points))
         if feature:
             results.append(feature)
         del region_mask, feature
