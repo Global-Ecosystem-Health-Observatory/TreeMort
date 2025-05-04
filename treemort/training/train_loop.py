@@ -119,7 +119,7 @@ def loss_fn_basic(
     teacher_probs = torch.pow(teacher_probs, 1.0 / sharpen_temperature)
     teacher_probs = torch.clamp(teacher_probs, min=0.05, max=0.95)
 
-    foreground_mask = (labels > 0).float()
+    foreground_mask = (labels[:, 0:1, :, :] > 0).float()
     background_mask = 1.0 - foreground_mask
 
     w_fg = kwargs.get("foreground_weight", 5.0)
