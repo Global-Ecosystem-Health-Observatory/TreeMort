@@ -105,7 +105,7 @@ Examples:
 
 export TREEMORT_REPO_PATH="/users/rahmanan/TreeMort"
 
-(train) bash $TREEMORT_REPO_PATH/scripts/submit_treemort.sh lumi unet finland
-(test)  bash $TREEMORT_REPO_PATH/scripts/submit_treemort.sh lumi unet finland --eval-only
+(train) bash $TREEMORT_REPO_PATH/scripts/submit_treemort.sh lumi flair_unet poland
+(test)  bash $TREEMORT_REPO_PATH/scripts/submit_treemort.sh lumi flair_unet poland --eval-only
 
 '''
