@@ -64,6 +64,18 @@ def trainer(
         elif conf.distillation_method == "feature":
             extra_params["lambda_feature"] = conf.distillation_lambda
 
+        if hasattr(conf, "distillation_sharpen_temperature"):
+            extra_params["sharpen_temperature"] = conf.distillation_sharpen_temperature
+
+        initial_alpha = 0.3
+        final_alpha = 0.7
+        total_epochs = conf.epochs
+        alpha = initial_alpha + (final_alpha - initial_alpha) * epoch / total_epochs
+
+        initial_temp = 6.0
+        final_temp = 2.0
+        temperature = initial_temp + (final_temp - initial_temp) * epoch / total_epochs
+
         train_loss, train_metrics = training_loop(
             student_model,
             teacher_model_or_ema,
@@ -76,8 +88,8 @@ def trainer(
             conf.model,
             conf.teacher_model_names,
             device,
-            alpha=conf.distillation_alpha,
-            temperature=conf.distillation_temperature,
+            alpha=alpha,
+            temperature=temperature,
             **extra_params
         )
 

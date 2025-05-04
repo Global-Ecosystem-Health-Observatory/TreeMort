@@ -96,14 +96,48 @@ def loss_fn_basic(
 ):
     student_logits, _ = process_model_output(student_model, images, model_name)
     with torch.no_grad():
-        teacher_logits, _ = process_model_output(teacher_model, images, teacher_model_name)
+        teacher_logits_list = []
+        for aug_fn, rev_fn in [
+            (lambda x: x, lambda x: x),
+            (lambda x: torch.flip(x, dims=[-1]), lambda x: torch.flip(x, dims=[-1])),
+            (lambda x: torch.flip(x, dims=[-2]), lambda x: torch.flip(x, dims=[-2]))
+        ]:
+            images_aug = aug_fn(images)
+            with torch.no_grad():
+                logits_aug, _ = process_model_output(teacher_model, images_aug, teacher_model_name)
+            teacher_logits_list.append(rev_fn(logits_aug))
+
+        teacher_logits = torch.mean(torch.stack(teacher_logits_list), dim=0)
 
     loss_standard = criterion(student_logits, labels)
 
-    loss_distillation = kd_criterion(
-        F.logsigmoid(student_logits / temperature),
-        torch.sigmoid(teacher_logits / temperature),
-    )
+    student_probs = torch.sigmoid(student_logits / temperature)
+    teacher_probs = torch.sigmoid(teacher_logits / temperature)
+
+    # Optional sharpening before clamping
+    sharpen_temperature = kwargs.get("sharpen_temperature", temperature)
+    teacher_probs = torch.pow(teacher_probs, 1.0 / sharpen_temperature)
+    teacher_probs = torch.clamp(teacher_probs, min=0.05, max=0.95)
+
+    foreground_mask = (labels > 0).float()
+    background_mask = 1.0 - foreground_mask
+
+    w_fg = kwargs.get("foreground_weight", 5.0)
+    w_bg = kwargs.get("background_weight", 1.0)
+
+    weight_map = foreground_mask * w_fg + background_mask * w_bg
+
+    confidence_mask = (teacher_probs > 0.3).float()
+    teacher_probs = teacher_probs * confidence_mask
+    student_probs = student_probs * confidence_mask
+    weight_map = weight_map * confidence_mask
+
+    confidence_weights = torch.clamp((teacher_probs - 0.3) / 0.7, 0, 1)  # Range 0 to 1
+    loss_distillation = F.binary_cross_entropy(
+        student_probs,
+        teacher_probs,
+        weight=weight_map * confidence_weights
+    ) * (temperature ** 2)
 
     loss = alpha * loss_distillation + (1 - alpha) * loss_standard
 
