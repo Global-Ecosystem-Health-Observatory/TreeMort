@@ -57,7 +57,7 @@ def load_teacher_weights(teacher_model, conf, device):
 
 
 def load_checkpoint_if_available(model, conf, device):
-    checkpoint_path = get_checkpoint(conf.output_dir, model_name=conf.model)
+    checkpoint_path = get_checkpoint(conf.output_dir, model_name=conf.model, model_file_name=conf.best_model)
 
     if checkpoint_path:
         model.load_state_dict(torch.load(checkpoint_path, map_location=device, weights_only=True))
