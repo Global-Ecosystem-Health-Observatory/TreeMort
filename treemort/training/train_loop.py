@@ -244,10 +244,18 @@ def loss_fn_feature(
         weight=weight_map * confidence_weights
     ) * (temperature ** 2)
 
+    feature_weights = kwargs.get("feature_weights", [1.0] * len(student_features))
+
+    def normalize_feat(x):
+        return F.normalize(x.view(x.size(0), -1), p=2, dim=1).view_as(x)
+
     loss_feature = sum(
-        F.mse_loss(s_feat, t_feat)
-        for s_feat, t_feat in zip(student_features, teacher_features)
-    ) / len(student_features)
+        w * (
+            0.5 * F.mse_loss(normalize_feat(s), normalize_feat(t)) +
+            0.5 * (1 - F.cosine_similarity(s.view(s.size(0), -1), t.view(t.size(0), -1), dim=1).mean())
+        )
+        for s, t, w in zip(student_features, teacher_features, feature_weights)
+    )
     
     loss = loss_standard + alpha * loss_distillation + lambda_feature * loss_feature
 
