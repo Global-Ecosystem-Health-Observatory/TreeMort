@@ -17,4 +17,4 @@ teacher-backbones = None
 distillation-alpha = 0.3
 distillation-temperature = 2.0
 distillation-beta = 0.999
-distillation-method = self
+distillation-method = feature
