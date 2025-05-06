@@ -26,7 +26,6 @@ def run(conf, eval_only):
     if eval_only:
         conf.resume = True
         conf.best_model = "best.weights."+ conf.distillation_method + ".pth"
-        conf.best_model = "best.weights.transfer.pth"
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info(f"Using device: {device}")
