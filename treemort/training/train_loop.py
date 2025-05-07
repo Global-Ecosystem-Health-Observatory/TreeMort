@@ -276,8 +276,8 @@ def loss_fn_ensemble(
     teacher_predictions = []
     for teacher, teacher_name in zip(teacher_models, teacher_model_names):
         with torch.no_grad():
-            teacher_logits, _ = process_model_output(teacher, images, teacher_name)
-            teacher_predictions.append(teacher_logits)
+            teacher_output = process_model_output(teacher, images, teacher_name)
+            teacher_predictions.append(teacher_output[0])
 
     ensemble_logits = torch.mean(torch.stack(teacher_predictions), dim=0)
     
