@@ -1,8 +1,11 @@
 import os
+import time
 import torch
 import argparse
+import configargparse
 
 from pathlib import Path
+from skimage.morphology import label
 from multiprocessing import Pool, cpu_count
 
 from treemort.utils.logger import configure_logger, get_logger, initialize_logger
@@ -14,12 +17,15 @@ from inference.utils import (
     load_and_preprocess_image,
     threshold_prediction_map,
     extract_contours,
+    extract_contours_from_labels,
     save_geojson,
     log_and_raise,
     validate_path,
-    compute_watershed, 
-    extract_ellipses, 
-    save_geojson,
+    expand_path,
+    compute_watershed,
+    extract_ellipses,
+    segment_filtering_only,
+    watershed_segmentation_only,
 )
 
 
@@ -34,8 +40,13 @@ def process_image(
     logger.debug(f"Processing image: {os.path.basename(image_path)}")
 
     try:
-        image, transform, crs = load_and_preprocess_image(image_path, conf.nir_rgb_order)
-        logger.debug(f"Loaded and preprocessed image: {os.path.basename(image_path)}")
+        total_start_time = time.time()
+        start_time = time.time()
+        image, transform, crs = load_and_preprocess_image(
+            image_path, conf.nir_rgb_order
+        )
+        logger.info(f"Image loaded in {time.time() - start_time:.2f} seconds.")
+        start_time = time.time()
 
         prediction_maps = sliding_window_inference(
             model,
@@ -48,24 +59,86 @@ def process_image(
             crop_size=conf.test_crop_size,
             model_name=conf.model,
         )
+
+        logger.info(
+            f"Sliding window inference completed in {time.time() - start_time:.2f} seconds."
+        )
+        start_time = time.time()
+
         segment_map = prediction_maps[0]
         
         image_np = image.cpu().numpy()
         segment_map_np = segment_map.cpu().numpy()
-        
+
+        logger.info(
+            f"Converted prediction maps to numpy in {time.time() - start_time:.2f} seconds."
+        )
+
         if post_process:
+            start_time = time.time()
             labels_ws = compute_watershed(segment_map_np, conf)
-            features = extract_ellipses(labels_ws, transform, conf)
+            logger.info(
+                f"Watershed segmentation took {time.time() - start_time:.2f} seconds."
+            )
+            start_time = time.time()
+            features = list(extract_ellipses(labels_ws, transform, conf))
+            logger.info(
+                f"Ellipse extraction took {time.time() - start_time:.2f} seconds."
+            )
+            start_time = time.time()
             save_geojson(features, geojson_path, crs, transform, name="FittedEllipses")
+            logger.info(f"GeoJSON saved in {time.time() - start_time:.2f} seconds.")
+
+            # # Filtering-only variant
+            # start_time = time.time()
+            # filtered_mask = segment_filtering_only(segment_map_np, conf)
+            # logger.info(f"Segment filtering took {time.time() - start_time:.2f} seconds.")
+            # start_time = time.time()
+            # features = extract_contours(filtered_mask, transform)
+            # logger.info(f"Contour extraction took {time.time() - start_time:.2f} seconds.")
+            # start_time = time.time()
+            # save_geojson(features, geojson_path, crs, transform, name="FilteredContours")
+            # logger.info(f"GeoJSON saved in {time.time() - start_time:.2f} seconds.")
+
+            # # Watershed-only variant
+            # start_time = time.time()
+            # labels_ws = watershed_segmentation_only(segment_map_np, centroid_map_np, hybrid_map_np, conf)
+            # logger.info(f"Watershed segmentation took {time.time() - start_time:.2f} seconds.")
+            # start_time = time.time()
+            # features = extract_contours_from_labels(labels_ws, transform)
+            # logger.info(f"Contour extraction took {time.time() - start_time:.2f} seconds.")
+            # start_time = time.time()
+            # save_geojson(features, geojson_path, crs, transform, name="WatershedContours")
+            # logger.info(f"GeoJSON saved in {time.time() - start_time:.2f} seconds.")
 
         else:
-            binary_mask = threshold_prediction_map(segment_map_np, conf.segment_threshold)
+            start_time = time.time()
+            binary_mask = threshold_prediction_map(
+                segment_map_np, conf.segment_threshold
+            )
+            logger.info(
+                f"Thresholded prediction map in {time.time() - start_time:.2f} seconds."
+            )
+            start_time = time.time()
             features = extract_contours(binary_mask, transform)
+            logger.info(
+                f"Contour extraction took {time.time() - start_time:.2f} seconds."
+            )
+            start_time = time.time()
             save_geojson(features, geojson_path, crs, transform, name="Contours")
+            logger.info(f"GeoJSON saved in {time.time() - start_time:.2f} seconds.")
 
-        logger.info(f"Successfully processed and saved GeoJSON for: {os.path.basename(image_path)}")
+        logger.info(
+            f"Total processing time for {os.path.basename(image_path)}: {time.time() - total_start_time:.2f} seconds."
+        )
+        logger.info(
+            f"Successfully processed and saved GeoJSON for: {os.path.basename(image_path)}"
+        )
     except Exception as e:
-        log_and_raise(logger, RuntimeError(f"Error processing image {os.path.basename(image_path)}: {e}"))
+        log_and_raise(
+            logger,
+            RuntimeError(f"Error processing image {os.path.basename(image_path)}: {e}"),
+        )
 
 
 def process_single_image(
@@ -82,12 +155,17 @@ def process_single_image(
 
         model = load_model(conf, id2label, device)
 
-        geojson_path = os.path.join(output_dir, f"{os.path.splitext(os.path.basename(image_path))[0]}.geojson")
+        geojson_path = os.path.join(
+            output_dir, f"{os.path.splitext(os.path.basename(image_path))[0]}.geojson"
+        )
         os.makedirs(os.path.dirname(geojson_path), exist_ok=True)
 
         process_image(model, image_path, geojson_path, conf, post_process)
     except Exception as e:
-        log_and_raise(logger, RuntimeError(f"Error processing image {os.path.basename(image_path)}: {e}"))
+        log_and_raise(
+            logger,
+            RuntimeError(f"Error processing image {os.path.basename(image_path)}: {e} (line {e.__traceback__.tb_lineno})"),
+        )
 
 
 def run_inference(
@@ -99,10 +177,11 @@ def run_inference(
     post_process: bool = False,
     verbosity: str = "info",
     num_processes: int = 4,
+    list_file: str = None,
 ) -> None:
     logger = get_logger()
 
-    validate_path(data_path)
+    validate_path(logger, data_path)
     if not os.path.isdir(output_dir):
         os.makedirs(output_dir, exist_ok=True)
 
@@ -110,12 +189,33 @@ def run_inference(
     
     conf = setup(config_file_path, model_config=model_config, data_config=data_config)
 
-    data_path = Path(data_path)
-    image_paths = (
-        list(data_path.rglob("*.tiff")) + list(data_path.rglob("*.tif")) + list(data_path.rglob("*.jp2"))
-        if data_path.is_dir()
-        else [data_path]
-    )
+    # Select images either from a provided list file or by directory scan
+    if list_file:
+        data_path = Path(data_path)
+        if not os.path.isfile(list_file):
+            get_logger().error(f"List file not found: {list_file}")
+            return
+        with open(list_file, "r") as f:
+            lines = [
+                line.strip()
+                for line in f
+                if line.strip() and not line.strip().startswith("#")
+            ]
+        image_paths = []
+        for p in lines:
+            p_path = Path(p)
+            if not p_path.is_absolute():
+                p_path = data_path / p_path
+            image_paths.append(p_path)
+    else:
+        data_path = Path(data_path)
+        image_paths = (
+            list(data_path.rglob("*.tiff"))
+            + list(data_path.rglob("*.tif"))
+            + list(data_path.rglob("*.jp2"))
+            if data_path.is_dir()
+            else [data_path]
+        )
 
     if not image_paths:
         logger.warning(f"No images found in the specified path: {data_path}")
@@ -127,18 +227,138 @@ def run_inference(
         (image_path, conf, output_dir, id2label, post_process)
         for image_path in image_paths
         # Uncomment the following line to skip images already processed:
-        # if not os.path.exists(os.path.join(output_dir, f"{os.path.splitext(os.path.basename(image_path))[0]}.geojson"))
+        if not os.path.exists(
+            os.path.join(
+                output_dir,
+                f"{os.path.splitext(os.path.basename(image_path))[0]}.geojson",
+            )
+        )
     ]
 
     try:
-        slurm_cpus = os.getenv("SLURM_CPUS_PER_TASK")
-        num_processes = int(slurm_cpus) if slurm_cpus else min(num_processes, cpu_count())
-
-        with Pool(processes=num_processes, initializer=initialize_logger, initargs=(verbosity,)) as pool:
-            pool.starmap(process_single_image, tasks)
+        for image_path, conf, output_dir, id2label, post_process in tasks:
+            process_single_image(image_path, conf, output_dir, id2label, post_process)
         logger.info(f"Batch processing completed: {len(image_paths)} images processed.")
     except Exception as e:
-        log_and_raise(logger, RuntimeError(f"Error during parallel processing: {e}"))
+        log_and_raise(logger, RuntimeError(f"Error during processing: {e}"))
+
+
+def parse_config(config_file_path: str) -> argparse.Namespace:
+    logger = get_logger()
+    validate_path(logger, config_file_path)
+
+    parser = configargparse.ArgParser(default_config_files=[config_file_path])
+    parser.add(
+        "--model-config",
+        type=str,
+        required=True,
+        help="Path to the model configuration file (e.g., architecture, hyperparameters).",
+    )
+    parser.add(
+        "--best-model",
+        type=str,
+        required=True,
+        help="Path to the file containing the best model weights.",
+    )
+    parser.add(
+        "--window-size",
+        type=int,
+        default=256,
+        help="Size of the sliding window for inference (default: 256 pixels).",
+    )
+    parser.add(
+        "--stride",
+        type=int,
+        default=128,
+        help="Stride length for sliding window during inference (default: 128 pixels).",
+    )
+    parser.add(
+        "--input-channels", type=int, required=True, help="number of input channels"
+    )
+    parser.add(
+        "--output-channels", type=int, required=True, help="number of output channels"
+    )
+    parser.add(
+        "--min-area",
+        type=float,
+        default=1.0,
+        help="Minimum area (in pixels) for retaining a detected region.",
+    )
+    parser.add(
+        "--max-aspect-ratio",
+        type=float,
+        default=3.0,
+        help="Maximum allowable aspect ratio for detected regions.",
+    )
+    parser.add(
+        "--min-solidity",
+        type=float,
+        default=0.85,
+        help="Minimum solidity for retaining a detected region (solidity = area/convex hull).",
+    )
+    parser.add(
+        "--min-distance",
+        type=int,
+        default=7,
+        help="Minimum distance between peaks for watershed segmentation.",
+    )
+    parser.add(
+        "--dilation-radius",
+        type=int,
+        default=0,
+        help="Radius of the structuring element for dilating binary masks.",
+    )
+    parser.add(
+        "--erosion-radius",
+        type=int,
+        default=0,
+        help="Radius of the structuring element for eroding binary masks.",
+    )
+    parser.add(
+        "--blur-sigma",
+        type=float,
+        default=1.0,
+        help="Standard deviation for Gaussian blur applied to prediction maps.",
+    )
+    parser.add(
+        "--segment-threshold",
+        type=float,
+        default=0.5,
+        help="Threshold for binary classification during inference (default: 0.5).",
+    )
+    parser.add(
+        "--centroid-threshold",
+        type=float,
+        default=0.5,
+        help="Threshold for filtering peaks based on the centroid map.",
+    )
+    parser.add(
+        "--hybrid-threshold",
+        type=float,
+        default=-0.5,
+        help="Threshold for filtering contours based on the hybrid map.",
+    )
+    parser.add(
+        "--tightness",
+        type=float,
+        default=0.1,
+        help="Tightness parameter for ellipse fitting.",
+    )
+    parser.add(
+        "--nir-rgb-order",
+        type=int,
+        nargs="+",
+        default=[3, 0, 1, 2],
+        help="Order of NIR, Red, Green, and Blue channels in the input imagery.",
+    )
+
+    conf, _ = parser.parse_known_args()
+    conf.model_config = expand_path(conf.model_config)
+
+    conf.min_area_pixels = (
+        conf.min_area / 0.0625
+    )  # for 25cm pix resolution; (0.25*0.25) = 0.0625 sq. m per pixel ; 1/0.0625 = 16 pixels
+    return conf
 
 
 def main():
@@ -150,12 +370,21 @@ def main():
     parser.add_argument('--outdir',       type=str, help="Directory to save GeoJSON predictions (default: same as input)")
     parser.add_argument('--post-process', action="store_true", help="Enable or disable post-processing")
     parser.add_argument('--verbosity',    type=str, choices=['info', 'debug', 'warning'], default='info')
-    
+    parser.add_argument("--list-file",    type=str, help="Path to text file with list of image filenames to process")
+
     args = parser.parse_args()
     
     _ = configure_logger(verbosity=args.verbosity)
     
-    run_inference(args.data_path, args.config, args.model_config, args.data_config, args.outdir, args.post_process, verbosity=args.verbosity)
+    run_inference(
+        args.data_path, 
+        args.config, 
+        args.model_config, 
+        args.data_config, 
+        args.outdir, 
+        args.post_process, 
+        verbosity=args.verbosity
+    )
 
 
 if __name__ == "__main__":
@@ -189,6 +418,14 @@ python -m inference.engine \
     --outdir ${TREEMORT_DATA_PATH}/Finland/Predictions
 
 python -m inference.engine \
+    ${TREEMORT_DATA_PATH}/Poland/RGBNIR/25cm \
+    --config ${TREEMORT_REPO_PATH}/configs/inference/poland.txt \
+    --model-config ${TREEMORT_REPO_PATH}/configs/model/flair_unet.txt \
+    --data-config ${TREEMORT_REPO_PATH}/configs/data/poland.txt \
+    --outdir ${TREEMORT_DATA_PATH}/Poland/Predictions_flair_unet_basic_post_process \
+    --post-process --verbosity info
+    
+python -m inference.engine \
     ${TREEMORT_DATA_PATH}/Poland/RGBNIR/25cm/2021/Images/M-33-21-B-d-2-3_0.tif \
     --config ${TREEMORT_REPO_PATH}/configs/inference/poland.txt \
     --model-config ${TREEMORT_REPO_PATH}/configs/model/flair_unet.txt \
@@ -217,14 +454,14 @@ python -m inference.engine \
 
 2) HPC
 
-Usage: ./submit_inference.sh <hpc_type> <model config file> <data config file> [--post-process]
+Usage: ./submit_inference.sh <hpc_type> <model config file> <data config file> <KD type> [--post-process]
 
 Examples:
 
 export TREEMORT_REPO_PATH="/users/rahmanan/TreeMort"
 
-(sans post-processing) sh $TREEMORT_REPO_PATH/scripts/submit_inference.sh lumi flair_unet finland
-(with post-processing) sh $TREEMORT_REPO_PATH/scripts/submit_inference.sh lumi flair_unet finland --post-process
+(sans post-processing) sh $TREEMORT_REPO_PATH/scripts/submit_inference.sh lumi flair_unet finland basic
+(with post-processing) sh $TREEMORT_REPO_PATH/scripts/submit_inference.sh lumi flair_unet finland basic --post-process
 
 '''
 
