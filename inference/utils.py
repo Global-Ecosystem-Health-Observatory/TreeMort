@@ -430,8 +430,11 @@ def _postprocess_labels(labels_ws, min_region_size=50, dilation_radius=1):
 
 
 def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
+    logger = get_logger()
     for region in regionprops(labels_ws):
+        logger.debug(f"Processing region {region.label} with area {region.area}")
         if region.area < conf.min_area_pixels:
+            logger.debug(f"Skipping region {region.label}: area below threshold ({region.area} < {conf.min_area_pixels})")
             continue
 
         # Calculate extended bounding box with padding for erosion
@@ -454,6 +457,7 @@ def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
         # Find contours in the eroded mask
         eroded_contours = find_contours(eroded_mask, level=0.5)
         if not eroded_contours:
+            logger.debug(f"No contours found for region {region.label} after erosion.")
             continue
         eroded_contour = max(eroded_contours, key=lambda c: c.shape[0])
 
@@ -465,6 +469,7 @@ def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
             ],
             dtype=np.float32,
         )
+        logger.debug(f"Region {region.label}: number of contour points = {len(pts)}")
         if len(pts) < 5:
             continue
 
@@ -478,6 +483,7 @@ def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
         center = ellipse[0]
         axes = ellipse[1]
         angle_deg = ellipse[2]
+        logger.debug(f"Region {region.label}: fitted ellipse center = {center}, axes = {axes}, angle = {angle_deg}")
         orientation = np.deg2rad(angle_deg)
 
         # Compute semi-axes with tightness factor
@@ -524,6 +530,7 @@ def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
                 convex_hull.length / (4 * np.sqrt(area)) if area > 0 else float("inf")
             )
             solidity = area / convex_hull.area if convex_hull.area > 0 else 0
+            logger.debug(f"Region {region.label}: computed area = {area:.2f}, aspect_ratio = {aspect_ratio:.2f}, solidity = {solidity:.2f}")
             if (
                 area >= conf.min_area
                 and aspect_ratio <= conf.max_aspect_ratio
@@ -546,7 +553,10 @@ def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
                         "coordinates": [transformed_ellipse.tolist()],
                     },
                 }
+                logger.debug(f"Region {region.label}: ellipse accepted.")
                 yield feature
+            else:
+                logger.debug(f"Region {region.label}: ellipse rejected due to shape criteria.")
 
 
 def extract_contours(binary_mask: np.ndarray, transform: Affine) -> List[Dict]:
