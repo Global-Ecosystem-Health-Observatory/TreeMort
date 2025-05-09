@@ -506,8 +506,17 @@ def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
         ellipse_arr = np.array(ellipse_coords)
         transformed_ellipse = _apply_transform(ellipse_arr, transform)
 
-        # Create and validate polygon
-        ellipse_poly = Polygon(transformed_ellipse.tolist())
+        # Ensure the transformed ellipse is closed
+        transformed_list = transformed_ellipse.tolist()
+        if transformed_list[0] != transformed_list[-1]:
+            transformed_list.append(transformed_list[0])
+        from shapely.geometry import LinearRing
+
+        try:
+            ring = LinearRing(transformed_list)
+            ellipse_poly = Polygon(ring)
+        except Exception:
+            continue  # Skip invalid ellipse
         if ellipse_poly.is_valid and not ellipse_poly.is_empty:
             convex_hull = ellipse_poly.convex_hull
             area = ellipse_poly.area
