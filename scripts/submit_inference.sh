@@ -57,9 +57,12 @@ fi
 
 # Filter and forward only the --post-process flag to the inference script.
 POST_PROCESS_FLAG=""
-if [[ "$@" == *"--post-process"* ]]; then
-    POST_PROCESS_FLAG="--post-process"
-fi
+for arg in "$@"; do
+    if [ "$arg" == "--post-process" ]; then
+        POST_PROCESS_FLAG="--post-process"
+        break
+    fi
+done
 
 # Call the inference script with the filtered flag.
 bash $TREEMORT_REPO_PATH/scripts/run_inference.sh "$POST_PROCESS_FLAG"
