@@ -8,13 +8,13 @@ if [ "$HPC_TYPE" == "lumi" ]; then
     PROJECT_NAME="project_462000684"
     PARTITION_NAME="small-g"
     MODULE_NAME="pytorch/2.5"
-    MODULE_CHANGE="module use /appl/local/csc/modulefiles/"
+    MODULE_USE_CMD="module use /appl/local/csc/modulefiles/"
     GPU_DIRECTIVE="#SBATCH --gpus-per-node=1"
 else
     PROJECT_NAME="project_2004205"
     PARTITION_NAME="gpu"
     MODULE_NAME="pytorch/2.5"
-    MODULE_CHANGE=""
+    MODULE_USE_CMD=""
     GPU_DIRECTIVE="#SBATCH --gres=gpu:v100:1"
 fi
 
@@ -38,7 +38,7 @@ $GPU_DIRECTIVE
 export TRANSFORMERS_CACHE="$TREEMORT_DATA_PATH/huggingface_cache"
 export HF_HOME="$TREEMORT_DATA_PATH/huggingface_cache"
 
-$MODULE_CHANGE
+$MODULE_USE_CMD
 echo "Loading module: $MODULE_NAME"
 module load $MODULE_NAME
 
@@ -80,28 +80,28 @@ fi
 
 POST_PROCESS=""
 for arg in "$@"; do
-    case $arg in
+    case \$arg in
         --post-process) POST_PROCESS="--post-process" ;;
-        *) echo "[ERROR] Unknown parameter passed: $arg"; exit 1 ;;
+        *) echo "[ERROR] Unknown parameter passed: \$arg"; exit 1 ;;
     esac
 done
 
-if [ -n "$POST_PROCESS" ]; then
+if [ -n "\$POST_PROCESS" ]; then
     echo "[INFO] Post-processing is enabled"
 fi
 
 echo "[INFO] Starting inference..."
 
-echo srun python3 "$TREEMORT_REPO_PATH/inference/engine.py" "$DATA_PATH" --config "$CONFIG_PATH" --model-config "$MODEL_CONFIG_PATH" --data-config "$DATA_CONFIG_PATH" --outdir "$OUTPUT_PATH" $POST_PROCESS
+echo srun python3 "$TREEMORT_REPO_PATH/inference/engine.py" "$DATA_PATH" --config "$CONFIG_PATH" --model-config "$MODEL_CONFIG_PATH" --data-config "$DATA_CONFIG_PATH" --outdir "$OUTPUT_PATH" \$POST_PROCESS
 
-EXIT_STATUS=$?
-if [ $EXIT_STATUS -ne 0 ]; then
-    echo "[ERROR] Job failed with exit status $EXIT_STATUS"
+EXIT_STATUS=\$?
+if [ \$EXIT_STATUS -ne 0 ]; then
+    echo "[ERROR] Job failed with exit status \$EXIT_STATUS"
 else
     echo "[INFO] Job completed successfully"
 fi
 
-exit $EXIT_STATUS
+exit \$EXIT_STATUS
 EOT
 
 echo "Generated SBATCH script:"
