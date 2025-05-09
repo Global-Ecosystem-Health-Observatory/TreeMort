@@ -24,6 +24,7 @@ SBATCH_SCRIPT=$(mktemp)
 # SLURM Job Configuration
 cat <<EOT > $SBATCH_SCRIPT
 #!/bin/bash
+eval set -- "\$SCRIPT_ARGS"
 #SBATCH --job-name=treemort-inference
 #SBATCH --account=$PROJECT_NAME
 #SBATCH --output=output/stdout/%A_%a.out
@@ -123,4 +124,4 @@ echo "Generated SBATCH script:"
 cat $SBATCH_SCRIPT
 
 # Submit SLURM Job
-sbatch $SBATCH_SCRIPT "$@"
+sbatch --export=ALL,SCRIPT_ARGS="$*" $SBATCH_SCRIPT
