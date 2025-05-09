@@ -426,7 +426,7 @@ python -m inference.engine \
     --post-process --verbosity info
     
 python -m inference.engine \
-    ${TREEMORT_DATA_PATH}/Poland/RGBNIR/25cm/2021/Images/M-33-21-B-d-2-3_0.tif \
+    ${TREEMORT_DATA_PATH}/Poland/RGBNIR/25cm/2021/Images/M-33-11-A-a-1-4_0.tif \
     --config ${TREEMORT_REPO_PATH}/configs/inference/poland.txt \
     --model-config ${TREEMORT_REPO_PATH}/configs/model/flair_unet.txt \
     --data-config ${TREEMORT_REPO_PATH}/configs/data/poland.txt \
