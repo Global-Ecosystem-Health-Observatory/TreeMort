@@ -369,7 +369,7 @@ def main():
     parser.add_argument('--data-config',  type=str, required=True, help="Path to the data configuration file")
     parser.add_argument('--outdir',       type=str, help="Directory to save GeoJSON predictions (default: same as input)")
     parser.add_argument('--post-process', action="store_true", help="Enable or disable post-processing")
-    parser.add_argument('--verbosity',    type=str, choices=['info', 'debug', 'warning'], default='info')
+    parser.add_argument('--verbosity',    type=str, choices=['info', 'debug', 'warning'], default='debug')
     parser.add_argument("--list-file",    type=str, help="Path to text file with list of image filenames to process")
 
     args = parser.parse_args()
