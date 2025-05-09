@@ -8,13 +8,13 @@ if [ "$HPC_TYPE" == "lumi" ]; then
     PROJECT_NAME="project_462000684"
     PARTITION_NAME="small-g"
     MODULE_NAME="pytorch/2.5"
-    MODULE_USE_CMD="module use /appl/local/csc/modulefiles/"
+    MODULE_CHANGE="module use /appl/local/csc/modulefiles/"
     GPU_DIRECTIVE="#SBATCH --gpus-per-node=1"
 else
     PROJECT_NAME="project_2004205"
     PARTITION_NAME="gpu"
     MODULE_NAME="pytorch/2.5"
-    MODULE_USE_CMD=""
+    MODULE_CHANGE=""
     GPU_DIRECTIVE="#SBATCH --gres=gpu:v100:1"
 fi
 
@@ -24,7 +24,6 @@ SBATCH_SCRIPT=$(mktemp)
 # SLURM Job Configuration
 cat <<EOT > $SBATCH_SCRIPT
 #!/bin/bash
-eval set -- "\$SCRIPT_ARGS"
 #SBATCH --job-name=treemort-inference
 #SBATCH --account=$PROJECT_NAME
 #SBATCH --output=output/stdout/%A_%a.out
@@ -39,7 +38,7 @@ $GPU_DIRECTIVE
 export TRANSFORMERS_CACHE="$TREEMORT_DATA_PATH/huggingface_cache"
 export HF_HOME="$TREEMORT_DATA_PATH/huggingface_cache"
 
-$MODULE_USE_CMD
+$MODULE_CHANGE
 echo "Loading module: $MODULE_NAME"
 module load $MODULE_NAME
 
@@ -80,31 +79,16 @@ elif [ ! -d "$OUTPUT_PATH" ]; then
 fi
 
 POST_PROCESS=""
-
-while [[ "$#" -gt 0 ]]; do
-    if [ -z "$1" ]; then
-        break
-    fi
-    case $1 in
+for arg in "$@"; do
+    case $arg in
         --post-process) POST_PROCESS="--post-process" ;;
-        *) echo "[ERROR] Unknown parameter passed: $1"; exit 1 ;;
+        *) echo "[ERROR] Unknown parameter passed: $arg"; exit 1 ;;
     esac
-    shift
 done
 
 if [ -n "$POST_PROCESS" ]; then
     echo "[INFO] Post-processing is enabled"
 fi
-
-# echo "[INFO] Pre-downloading Beit and Maskformer models..."
-# rm -rf "$TREEMORT_DATA_PATH/huggingface_cache/microsoft/beit-base-finetuned-ade-640-640"
-# python3 -c "from transformers import AutoModel; AutoModel.from_pretrained('microsoft/beit-base-finetuned-ade-640-640', cache_dir='$TREEMORT_DATA_PATH/huggingface_cache')"
-
-# rm -rf "$TREEMORT_DATA_PATH/huggingface_cache/facebook/maskformer-swin-base-ade"
-# python3 -c "from transformers import AutoModel; AutoModel.from_pretrained('facebook/maskformer-swin-base-ade', cache_dir='$TREEMORT_DATA_PATH/huggingface_cache')"
-
-# rm -rf "$TREEMORT_DATA_PATH/huggingface_cache/facebook/detr-resnet-50-panoptic"
-# python3 -c "from transformers import AutoModel; AutoModel.from_pretrained('facebook/detr-resnet-50-panoptic', cache_dir='$TREEMORT_DATA_PATH/huggingface_cache')"
 
 echo "[INFO] Starting inference..."
 
@@ -124,4 +108,4 @@ echo "Generated SBATCH script:"
 cat $SBATCH_SCRIPT
 
 # Submit SLURM Job
-sbatch --export=ALL,SCRIPT_ARGS="$*" $SBATCH_SCRIPT
+sbatch --export=ALL $SBATCH_SCRIPT "$@"
