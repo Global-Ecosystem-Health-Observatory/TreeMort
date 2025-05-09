@@ -227,12 +227,12 @@ def run_inference(
         (image_path, conf, output_dir, id2label, post_process)
         for image_path in image_paths
         # Uncomment the following line to skip images already processed:
-        if not os.path.exists(
-            os.path.join(
-                output_dir,
-                f"{os.path.splitext(os.path.basename(image_path))[0]}.geojson",
-            )
-        )
+        # if not os.path.exists(
+        #     os.path.join(
+        #         output_dir,
+        #         f"{os.path.splitext(os.path.basename(image_path))[0]}.geojson",
+        #     )
+        # )
     ]
 
     try:
@@ -422,11 +422,11 @@ python -m inference.engine \
     --config ${TREEMORT_REPO_PATH}/configs/inference/poland.txt \
     --model-config ${TREEMORT_REPO_PATH}/configs/model/flair_unet.txt \
     --data-config ${TREEMORT_REPO_PATH}/configs/data/poland.txt \
-    --outdir ${TREEMORT_DATA_PATH}/Poland/Predictions_flair_unet_self_post_process \
+    --outdir ${TREEMORT_DATA_PATH}/Poland/Predictions_flair_unet_basic_post_process \
     --post-process --verbosity debug
     
 python -m inference.engine \
-    ${TREEMORT_DATA_PATH}/Poland/RGBNIR/25cm/2022/Images/N-34-81-B-a-4-2_0.tif \
+    ${TREEMORT_DATA_PATH}/Poland/RGBNIR/25cm/2021/Images/M-33-11-A-a-1-4_0.tif \
     --config ${TREEMORT_REPO_PATH}/configs/inference/poland.txt \
     --model-config ${TREEMORT_REPO_PATH}/configs/model/flair_unet.txt \
     --data-config ${TREEMORT_REPO_PATH}/configs/data/poland.txt \
