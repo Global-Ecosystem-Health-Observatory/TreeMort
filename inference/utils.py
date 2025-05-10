@@ -415,14 +415,17 @@ def _postprocess_labels(labels_ws, min_region_size=50, dilation_radius=1):
     new_labels = labels_ws.copy()
 
     for lbl in unique_labels:
+        logger.debug(f"Evaluating label {lbl}, size = {label_sizes[lbl]}")
         if lbl == 0:  # Skip background
             continue
         if label_sizes[lbl] < min_region_size:  # If region is too small
-            logger.debug(f"Removing region {lbl} with size {label_sizes[lbl]}")
+            logger.debug(f"Label {lbl} marked for removal. Attempting to reassign pixels to neighbors.")
             mask = labels_ws == lbl
 
             dilated = binary_dilation(mask, disk(dilation_radius))
+            logger.debug(f"Dilated mask for label {lbl} computed.")
             boundary_labels = labels_ws[dilated & (labels_ws != lbl)]
+            logger.debug(f"Boundary labels for label {lbl}: {np.unique(boundary_labels)}")
 
             if boundary_labels.size > 0:
                 unique_neighbors, neighbor_counts = np.unique(
@@ -434,6 +437,11 @@ def _postprocess_labels(labels_ws, min_region_size=50, dilation_radius=1):
                 if valid_counts.size > 0:
                     target_label = valid_neighbors[np.argmax(valid_counts)]
                     new_labels[mask] = target_label
+                    logger.debug(f"Label {lbl} reassigned to {target_label}")
+                else:
+                    logger.debug(f"No valid neighbors found for label {lbl}. Region remains removed.")
+            else:
+                logger.debug(f"No valid neighbors found for label {lbl}. Region remains removed.")
 
     return new_labels
 
