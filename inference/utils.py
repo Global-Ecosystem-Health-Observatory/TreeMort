@@ -405,6 +405,10 @@ def compute_watershed(segment_map, conf):
 
 
 def _postprocess_labels(labels_ws, min_region_size=50, dilation_radius=1):
+    logger = get_logger()
+    logger.debug(f"Postprocess: using dilation radius = {dilation_radius}")
+    logger.debug(f"Postprocess: structuring element shape = {disk(dilation_radius).shape}")
+
     unique_labels, counts = np.unique(labels_ws, return_counts=True)
     label_sizes = dict(zip(unique_labels, counts))
 
@@ -414,6 +418,7 @@ def _postprocess_labels(labels_ws, min_region_size=50, dilation_radius=1):
         if lbl == 0:  # Skip background
             continue
         if label_sizes[lbl] < min_region_size:  # If region is too small
+            logger.debug(f"Removing region {lbl} with size {label_sizes[lbl]}")
             mask = labels_ws == lbl
 
             dilated = binary_dilation(mask, disk(dilation_radius))
