@@ -76,12 +76,16 @@ def process_image(
 
         if post_process:
             start_time = time.time()
+            logger.debug("Starting watershed computation...")
             labels_ws = compute_watershed(segment_map_np, conf)
+            logger.debug("Finished watershed computation.")
             logger.info(
                 f"Watershed segmentation took {time.time() - start_time:.2f} seconds."
             )
             start_time = time.time()
+            logger.debug("Starting ellipse extraction...")
             features = list(extract_ellipses(labels_ws, transform, conf))
+            logger.debug(f"Number of features extracted: {len(features)}")
             logger.info(
                 f"Ellipse extraction took {time.time() - start_time:.2f} seconds."
             )

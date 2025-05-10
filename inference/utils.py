@@ -388,14 +388,18 @@ def compute_watershed(segment_map, conf):
         exclude_border=False,
         labels=mask_grown
     )
+    logger = get_logger()
+    logger.debug(f"Watershed: number of peaks detected = {len(local_max)}")
 
     markers = np.zeros(segment_map.shape, dtype=np.int32)
     for i, (y, x) in enumerate(local_max):
         markers[y, x] = i + 1  # Ensure marker values are unique and nonzero
 
     labels_ws = watershed(-smoothed_segment_map, markers, mask=mask_grown)
+    logger.debug(f"Watershed: number of labels before filtering = {len(np.unique(labels_ws)) - 1}")
 
     new_labels = _postprocess_labels(labels_ws, min_region_size=conf.min_area_pixels, dilation_radius=conf.dilation_radius)
+    logger.debug(f"Watershed: number of labels after filtering = {len(np.unique(new_labels)) - 1}")
 
     return new_labels
 
@@ -431,6 +435,12 @@ def _postprocess_labels(labels_ws, min_region_size=50, dilation_radius=1):
 
 def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
     logger = get_logger()
+    logger.debug(
+        f"Config: min_area={conf.min_area}, max_aspect_ratio={conf.max_aspect_ratio}, min_solidity={conf.min_solidity}, erosion_radius={conf.erosion_radius}, tightness={conf.tightness}"
+    )
+    logger.debug(f"Total regions from watershed: {len(regionprops(labels_ws))}")
+    total_accepted = 0
+    total_rejected = 0
     for region in regionprops(labels_ws):
         logger.debug(f"Processing region {region.label} with area {region.area}")
         if region.area < conf.min_area_pixels:
@@ -450,9 +460,11 @@ def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
 
         # Create mask within the cropped area
         mask = cropped_labels == region.label
+        logger.debug(f"Region {region.label}: mask sum (pre-erosion) = {mask.sum()}")
 
         # Erode the mask
         eroded_mask = erosion(mask, disk(conf.erosion_radius))
+        logger.debug(f"Region {region.label}: mask sum (post-erosion) = {eroded_mask.sum()}")
 
         # Find contours in the eroded mask
         eroded_contours = find_contours(eroded_mask, level=0.5)
@@ -477,13 +489,14 @@ def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
         if len(pts) > 200:
             indices = np.linspace(0, len(pts) - 1, 200, dtype=int)
             pts = pts[indices]
+        logger.debug(f"Region {region.label}: contour points used for ellipse fitting = {len(pts)}")
 
         # Fit ellipse to the contour points
         ellipse = cv2.fitEllipse(pts)
+        logger.debug(f"Region {region.label}: ellipse raw fit: center={ellipse[0]}, axes={ellipse[1]}, angle={ellipse[2]}")
         center = ellipse[0]
         axes = ellipse[1]
         angle_deg = ellipse[2]
-        logger.debug(f"Region {region.label}: fitted ellipse center = {center}, axes = {axes}, angle = {angle_deg}")
         orientation = np.deg2rad(angle_deg)
 
         # Compute semi-axes with tightness factor
@@ -530,7 +543,7 @@ def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
                 convex_hull.length / (4 * np.sqrt(area)) if area > 0 else float("inf")
             )
             solidity = area / convex_hull.area if convex_hull.area > 0 else 0
-            logger.debug(f"Region {region.label}: computed area = {area:.2f}, aspect_ratio = {aspect_ratio:.2f}, solidity = {solidity:.2f}")
+            logger.debug(f"Region {region.label}: shape filtering -> area={area:.2f}, aspect_ratio={aspect_ratio:.2f}, solidity={solidity:.2f}")
             if (
                 area >= conf.min_area
                 and aspect_ratio <= conf.max_aspect_ratio
@@ -554,9 +567,14 @@ def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
                     },
                 }
                 logger.debug(f"Region {region.label}: ellipse accepted.")
+                total_accepted += 1
                 yield feature
             else:
                 logger.debug(f"Region {region.label}: ellipse rejected due to shape criteria.")
+                total_rejected += 1
+        else:
+            total_rejected += 1
+    logger.debug(f"Ellipse extraction summary: {total_accepted} accepted, {total_rejected} rejected.")
 
 
 def extract_contours(binary_mask: np.ndarray, transform: Affine) -> List[Dict]:
