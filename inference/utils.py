@@ -8,7 +8,7 @@ import rasterio.features
 import numpy as np
 
 from scipy import ndimage as ndi
-from scipy.ndimage import gaussian_filter, binary_dilation
+from scipy.ndimage import gaussian_filter, binary_dilation, label
 from affine import Affine
 from typing import Optional, List, Tuple, Generator, Dict
 from shapely.geometry import Polygon
@@ -16,7 +16,7 @@ from shapely.geometry import Polygon
 from skimage.filters import gaussian
 from skimage.feature import peak_local_max
 from skimage.measure import regionprops, find_contours
-from skimage.morphology import erosion, disk, remove_small_objects, binary_dilation
+from skimage.morphology import erosion, disk, remove_small_objects
 from skimage.segmentation import watershed
 
 from rasterio.crs import CRS
@@ -409,41 +409,94 @@ def _postprocess_labels(labels_ws, min_region_size=50, dilation_radius=1):
     logger.debug(f"Postprocess: using dilation radius = {dilation_radius}")
     logger.debug(f"Postprocess: structuring element shape = {disk(dilation_radius).shape}")
 
-    unique_labels, counts = np.unique(labels_ws, return_counts=True)
-    label_sizes = dict(zip(unique_labels, counts))
+    np.random.seed(42)
 
     new_labels = labels_ws.copy()
 
-    for lbl in unique_labels:
-        logger.debug(f"Evaluating label {lbl}, size = {label_sizes[lbl]}")
-        if lbl == 0:  # Skip background
-            continue
-        if label_sizes[lbl] < min_region_size:  # If region is too small
-            logger.debug(f"Label {lbl} marked for removal. Attempting to reassign pixels to neighbors.")
-            mask = labels_ws == lbl
+    unique_labels, counts = np.unique(labels_ws, return_counts=True)
+    label_sizes = dict(zip(unique_labels, counts))
+    sorted_labels = sorted(
+        [lbl for lbl in unique_labels if lbl != 0],
+        key=lambda lbl: label_sizes[lbl],
+        reverse=True
+    )
+    logger.debug(f"Postprocess: {len(sorted_labels)} non-background labels")
 
+    for lbl in sorted_labels:
+        size = label_sizes[lbl]
+        logger.debug(f"Evaluating label {lbl}, size = {size}")
+        
+        if size < min_region_size:
+            logger.debug(f"Label {lbl} marked for removal. Finding largest neighbor.")
+            
+            mask = (labels_ws == lbl)
+            
             dilated = binary_dilation(mask, disk(dilation_radius))
-            logger.debug(f"Dilated mask for label {lbl} computed.")
             boundary_labels = labels_ws[dilated & (labels_ws != lbl)]
-            logger.debug(f"Boundary labels for label {lbl}: {np.unique(boundary_labels)}")
-
-            if boundary_labels.size > 0:
-                unique_neighbors, neighbor_counts = np.unique(
-                    boundary_labels, return_counts=True
-                )
-                valid_neighbors = unique_neighbors[unique_neighbors != 0]
-                valid_counts = neighbor_counts[unique_neighbors != 0]
-
-                if valid_counts.size > 0:
-                    target_label = valid_neighbors[np.argmax(valid_counts)]
-                    new_labels[mask] = target_label
-                    logger.debug(f"Label {lbl} reassigned to {target_label}")
-                else:
-                    logger.debug(f"No valid neighbors found for label {lbl}. Region remains removed.")
+            
+            neighbor_labels = np.unique(boundary_labels)
+            valid_neighbors = [n for n in neighbor_labels if n != 0]
+            logger.debug(f"Boundary labels for label {lbl}: {valid_neighbors}")
+            
+            if valid_neighbors:
+                neighbor_sizes = [label_sizes.get(n, 0) for n in valid_neighbors]
+                target_label = valid_neighbors[np.argmax(neighbor_sizes)]
+                logger.debug(f"Label {lbl} reassigned to {target_label} (size {label_sizes[target_label]})")
+                
+                new_labels[mask] = target_label
+                label_sizes[target_label] = label_sizes.get(target_label, 0) + size
+                label_sizes[lbl] = 0
             else:
-                logger.debug(f"No valid neighbors found for label {lbl}. Region remains removed.")
+                logger.debug(f"No valid neighbors for label {lbl}. Setting to background.")
+                new_labels[mask] = 0
+                label_sizes[lbl] = 0
 
+    final_labels = np.unique(new_labels[new_labels != 0])
+    logger.debug(f"Postprocess: number of labels after filtering = {len(final_labels)}")
+    
     return new_labels
+
+
+# def _postprocess_labels(labels_ws, min_region_size=50, dilation_radius=1):
+#     logger = get_logger()
+#     logger.debug(f"Postprocess: using dilation radius = {dilation_radius}")
+#     logger.debug(f"Postprocess: structuring element shape = {disk(dilation_radius).shape}")
+
+#     unique_labels, counts = np.unique(labels_ws, return_counts=True)
+#     label_sizes = dict(zip(unique_labels, counts))
+
+#     new_labels = labels_ws.copy()
+
+#     for lbl in unique_labels:
+#         logger.debug(f"Evaluating label {lbl}, size = {label_sizes[lbl]}")
+#         if lbl == 0:  # Skip background
+#             continue
+#         if label_sizes[lbl] < min_region_size:  # If region is too small
+#             logger.debug(f"Label {lbl} marked for removal. Attempting to reassign pixels to neighbors.")
+#             mask = labels_ws == lbl
+
+#             dilated = binary_dilation(mask, disk(dilation_radius))
+#             logger.debug(f"Dilated mask for label {lbl} computed.")
+#             boundary_labels = labels_ws[dilated & (labels_ws != lbl)]
+#             logger.debug(f"Boundary labels for label {lbl}: {np.unique(boundary_labels)}")
+
+#             if boundary_labels.size > 0:
+#                 unique_neighbors, neighbor_counts = np.unique(
+#                     boundary_labels, return_counts=True
+#                 )
+#                 valid_neighbors = unique_neighbors[unique_neighbors != 0]
+#                 valid_counts = neighbor_counts[unique_neighbors != 0]
+
+#                 if valid_counts.size > 0:
+#                     target_label = valid_neighbors[np.argmax(valid_counts)]
+#                     new_labels[mask] = target_label
+#                     logger.debug(f"Label {lbl} reassigned to {target_label}")
+#                 else:
+#                     logger.debug(f"No valid neighbors found for label {lbl}. Region remains removed.")
+#             else:
+#                 logger.debug(f"No valid neighbors found for label {lbl}. Region remains removed.")
+
+#     return new_labels
 
 
 def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
