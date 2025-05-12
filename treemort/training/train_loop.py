@@ -190,7 +190,7 @@ def loss_fn_self(
     ) * (temperature ** 2)
 
     loss = alpha * loss_distillation + (1 - alpha) * loss_standard
-    return loss, student_logits, teacher_logits
+    return loss.detach(), student_logits.detach(), teacher_logits.detach()
 
 
 def loss_fn_feature(
@@ -316,6 +316,7 @@ def loss_fn_ensemble(
 
 
 def update_fn_self(student_model, ema_model, beta=0.999, **kwargs):
+    ema_model.train()
     with torch.no_grad():
         for ema_param, student_param in zip(
             ema_model.parameters(), student_model.parameters()

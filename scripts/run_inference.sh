@@ -6,10 +6,10 @@ HPC_TYPE=${HPC_TYPE:-"puhti"}
 # Set HPC-specific variables
 if [ "$HPC_TYPE" == "lumi" ]; then
     PROJECT_NAME="project_462000684"
-    PARTITION_NAME="small" # small or small-g
+    PARTITION_NAME="small-g" # small or small-g
     MODULE_NAME="pytorch/2.5"
     MODULE_USE_CMD="module use /appl/local/csc/modulefiles/"
-    # GPU_DIRECTIVE="#SBATCH --gpus-per-node=1"
+    GPU_DIRECTIVE="#SBATCH --gpus-per-node=1"
 else
     PROJECT_NAME="project_2004205"
     PARTITION_NAME="gpu"

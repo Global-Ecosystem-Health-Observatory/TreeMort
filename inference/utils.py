@@ -666,7 +666,7 @@ def extract_contours(binary_mask: np.ndarray, transform: Affine) -> List[Dict]:
     )
 
     reshaped_contours = [contour.reshape(-1, 2) for contour in contours]
-    print(f"Extracted {len(reshaped_contours)} contours from the binary mask.")
+    logger.debug(f"Extracted {len(reshaped_contours)} contours from the binary mask.")
 
     features = []
     skipped_contours = 0
@@ -794,12 +794,45 @@ def save_geojson(features, filename, crs, transform, name="FittedEllipses"):
                 "Warning: CRS is not in EPSG format; setting CRS to null in GeoJSON."
             )
 
+    # Validate and filter features to ensure only single, valid polygons are included
+    valid_features = []
+    for feat in features:
+        # Defensive: Only process features with type Polygon
+        geom = feat.get("geometry", {})
+        coords = geom.get("coordinates", [])
+        if geom.get("type") != "Polygon" or not coords or not isinstance(coords[0], list):
+            logger.debug("Skipping feature with invalid geometry type or coordinates.")
+            continue
+        transformed_contour = np.array(coords[0])
+        # Ensure the polygon is explicitly closed
+        if not np.array_equal(transformed_contour[0], transformed_contour[-1]):
+            # Force closing the polygon explicitly
+            transformed_contour = np.vstack([transformed_contour, transformed_contour[0]])
+        # Skip degenerate polygons (must have at least 4 points, including closure)
+        if len(transformed_contour) < 4:
+            logger.debug("Contour has too few points to form a valid polygon.")
+            continue
+        polygon = Polygon(transformed_contour)
+        if not polygon.is_valid:
+            polygon = polygon.buffer(0)
+        # Skip multipolygons or non-polygon geometries
+        if polygon.geom_type != "Polygon":
+            logger.debug("Skipping geometry that is not a single polygon.")
+            continue
+        if polygon.is_valid and not polygon.is_empty:
+            # Use the possibly fixed coordinates for output
+            feat["geometry"]["coordinates"] = [np.array(polygon.exterior.coords).tolist()]
+            valid_features.append(feat)
+        else:
+            logger.debug("Skipping invalid or empty polygon.")
+            continue
+
     geojson = {
         "type": "FeatureCollection",
         "name": name,
         "crs": geojson_crs,
         "metadata": {"transform": tuple(transform)},
-        "features": features,
+        "features": valid_features,
     }
 
     with open(filename, "w") as f:
