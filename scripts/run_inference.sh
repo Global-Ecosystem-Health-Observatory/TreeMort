@@ -80,10 +80,9 @@ fi
 
 POST_PROCESS=""
 for arg in "$@"; do
-    case \$arg in
-        --post-process) POST_PROCESS="--post-process" ;;
-        *) echo "[ERROR] Unknown parameter passed: \$arg"; exit 1 ;;
-    esac
+    if [ "$arg" == "--post-process" ]; then
+        POST_PROCESS="--post-process"
+    fi
 done
 
 if [ -n "\$POST_PROCESS" ]; then
