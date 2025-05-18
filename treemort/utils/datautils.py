@@ -124,7 +124,7 @@ def stratify_images_by_region(image_patch_map, val_ratio=0.2, test_ratio=0.1, la
     cluster_aggregates = cluster_aggregates.sort_values("ClusterDeadTrees", ascending=False)
 
     total_dead_trees = cluster_aggregates["ClusterDeadTrees"].sum()
-    desired_ratios = np.array([(1 - val_ratio - test_ratio)*0.25, val_ratio, test_ratio])
+    desired_ratios = np.array([(1 - val_ratio - test_ratio)*0.50, val_ratio, test_ratio])
     target_counts = (desired_ratios * total_dead_trees).round()
 
     train_keys, val_keys, test_keys = [], [], []
