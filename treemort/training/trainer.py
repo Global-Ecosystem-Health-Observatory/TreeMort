@@ -67,8 +67,8 @@ def trainer(
         if hasattr(conf, "distillation_sharpen_temperature"):
             extra_params["sharpen_temperature"] = conf.distillation_sharpen_temperature
 
-        initial_alpha = 0.3
-        final_alpha = 0.7
+        initial_alpha = 0.5
+        final_alpha = 0.2
         total_epochs = conf.epochs
         alpha = initial_alpha + (final_alpha - initial_alpha) * epoch / total_epochs
 

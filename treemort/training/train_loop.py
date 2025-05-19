@@ -412,7 +412,7 @@ def train_one_epoch_feature_level_distillation(
     device,
     alpha=0.5,
     temperature=2.0,
-    lambda_feature=1.0,
+    lambda_feature=0.5,
     **kwargs,
 ):
     return train_one_epoch(
