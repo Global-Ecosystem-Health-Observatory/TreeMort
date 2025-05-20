@@ -11,7 +11,7 @@ if [ -z "$2" ]; then
 fi
 
 if [ -z "$3" ]; then
-    echo "Error: DATA_TYPE argument is required (e.g., 'finland' or 'poland')."
+    echo "Error: DATA_TYPE argument is required (e.g., 'finland' or 'poland' or 'estonia')."
     exit 1
 fi
 
@@ -50,6 +50,9 @@ if [ "$DATA_TYPE" == "finland" ]; then
 elif [ "$DATA_TYPE" == "poland" ]; then
     export DATA_PATH="$TREEMORT_DATA_PATH/Poland/RGBNIR/25cm"
     export OUTPUT_PATH="$TREEMORT_DATA_PATH/Poland/$PREDICTIONS_FOLDER"
+elif [ "$DATA_TYPE" == "estonia" ]; then
+    export DATA_PATH="$TREEMORT_DATA_PATH/Estonia/RGBNIR/25cm"
+    export OUTPUT_PATH="$TREEMORT_DATA_PATH/Estonia/$PREDICTIONS_FOLDER"
 else
     echo "Error: Unsupported DATA_TYPE '$DATA_TYPE'."
     exit 1
