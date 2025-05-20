@@ -59,18 +59,18 @@ fi
 echo "[INFO] Starting creator..."
 srun python3 "$CREATOR_PATH" "$DATA_CONFIG_PATH" --num-workers "$SLURM_CPUS_PER_TASK"
 
-EXIT_STATUS=$?
-if [ $EXIT_STATUS -ne 0 ]; then
-    echo "[ERROR] Job failed with exit status $EXIT_STATUS"
+EXIT_STATUS=\$?
+if [ \$EXIT_STATUS -ne 0 ]; then
+    echo "[ERROR] Job failed with exit status \$EXIT_STATUS"
 else
     echo "[INFO] Job completed successfully"
 fi
 
-exit $EXIT_STATUS
+exit \$EXIT_STATUS
 EOT
 
 echo "Generated SBATCH script:"
 cat $SBATCH_SCRIPT
 
 # Submit SLURM Job
-bash $SBATCH_SCRIPT "$@"
+sbatch --export=ALL $SBATCH_SCRIPT "$@"
