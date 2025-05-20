@@ -57,7 +57,7 @@ if [ -z "$DATA_CONFIG_PATH" ] || [ ! -f "$DATA_CONFIG_PATH" ]; then
 fi
 
 echo "[INFO] Starting creator..."
-srun python3 "$CREATOR_PATH" "$DATA_CONFIG_PATH" --num-workers "$SLURM_CPUS_PER_TASK"
+srun python3 \$CREATOR_PATH "$DATA_CONFIG_PATH" --num-workers \$SLURM_CPUS_PER_TASK
 
 EXIT_STATUS=\$?
 if [ \$EXIT_STATUS -ne 0 ]; then
@@ -73,4 +73,4 @@ echo "Generated SBATCH script:"
 cat $SBATCH_SCRIPT
 
 # Submit SLURM Job
-sbatch --export=ALL $SBATCH_SCRIPT "$@"
+# sbatch --export=ALL $SBATCH_SCRIPT "$@"
