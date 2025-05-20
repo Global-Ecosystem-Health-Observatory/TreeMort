@@ -6,7 +6,7 @@ if [ -z "$1" ]; then
 fi
 
 if [ -z "$2" ]; then
-    echo "Error: DATA_TYPE argument is required (e.g., 'finland' or 'poland')."
+    echo "Error: DATA_TYPE argument is required (e.g., 'finland' or 'poland' or 'estonia')."
     exit 1
 fi
 
