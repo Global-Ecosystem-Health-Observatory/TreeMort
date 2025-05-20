@@ -72,8 +72,8 @@ def trainer(
         total_epochs = conf.epochs
         alpha = initial_alpha + (final_alpha - initial_alpha) * epoch / total_epochs
 
-        initial_temp = 6.0
-        final_temp = 2.0
+        initial_temp = 10.0
+        final_temp = 4.0
         temperature = initial_temp + (final_temp - initial_temp) * epoch / total_epochs
 
         train_loss, train_metrics = training_loop(
