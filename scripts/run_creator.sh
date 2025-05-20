@@ -44,20 +44,13 @@ else
     exit 1
 fi
 
-CREATOR_PATH="${TREEMORT_REPO_PATH}/dataset/creator.py"
-
-if [ ! -f "$CREATOR_PATH" ]; then
-    echo "[ERROR] Creator source file not found at $CREATOR_PATH"
-    exit 1
-fi
-
 if [ -z "$DATA_CONFIG_PATH" ] || [ ! -f "$DATA_CONFIG_PATH" ]; then
     echo "[ERROR] Data config file is missing or invalid."
     exit 1
 fi
 
 echo "[INFO] Starting creator..."
-srun python3 \$CREATOR_PATH "$DATA_CONFIG_PATH" --num-workers \$SLURM_CPUS_PER_TASK
+srun python3 "${TREEMORT_REPO_PATH}/dataset/creator.py" "$DATA_CONFIG_PATH" --num-workers \$SLURM_CPUS_PER_TASK
 
 EXIT_STATUS=\$?
 if [ \$EXIT_STATUS -ne 0 ]; then
