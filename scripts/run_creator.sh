@@ -73,4 +73,4 @@ echo "Generated SBATCH script:"
 cat $SBATCH_SCRIPT
 
 # Submit SLURM Job
-# sbatch --export=ALL $SBATCH_SCRIPT "$@"
+sbatch --export=ALL $SBATCH_SCRIPT "$@"
