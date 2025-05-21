@@ -91,7 +91,7 @@ def build_parser(config_files):
     model_group.add("--distillation-alpha",       type=float, default=0.5,          help="alpha value for blending distillation and standard loss")
     model_group.add("--distillation-temperature", type=float, default=2.0,          help="temperature for softening logits during distillation")
     model_group.add("--distillation-beta",        type=float, default=0.999,        help="beta value for decay factor for EMA update")
-    model_group.add("--distillation-lambda",      type=float, default=1.0,          help="lambda value for weight for feature distillation loss")
+    model_group.add("--distillation-lambda",      type=float, default=0.2,          help="lambda value for weight for feature distillation loss")
     model_group.add("--distillation-method",      type=str,   default="basic",      help="weight file of pre-trained teacher model")
 
     train_group = parser.add_argument_group('Training')

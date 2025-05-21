@@ -227,7 +227,7 @@ def loss_fn_feature(
     w_bg = kwargs.get("background_weight", 1.0)
     weight_map = foreground_mask * w_fg + background_mask * w_bg
 
-    confidence_mask = (teacher_probs > 0.3).float()
+    confidence_mask = (teacher_probs > 0.15).float()
     teacher_probs = teacher_probs * confidence_mask
     student_probs = student_probs * confidence_mask
     weight_map = weight_map * confidence_mask
@@ -253,7 +253,11 @@ def loss_fn_feature(
         for s, t, w in zip(student_features, teacher_features, feature_weights)
     )
 
-    loss = loss_standard + alpha * loss_distillation + lambda_feature * loss_feature
+    # loss = loss_standard + alpha * loss_distillation + lambda_feature * loss_feature
+
+    total_weight = 1.0 + alpha + lambda_feature
+    loss = (loss_standard + alpha * loss_distillation + lambda_feature * loss_feature) / total_weight
+
 
     return loss, student_logits, teacher_logits
 
