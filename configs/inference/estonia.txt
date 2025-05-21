@@ -2,7 +2,7 @@
 
 include = base_config.txt
 
-best-model = best.weights.pth
+best-model = best.weights.poland.feature.pth
 
 min-area = 1.0            # Larger and less uniformly small compared to Finnish boreal species in sq. m
 max-aspect-ratio = 4.0    # More varied and sometimes elongated due to a wider diversity of species or forest structures
