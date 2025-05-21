@@ -252,8 +252,9 @@ def loss_fn_feature(
         )
         for s, t, w in zip(student_features, teacher_features, feature_weights)
     )
-    
-    loss = loss_standard + alpha * loss_distillation + lambda_feature * loss_feature
+
+    total_weight = 1.0 + alpha + lambda_feature
+    loss = (loss_standard + alpha * loss_distillation + lambda_feature * loss_feature) / total_weight
 
     return loss, student_logits, teacher_logits
 
