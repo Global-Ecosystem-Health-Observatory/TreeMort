@@ -1,0 +1,20 @@
+# settings for knowledge distilled TreeMort-1T-UNet (Compressed)
+
+include = base_config.txt
+
+model = flair_unet_small
+
+resume = True
+
+# teacher-model-names = flair_unet, hcfnet, fpn, pspnet, unet, unetplusplus, deeplabv3plus
+# teacher-model-file-names = best.weights.pth, best.weights.pth, best.weights.pth, best.weights.pth, best.weights.efficientnet.pth, best.weights.pth, best.weights.pth
+# teacher-backbones = None, None, efficientnet-b7, efficientnet-b7, efficientnet-b7, efficientnet-b7, efficientnet-b7
+
+teacher-model-names = flair_unet
+teacher-model-file-names = best.weights.pth
+teacher-backbones = None
+
+distillation-alpha = 0.3
+distillation-temperature = 2.0
+distillation-beta = 0.999
+distillation-method = feature

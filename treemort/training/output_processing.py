@@ -23,7 +23,7 @@ def process_model_output(model, images, model_name):
         outputs = model(images)
         logits = outputs.logits[:, 1:2, :, :]
     
-    elif model_name == "flair_unet":
+    elif model_name in ["flair_unet", "flair_unet_small"]:
         logits, features = model(images)
 
     else:

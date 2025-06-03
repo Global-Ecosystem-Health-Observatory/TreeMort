@@ -16,6 +16,7 @@ from treemort.modeling.network.sa_unet import SelfAttentionUNet
 from treemort.modeling.network.sa_unet_multiscale import MultiScaleAttentionUNet
 from treemort.modeling.network.dinov2 import Dinov2ForSemanticSegmentation
 from treemort.modeling.network.flair_unet import CombinedModel, PretrainedUNetModel
+from treemort.modeling.network.flair_unet_small import FlairUNetSmall
 from treemort.modeling.network.custom_models import (
     CustomMaskFormer,
     CustomDetr,
@@ -43,6 +44,7 @@ def configure_model(model_name, input_channels, output_channels, backbone, crop_
         "detr": lambda: configure_detr(backbone, cache_dir, id2label),
         "beit": lambda: configure_beit(backbone, cache_dir, id2label),
         "flair_unet": lambda: configure_flair_unet(input_channels, output_channels, crop_size),
+        "flair_unet_small": lambda: configure_flair_unet_small(input_channels, output_channels, crop_size),
         "hcfnet": lambda: configure_hcfnet(input_channels, output_channels),
     }
 
@@ -251,6 +253,16 @@ def configure_flair_unet(input_channels, output_channels, crop_size):
         pretrained_model=pretrained_model,
         n_classes=output_channels,
         output_size=crop_size,
+    )
+    return model
+
+
+def configure_flair_unet_small(input_channels, output_channels, crop_size):
+    model = FlairUNetSmall(
+        in_channels=input_channels,
+        out_channels=output_channels,
+        base_ch=32,
+        crop_size=crop_size
     )
     return model
 

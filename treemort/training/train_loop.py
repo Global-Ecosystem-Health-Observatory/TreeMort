@@ -245,12 +245,27 @@ def loss_fn_feature(
     def normalize_feat(x):
         return F.normalize(x.view(x.size(0), -1), p=2, dim=1).view_as(x)
 
+    def match_shape(tensor, ref):
+        return F.interpolate(tensor, size=ref.shape[2:], mode="bilinear", align_corners=False)
+
+    aligned_student_features = [
+        match_shape(s, t) for s, t in zip(student_features, teacher_features)
+    ]
+
+    # Dynamically project student features to match teacher feature channel sizes
+    projected_student_features = []
+    for s, t in zip(aligned_student_features, teacher_features):
+        if s.shape[1] != t.shape[1]:
+            proj = torch.nn.Conv2d(s.shape[1], t.shape[1], kernel_size=1).to(s.device)
+            s = proj(s)
+        projected_student_features.append(s)
+
     loss_feature = sum(
         w * (
             0.5 * F.mse_loss(normalize_feat(s), normalize_feat(t)) +
             0.5 * (1 - F.cosine_similarity(s.view(s.size(0), -1), t.view(t.size(0), -1), dim=1).mean())
         )
-        for s, t, w in zip(student_features, teacher_features, feature_weights)
+        for s, t, w in zip(projected_student_features, teacher_features, feature_weights)
     )
 
     # loss = loss_standard + alpha * loss_distillation + lambda_feature * loss_feature
