@@ -213,16 +213,30 @@ def loss_fn_feature(
 
     loss_standard = criterion(student_logits, labels)
 
-    student_probs = torch.sigmoid(student_logits / temperature)
-    teacher_probs = torch.sigmoid(teacher_logits / temperature)
+    # Instance-Specific Temperature Scaling (ISATS)
+    with torch.no_grad():
+        candidate_taus = torch.tensor([1.0, 2.0, 3.0, 4.0, 5.0]).to(teacher_logits.device)
+        best_tau = temperature
+        max_var = -float("inf")
 
-    sharpen_temperature = kwargs.get("sharpen_temperature", temperature)
-    teacher_probs = torch.pow(teacher_probs, 1.0 / sharpen_temperature)
+        for tau in candidate_taus:
+            temp_probs = torch.sigmoid(teacher_logits / tau)
+            temp_probs = torch.pow(temp_probs, 1.0 / tau)
+            temp_probs = torch.clamp(temp_probs, min=0.05, max=0.95)
+            non_gt_probs = temp_probs * (1.0 - labels)
+            variance = non_gt_probs.var(dim=(1, 2, 3)).mean()
+            if variance > max_var:
+                max_var = variance
+                best_tau = tau.item()
+
+    # Use best_tau for all distillation computations
+    teacher_probs = torch.sigmoid(teacher_logits / best_tau)
+    teacher_probs = torch.pow(teacher_probs, 1.0 / best_tau)
     teacher_probs = torch.clamp(teacher_probs, min=0.05, max=0.95)
+    student_probs = torch.sigmoid(student_logits / best_tau)
 
     foreground_mask = (labels[:, 0:1, :, :] > 0).float()
     background_mask = 1.0 - foreground_mask
-
     w_fg = kwargs.get("foreground_weight", 5.0)
     w_bg = kwargs.get("background_weight", 1.0)
     weight_map = foreground_mask * w_fg + background_mask * w_bg
@@ -233,13 +247,11 @@ def loss_fn_feature(
     weight_map = weight_map * confidence_mask
 
     confidence_weights = torch.clamp((teacher_probs - 0.3) / 0.7, 0, 1)
-
     loss_distillation = F.binary_cross_entropy(
-        student_probs,
-        teacher_probs,
-        weight=weight_map * confidence_weights
+        student_probs, teacher_probs, weight=weight_map * confidence_weights
     ) * (temperature ** 2)
 
+    # Feature alignment and projection
     feature_weights = kwargs.get("feature_weights", [1.0] * len(student_features))
 
     def normalize_feat(x):
@@ -248,11 +260,7 @@ def loss_fn_feature(
     def match_shape(tensor, ref):
         return F.interpolate(tensor, size=ref.shape[2:], mode="bilinear", align_corners=False)
 
-    aligned_student_features = [
-        match_shape(s, t) for s, t in zip(student_features, teacher_features)
-    ]
-
-    # Dynamically project student features to match teacher feature channel sizes
+    aligned_student_features = [match_shape(s, t) for s, t in zip(student_features, teacher_features)]
     projected_student_features = []
     for s, t in zip(aligned_student_features, teacher_features):
         if s.shape[1] != t.shape[1]:
@@ -267,8 +275,6 @@ def loss_fn_feature(
         )
         for s, t, w in zip(projected_student_features, teacher_features, feature_weights)
     )
-
-    # loss = loss_standard + alpha * loss_distillation + lambda_feature * loss_feature
 
     total_weight = 1.0 + alpha + lambda_feature
     loss = (loss_standard + alpha * loss_distillation + lambda_feature * loss_feature) / total_weight
