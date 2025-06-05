@@ -1,80 +1,99 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torchvision.models import mobilenet_v2
 
-class DepthwiseSeparableConv(nn.Module):
-    def __init__(self, in_ch, out_ch, kernel_size=3, padding=1):
+
+class Up(nn.Module):
+    def __init__(self, in_channels, out_channels):
         super().__init__()
-        self.depthwise = nn.Conv2d(in_ch, in_ch, kernel_size=kernel_size, padding=padding, groups=in_ch, bias=False)
-        self.pointwise = nn.Conv2d(in_ch, out_ch, kernel_size=1, bias=False)
-        self.bn = nn.BatchNorm2d(out_ch)
-        self.relu = nn.ReLU(inplace=True)
-
-    def forward(self, x):
-        x = self.depthwise(x)
-        x = self.pointwise(x)
-        x = self.bn(x)
-        return self.relu(x)
-
-class FlairUNetSmall(nn.Module):
-    def __init__(self, in_channels=3, out_channels=1, base_ch=32, crop_size=256):
-        super().__init__()
-        self.base_ch = base_ch
-        self.crop_size = crop_size
-
-        # Encoder
-        self.enc1 = self.conv_block(in_channels, base_ch)
-        self.enc2 = self.conv_block(base_ch, base_ch * 2)
-        self.enc3 = self.conv_block(base_ch * 2, base_ch * 4)
-
-        # Bottleneck
-        self.bottleneck = self.conv_block(base_ch * 4, base_ch * 4)
-
-        # Decoder
-        self.up2 = self.up_block(base_ch * 4, base_ch * 2)
-        self.up1 = self.up_block(base_ch * 2 + base_ch * 4, base_ch)
-
-        # Final
-        self.final = nn.Conv2d(base_ch + base_ch * 2, out_channels, kernel_size=1)
-
-    def conv_block(self, in_ch, out_ch):
-        return nn.Sequential(
-            DepthwiseSeparableConv(in_ch, out_ch),
-            DepthwiseSeparableConv(out_ch, out_ch)
+        self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True)
         )
 
-    def up_block(self, in_ch, out_ch):
-        return nn.Sequential(
-            nn.ConvTranspose2d(in_ch, out_ch, kernel_size=2, stride=2),
-            self.conv_block(out_ch, out_ch)
-        )
+    def forward(self, x1, x2):
+        x1 = self.up(x1)
+        diffY = x2.size()[2] - x1.size()[2]
+        diffX = x2.size()[3] - x1.size()[3]
+        x1 = F.pad(x1, [diffX // 2, diffX - diffX // 2,
+                        diffY // 2, diffY - diffY // 2])
+        x = torch.cat([x2, x1], dim=1)
+        return self.conv(x)
+
+
+class OutConv(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super().__init__()
+        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=1)
 
     def forward(self, x):
-        features = []
+        return self.conv(x)
 
-        # Encoder
-        enc1 = self.enc1(x)
-        features.append(enc1)  # Feature 1
 
-        enc2 = self.enc2(F.max_pool2d(enc1, 2))
-        features.append(enc2)  # Feature 2
+class MobileNetV2Encoder(nn.Module):
+    def __init__(self, input_channels):
+        super().__init__()
+        mobilenet = mobilenet_v2(pretrained=True)
+        self.initial = mobilenet.features[0]
 
-        enc3 = self.enc3(F.max_pool2d(enc2, 2))
-        features.append(enc3)  # Feature 3
+        # Modify the first conv layer to accept 4 channels
+        orig_conv = self.initial[0]
+        new_conv = nn.Conv2d(
+            input_channels,
+            orig_conv.out_channels,
+            kernel_size=orig_conv.kernel_size,
+            stride=orig_conv.stride,
+            padding=orig_conv.padding,
+            bias=orig_conv.bias is not None,
+        )
+        with torch.no_grad():
+            new_conv.weight[:, :3] = orig_conv.weight
+            new_conv.weight[:, 3] = orig_conv.weight[:, 0]
+        self.initial[0] = new_conv
 
-        # Bottleneck
-        bottleneck = self.bottleneck(F.max_pool2d(enc3, 2))
-        features.append(bottleneck)  # Feature 4
+        # Use selected layers from mobilenet
+        self.encoder_layers = nn.Sequential(*mobilenet.features[1:])
 
-        # Decoder
-        dec2 = self.up2(bottleneck)
-        dec2 = torch.cat([dec2, enc3], dim=1)
-        features.append(dec2)  # Feature 5
+    def forward(self, x):
+        x = self.initial(x)
+        features = [x]
+        for layer in self.encoder_layers:
+            x = layer(x)
+            features.append(x)
+        return features
 
-        dec1 = self.up1(dec2)
-        dec1 = torch.cat([dec1, enc2], dim=1)
-        features.append(dec1)  # Feature 6
 
-        out = self.final(dec1)
-        out = F.interpolate(out, size=(self.crop_size, self.crop_size), mode="bilinear", align_corners=False)
-        return out, features
+class CompressedUNet(nn.Module):
+    def __init__(self, input_channels, output_channels):
+        super().__init__()
+        self.encoder = MobileNetV2Encoder(input_channels)
+
+        # Corrected input channels for each Up block based on encoder features:
+        # up1: 1280 (bottleneck) + 320 (skip) = 1600
+        # up2: 320 + 160 = 480
+        # up3: 160 + 96 = 256
+        # up4: 32 + 16 = 48 (using feats[1] which is 16 channels)
+        self.up1 = Up(1600, 320)
+        self.up2 = Up(480, 96)
+        self.up3 = Up(256, 32)
+        self.up4 = Up(48, 24)
+        self.outc = OutConv(24, output_channels)
+
+    def forward(self, x):
+        x_input = x
+        feats = self.encoder(x)
+        # feats: [0]=24, [1]=32, [2]=32, [3]=96, [4]=320, [5]=1280 (if 6 total)
+        # Map: up1(feats[-1], feats[-2]) -> [1280, 320], up2(x, feats[-3]) -> [320, 160], etc.
+        x = self.up1(feats[-1], feats[-2])      # [1280 + 320]
+        x = self.up2(x, feats[-3])              # [320 + 160]
+        x = self.up3(x, feats[-4])              # [160 + 96]
+        x = self.up4(x, feats[1])               # [32 + 32], using feats[1] (32 channels)
+        x = self.outc(x)
+        x = F.interpolate(x, size=(x_input.shape[2], x_input.shape[3]), mode='bilinear', align_corners=False)
+        return x, feats

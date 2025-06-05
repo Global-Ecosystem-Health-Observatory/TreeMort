@@ -63,19 +63,25 @@ class SelfAttentionUNetDecoder(nn.Module):
         batch_norm=False,
         up_mode="upconv",
         kernel_size=3,
+        encoder_start_channels=None,
+        encoder_skip_channels=None,
     ):
         super(SelfAttentionUNetDecoder, self).__init__()
         assert up_mode in ("upconv", "upsample")
         self.padding = padding
         self.depth = depth
 
-        prev_channels = 2 ** (wf + depth - 1)
+        if encoder_start_channels is not None:
+            prev_channels = encoder_start_channels
+        else:
+            prev_channels = 2 ** (wf + depth - 1)
         self.up_path = nn.ModuleList()
-        for i in reversed(range(depth - 1)):
+        for i in range(depth - 1):
+            out_channels = encoder_skip_channels[i] if encoder_skip_channels else 2 ** (wf + depth - 2 - i)
             self.up_path.append(
-                UNetUpBlock(prev_channels, 2 ** (wf + i), up_mode, padding, batch_norm)
+                UNetUpBlock(prev_channels, out_channels, up_mode, padding, batch_norm)
             )
-            prev_channels = 2 ** (wf + i)
+            prev_channels = out_channels
 
         # Final layer to convert to desired output channels (n_classes)
         self.last = nn.Conv2d(prev_channels, n_classes, kernel_size=1)

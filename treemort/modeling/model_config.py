@@ -1,4 +1,6 @@
 import os
+import torch
+import torch.nn as nn
 
 import segmentation_models_pytorch as smp
 
@@ -16,7 +18,6 @@ from treemort.modeling.network.sa_unet import SelfAttentionUNet
 from treemort.modeling.network.sa_unet_multiscale import MultiScaleAttentionUNet
 from treemort.modeling.network.dinov2 import Dinov2ForSemanticSegmentation
 from treemort.modeling.network.flair_unet import CombinedModel, PretrainedUNetModel
-from treemort.modeling.network.flair_unet_small import FlairUNetSmall
 from treemort.modeling.network.custom_models import (
     CustomMaskFormer,
     CustomDetr,
@@ -258,11 +259,10 @@ def configure_flair_unet(input_channels, output_channels, crop_size):
 
 
 def configure_flair_unet_small(input_channels, output_channels, crop_size):
-    model = FlairUNetSmall(
-        in_channels=input_channels,
-        out_channels=output_channels,
-        base_ch=32,
-        crop_size=crop_size
+    from treemort.modeling.network.flair_unet_small import CompressedUNet
+    model = CompressedUNet(
+        input_channels=input_channels,
+        output_channels=output_channels
     )
     return model
 
@@ -270,3 +270,8 @@ def configure_flair_unet_small(input_channels, output_channels, crop_size):
 def configure_hcfnet(input_channels, output_channels):
     model = HCFnet(input_channels, output_channels)
     return model
+
+def print_model_structure(model):
+    print("Model structure:")
+    for name, module in model.named_children():
+        print(f"{name}: {module.__class__.__name__}")
