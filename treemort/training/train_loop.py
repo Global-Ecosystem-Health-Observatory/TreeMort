@@ -232,7 +232,11 @@ def loss_fn_feature(
     student_probs = student_probs * confidence_mask
     weight_map = weight_map * confidence_mask
 
-    confidence_weights = torch.clamp((teacher_probs - 0.3) / 0.7, 0, 1)
+    use_confidence_weighting = kwargs.get("use_confidence_weighting", True)
+    use_fg_bg_weighting = kwargs.get("use_fg_bg_weighting", True)
+
+    confidence_weights = torch.clamp((teacher_probs - 0.3) / 0.7, 0, 1) if use_confidence_weighting else 1.0
+    weight_map = weight_map if use_fg_bg_weighting else torch.ones_like(weight_map)
 
     loss_distillation = F.binary_cross_entropy(
         student_probs,
@@ -245,13 +249,16 @@ def loss_fn_feature(
     def normalize_feat(x):
         return F.normalize(x.view(x.size(0), -1), p=2, dim=1).view_as(x)
 
-    loss_feature = sum(
-        w * (
-            0.5 * F.mse_loss(normalize_feat(s), normalize_feat(t)) +
-            0.5 * (1 - F.cosine_similarity(s.view(s.size(0), -1), t.view(t.size(0), -1), dim=1).mean())
+    if kwargs.get("use_feature_loss", True):
+        loss_feature = sum(
+            w * (
+                0.5 * F.mse_loss(normalize_feat(s), normalize_feat(t)) +
+                0.5 * (1 - F.cosine_similarity(s.view(s.size(0), -1), t.view(t.size(0), -1), dim=1).mean())
+            )
+            for s, t, w in zip(student_features, teacher_features, feature_weights)
         )
-        for s, t, w in zip(student_features, teacher_features, feature_weights)
-    )
+    else:
+        loss_feature = 0.0
 
     # loss = loss_standard + alpha * loss_distillation + lambda_feature * loss_feature
 

@@ -63,6 +63,10 @@ def trainer(
             extra_params["beta"] = conf.distillation_beta
         elif conf.distillation_method == "feature":
             extra_params["lambda_feature"] = conf.distillation_lambda
+            extra_params["use_feature_loss"] = getattr(conf, "use_feature_loss", True)
+            extra_params["use_confidence_weighting"] = getattr(conf, "use_confidence_weighting", True)
+            extra_params["use_fg_bg_weighting"] = getattr(conf, "use_fg_bg_weighting", True)
+            extra_params["sharpen_temperature"] = getattr(conf, "distillation_sharpen_temperature", 4.0)
 
         if hasattr(conf, "distillation_sharpen_temperature"):
             extra_params["sharpen_temperature"] = conf.distillation_sharpen_temperature
