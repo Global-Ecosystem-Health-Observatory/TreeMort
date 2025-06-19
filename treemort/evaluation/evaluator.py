@@ -1,4 +1,5 @@
 import torch
+import os
 
 from collections import defaultdict
 
@@ -22,6 +23,9 @@ def evaluator(model, dataloader, num_samples, metrics, conf):
 
         test_metrics = defaultdict(float)
         
+        feature_dir = os.path.join(conf.output_dir, conf.feature_dir)
+        os.makedirs(feature_dir, exist_ok=True)
+        
         with torch.no_grad():
             for batch_idx, (images, labels) in enumerate(dataloader):
                 images, labels = images.to(device), labels.to(device)
@@ -30,7 +34,13 @@ def evaluator(model, dataloader, num_samples, metrics, conf):
                 _, _, h, w = buffer_mask.shape
 
                 logits, _ = process_model_output(model, images, conf.model)
-            
+                    
+                if hasattr(model, "feature_extractor"):
+                    features = model.feature_extractor.features
+                    for lname, fmap in features.items():
+                        fmap_np = fmap.cpu().numpy()
+                        torch.save(fmap_np, os.path.join(feature_dir, f"features_{lname}_batch{batch_idx}.pt"))
+
                 target_mask = labels[:, 0, :, :].unsqueeze(1)  # [B, 1, h, w]
                 target_centroid = labels[:, 1, :, :].unsqueeze(1)  # [B, 1, h, w]
                 target_hybrid = labels[:, 2, :, :].unsqueeze(1)  # [B, 1, h, w]

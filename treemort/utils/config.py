@@ -129,6 +129,7 @@ def build_parser(config_files):
     
     output_group = parser.add_argument_group('Output')
     output_group.add("--output-dir", type=str, default="./output", help="directory to save output files")
+    output_group.add("--feature-dir", type=str, default="features", help="directory to save extracted feature maps during evaluation.")
 
     return parser
 
@@ -144,7 +145,7 @@ def setup(config_file_path, model_config=None, data_config=None):
     config_files = include_files + [config_file_path]
 
     parser = build_parser(config_files)
-    conf, _ = parser.parse_known_args()
+    conf, _ = parser.parse_known_args(args=[])
 
     conf.data_folder = expand_path(conf.data_folder)
     conf.output_dir = expand_path(conf.output_dir)

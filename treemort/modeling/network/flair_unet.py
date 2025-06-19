@@ -171,23 +171,26 @@ class FeatureExtractor(nn.Module):
         super(FeatureExtractor, self).__init__()
         self.model = model
         self.use_metadata = use_metadata
-        self.features = []
+        self.features = {}
 
         # Hook the layers of the encoder
+        self.layer_names = ['layer1', 'layer2', 'layer3', 'layer4']
         layers = [
             self.model.seg_model.encoder.layer1[-1],
             self.model.seg_model.encoder.layer2[-1],
             self.model.seg_model.encoder.layer3[-1],
             self.model.seg_model.encoder.layer4[-1],
         ]
-        for layer in layers:
-            layer.register_forward_hook(self.hook)
+        for name, layer in zip(self.layer_names, layers):
+            layer.register_forward_hook(self._make_hook(name))
 
-    def hook(self, module, input, output):
-        self.features.append(output)
+    def _make_hook(self, name):
+        def hook(module, input, output):
+            self.features[name] = output.detach()
+        return hook
 
     def forward(self, x, met=None):
-        self.features = []
+        self.features = {}
         if self.use_metadata:
             self.model(x, met)
         else:
@@ -215,6 +218,9 @@ class CombinedModel(nn.Module):
 
     def forward(self, x):
         encoder_features = self.feature_extractor(x)
-        decoder_output = self.decoder(encoder_features[-1], encoder_features)
+        decoder_output = self.decoder(
+            encoder_features["layer4"],
+            [encoder_features[k] for k in self.feature_extractor.layer_names]
+        )
         upsampled_output = self.upsample(decoder_output)
         return upsampled_output, encoder_features
