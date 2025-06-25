@@ -253,9 +253,13 @@ def loss_fn_feature(
         loss_feature = sum(
             w * (
                 0.5 * F.mse_loss(normalize_feat(s), normalize_feat(t)) +
-                0.5 * (1 - F.cosine_similarity(s.view(s.size(0), -1), t.view(t.size(0), -1), dim=1).mean())
+                0.5 * (1 - F.cosine_similarity(
+                    s.view(s.size(0), -1),
+                    t.view(t.size(0), -1),
+                    dim=1
+                ).mean())
             )
-            for s, t, w in zip(student_features, teacher_features, feature_weights)
+            for (s, t), w in zip(zip(student_features.values(), teacher_features.values()), feature_weights)
         )
     else:
         loss_feature = 0.0
