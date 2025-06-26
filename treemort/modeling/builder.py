@@ -16,7 +16,7 @@ def resume_or_load(conf, id2label, n_batches, device):
 
     student_model, teacher_model, optimizer, schedular, criterion, metrics = build_model(conf, id2label, device, total_steps=conf.epochs * n_batches)
 
-    callbacks = build_callbacks(n_batches, os.path.join(conf.output_dir, conf.model), optimizer, "best.weights."+ conf.distillation_method + ".pth")
+    callbacks = build_callbacks(n_batches, os.path.join(conf.output_dir, conf.model), optimizer, "best.weights."+ conf.distillation_method + "_nd.pth")
 
     if conf.teacher_model_file_names:
         load_teacher_weights(teacher_model, conf, device)
