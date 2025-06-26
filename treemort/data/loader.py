@@ -22,7 +22,8 @@ def prepare_datasets(conf):
         test_ratio=conf.test_size
     )
 
-    random.seed(None) # makes loader non-deterministic
+    # random.seed(None) # makes loader non-deterministic
+    random.seed(42) # makes loader deterministic
 
     train_transform = Augmentations()
     val_transform = None
