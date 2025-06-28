@@ -5,5 +5,3 @@ include = base_config.txt
 data-folder = ${TREEMORT_DATA_PATH}/Poland/RGBNIR/25cm
 
 hdf5-file = Poland_RGBNIR_25cm.h5
-
-feature-dir = features_poland

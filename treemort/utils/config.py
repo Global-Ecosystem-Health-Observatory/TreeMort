@@ -172,6 +172,8 @@ def setup(config_file_path, model_config=None, data_config=None):
         if hasattr(conf, 'cache_dir') and conf.cache_dir is not None
         else os.environ.get("TRANSFORMERS_CACHE")
     )
+
+    conf.country = os.path.splitext(os.path.basename(data_config))[0] if data_config else None
     
     logger.info("Configuration successfully loaded.")
     return conf
