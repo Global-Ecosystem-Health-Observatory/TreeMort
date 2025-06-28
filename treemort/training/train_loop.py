@@ -190,7 +190,7 @@ def loss_fn_self(
     ) * (temperature ** 2)
 
     loss = alpha * loss_distillation + (1 - alpha) * loss_standard
-    return loss.detach(), student_logits.detach(), teacher_logits.detach()
+    return loss, student_logits, teacher_logits
 
 
 def loss_fn_feature(
