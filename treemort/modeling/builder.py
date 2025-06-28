@@ -8,10 +8,10 @@ from treemort.modeling.optimizer_loss_config import configure_optimizer, configu
 from treemort.utils.logger import get_logger
 from treemort.utils.checkpoints import get_checkpoint
 
-logger = get_logger(__name__)
-
 
 def resume_or_load(conf, id2label, n_batches, device):
+    logger = get_logger()
+
     logger.info("Building student and teacher models...")
 
     student_model, teacher_model, optimizer, schedular, criterion, metrics = build_model(conf, id2label, device, total_steps=conf.epochs * n_batches)
@@ -30,6 +30,8 @@ def resume_or_load(conf, id2label, n_batches, device):
 
 
 def load_teacher_weights(teacher_model, conf, device):
+    logger = get_logger()
+
     # If teacher_model is a list, load weights for each teacher
     if isinstance(teacher_model, list):
         # Ensure teacher_model_names and teacher_model_file_name are lists
@@ -57,6 +59,8 @@ def load_teacher_weights(teacher_model, conf, device):
 
 
 def load_checkpoint_if_available(model, conf, device):
+    logger = get_logger()
+
     checkpoint_path = get_checkpoint(conf.output_dir, model_name=conf.model, model_file_name=conf.best_model)
 
     if checkpoint_path:
@@ -67,6 +71,8 @@ def load_checkpoint_if_available(model, conf, device):
 
 
 def build_model(conf, id2label, device, total_steps=1):
+    logger = get_logger()
+    
     student_model = configure_model(conf.model, conf.input_channels, conf.output_channels, conf.backbone, conf.test_crop_size, conf.cache_dir, id2label)
     student_model.to(device)
     logger.info("Student model successfully moved to device.")
