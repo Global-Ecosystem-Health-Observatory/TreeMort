@@ -9,10 +9,10 @@ from treemort.evaluation.evaluator import evaluator
 from treemort.utils.config import setup
 from treemort.utils.logger import get_logger, configure_logger
 
-logger = get_logger(__name__)
-
 
 def run(conf, eval_only):
+    logger = get_logger()
+
     assert os.path.exists(conf.data_folder), f"[ERROR] Data folder {conf.data_folder} does not exist."
 
     if not os.path.exists(conf.output_dir):
@@ -25,7 +25,7 @@ def run(conf, eval_only):
 
     if eval_only:
         conf.resume = True
-        conf.best_model = "best.weights."+ conf.distillation_method + "_nd.pth"
+        conf.best_model = "best.weights."+ conf.country +"."+ conf.distillation_method + "_nd.pth"
         conf.feature_dir = "features_"+ conf.country + "_" + conf.distillation_method + "_nd"
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
