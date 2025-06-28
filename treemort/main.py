@@ -25,8 +25,10 @@ def run(conf, eval_only):
 
     if eval_only:
         conf.resume = True
-        conf.best_model = "best.weights."+ conf.country +"."+ conf.distillation_method + "_nd.pth"
         conf.feature_dir = "features_"+ conf.country + "_" + conf.distillation_method + "_nd"
+
+        # conf.best_model = "best.weights.finland_nd.pth" # Baseline model for evaluation
+        conf.best_model = "best.weights.poland."+ conf.distillation_method + "_nd.pth" # Finetuned or distillation model for evaluation
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info(f"Using device: {device}")
