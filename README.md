@@ -10,6 +10,7 @@ git clone https://github.com/Global-Ecosystem-Health-Observatory/TreeMort.git
 export TREEMORT_VENV_PATH="/path/to/venv"
 export TREEMORT_REPO_PATH="/path/to/package"
 
+cd TreeMort
 bash $TREEMORT_REPO_PATH/scripts/install_treemort.sh
 ```
 
