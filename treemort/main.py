@@ -98,4 +98,19 @@ sh $TREEMORT_REPO_PATH/scripts/run_treemort.sh $TREEMORT_REPO_PATH/configs/flair
 
 sh $TREEMORT_REPO_PATH/scripts/run_treemort.sh $TREEMORT_REPO_PATH/configs/flair_unet_bs8_cs256.txt --eval-only true
 
+
+- For Lumi
+
+export TREEMORT_REPO_PATH="/users/rahmanan/TreeMort"
+export TREEMORT_VENV_PATH="/projappl/project_462000684/rahmanan/venv"
+export TREEMORT_DATA_PATH="/scratch/project_462000684/rahmanan/dead_trees"
+
+1) Train
+
+sh $TREEMORT_REPO_PATH/scripts/run_treemort.sh $TREEMORT_REPO_PATH/configs/flair_unet_bs8_cs256_sdt.txt --eval-only false
+
+2) Evaluate
+
+sh $TREEMORT_REPO_PATH/scripts/run_treemort.sh $TREEMORT_REPO_PATH/configs/flair_unet_bs8_cs256_sdt.txt --eval-only true
+
 '''
