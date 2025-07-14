@@ -12,7 +12,7 @@ from transformers import (
 from treemort.modeling.network.sa_unet import SelfAttentionUNet
 from treemort.modeling.network.sa_unet_multiscale import MultiScaleAttentionUNet
 from treemort.modeling.network.dinov2 import Dinov2ForSemanticSegmentation
-from treemort.modeling.network.flair_unet import CombinedModel, PretrainedUNetModel
+from treemort.modeling.network.flair_unet import CombinedModel, PretrainedUNetModel, StandardCombinedModel
 from treemort.modeling.network.custom_models import (
     CustomMaskFormer,
     CustomDetr,
@@ -35,6 +35,9 @@ def configure_model(conf, id2label):
         "detr": lambda: configure_detr(conf, id2label),
         "beit": lambda: configure_beit(conf, id2label),
         "flair_unet": lambda: configure_flair_unet(conf),
+        "flair_unet_baseline": lambda: configure_flair_unet(conf, use_pretrain=False, use_attention=False, use_multi_task=False), # Baseline (Standard U-Net)
+        "flair_unet_pretrained": lambda: configure_flair_unet(conf, use_pretrain=True, use_attention=False, use_multi_task=False), # Pretrained Encoder Only
+        "flair_unet_attention": lambda: configure_flair_unet(conf, use_pretrain=True, use_attention=True, use_multi_task=False), # Self-Attention Modules
         "hcfnet": lambda: configure_hcfnet(conf),
     }
 
@@ -100,7 +103,25 @@ def configure_beit(conf, id2label):
     return model
 
 
-def configure_flair_unet(conf):
+# Updated configure function with toggles for variants
+def configure_flair_unet(
+    conf,
+    use_pretrain=True,  # Toggle for pretrained FLAIR-INC
+    use_attention=True,  # Toggle for self-attention in decoder
+    use_multi_task=True,  # Toggle for multi-task (n_classes=3) vs single-task (n_classes=1)
+):
+    if not use_pretrain:
+        # Use standard SMP U-Net with no pretrain (vanilla baseline)
+        model = smp.Unet(
+            encoder_name="resnet34",  # Match manuscript
+            encoder_weights=None,  # No pretrain
+            in_channels=conf.input_channels,
+            classes=1 if not use_multi_task else 3,  # Single or multi-task
+            activation=None,
+        )
+        return model
+
+    # Pretrained case: Load FLAIR-INC as before
     repo_id = "IGNF/FLAIR-INC_rgbi_15cl_resnet34-unet"
     filename = "FLAIR-INC_rgbi_15cl_resnet34-unet_weights.pth"
 
@@ -110,15 +131,25 @@ def configure_flair_unet(conf):
         architecture="unet",
         encoder="resnet34",
         n_channels=conf.input_channels,
-        n_classes=15,
+        n_classes=15,  # Original FLAIR classes; adapted later
         use_metadata=False,
     ).get_model()
 
-    model = CombinedModel(
-        pretrained_model=pretrained_model,
-        n_classes=conf.output_channels,
-        output_size=conf.test_crop_size,
-    )
+    # Choose CombinedModel based on use_attention
+    n_classes = 3 if use_multi_task else 1  # Multi-task: 3 channels; single-task: 1
+    if use_attention:
+        model = CombinedModel(
+            pretrained_model=pretrained_model,
+            n_classes=n_classes,
+            output_size=conf.test_crop_size,
+        )
+    else:
+        model = StandardCombinedModel(
+            pretrained_model=pretrained_model,
+            n_classes=n_classes,
+            output_size=conf.test_crop_size,
+        )
+
     return model
 
 

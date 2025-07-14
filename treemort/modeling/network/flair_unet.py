@@ -218,3 +218,152 @@ class CombinedModel(nn.Module):
         decoder_output = self.decoder(encoder_features[-1], encoder_features)
         upsampled_output = self.upsample(decoder_output)
         return upsampled_output
+
+
+import torch
+from huggingface_hub import hf_hub_download
+from treemort.modeling.network.unet_mtd import smp_unet_mtd  # Assuming this is for the pretrained init
+import segmentation_models_pytorch as smp
+
+# Existing classes from "flair_unet.py" (SelfAttentionUNetDecoder, etc.) remain unchanged.
+
+# New: Standard U-Net Decoder (no self-attention, based on your code)
+class StandardUNetDecoder(nn.Module):
+    def __init__(
+        self,
+        n_classes=1,
+        depth=5,
+        wf=6,
+        padding=True,
+        batch_norm=False,
+        up_mode="upconv",
+        kernel_size=3,
+    ):
+        super(StandardUNetDecoder, self).__init__()
+        assert up_mode in ("upconv", "upsample")
+        self.padding = padding
+        self.depth = depth
+
+        prev_channels = 2 ** (wf + depth - 1)
+        self.up_path = nn.ModuleList()
+        for i in reversed(range(depth - 1)):
+            self.up_path.append(
+                StandardUNetUpBlock(prev_channels, 2 ** (wf + i), up_mode, padding, batch_norm)
+            )
+            prev_channels = 2 ** (wf + i)
+
+        self.last = nn.Conv2d(prev_channels, n_classes, kernel_size=1)
+
+    def forward(self, x, encoder_features):
+        for i, up in enumerate(self.up_path):
+            x = up(x, encoder_features[-i - 2])
+        return self.last(x)
+
+class StandardUNetConvBlock(nn.Module):
+    def __init__(self, in_size, out_size, padding, batch_norm, kernel_size=3):
+        super(StandardUNetConvBlock, self).__init__()
+
+        padding_ = int(padding) * (kernel_size - 1) // 2
+        self.conv1 = nn.Conv2d(
+            in_size,
+            out_size,
+            kernel_size=kernel_size,
+            padding=padding_,
+            padding_mode="reflect",
+        )
+        self.conv2 = nn.Conv2d(
+            out_size,
+            out_size,
+            kernel_size=kernel_size,
+            padding=padding_,
+            padding_mode="reflect",
+        )
+        self.batch_norm = batch_norm
+        if batch_norm:
+            self.batch_norm1 = nn.BatchNorm2d(out_size)
+            self.batch_norm2 = nn.BatchNorm2d(out_size)
+
+    def forward(self, x):
+        x = F.relu(self.conv1(x))
+        if self.batch_norm:
+            x = self.batch_norm1(x)
+        x = F.relu(self.conv2(x))
+        if self.batch_norm:
+            x = self.batch_norm2(x)
+        return x
+
+class StandardUNetUpBlock(nn.Module):
+    def __init__(self, in_size, out_size, up_mode, padding, batch_norm):
+        super(StandardUNetUpBlock, self).__init__()
+        if up_mode == "upconv":
+            self.up = nn.ConvTranspose2d(in_size, out_size, kernel_size=2, stride=2)
+        elif up_mode == "upsample":
+            self.up = nn.Sequential(
+                nn.Upsample(mode="bilinear", scale_factor=2),
+                nn.Conv2d(in_size, out_size, kernel_size=1),
+            )
+
+        self.conv_block = StandardUNetConvBlock(in_size, out_size, padding, batch_norm)
+
+    def forward(self, x, bridge):
+        up = self.up(x)
+        diffY = bridge.size()[2] - up.size()[2]
+        diffX = bridge.size()[3] - up.size()[3]
+        up = F.pad(up, (diffX // 2, diffX - diffX // 2, diffY // 2, diffY - diffY // 2))
+        out = torch.cat([up, bridge], 1)
+        out = self.conv_block(out)
+        return out
+
+# New: Standard Feature Extractor (no changes needed, reused from "flair_unet.py")
+class StandardFeatureExtractor(nn.Module):
+    def __init__(self, model, use_metadata=False):
+        super(StandardFeatureExtractor, self).__init__()
+        self.model = model
+        self.use_metadata = use_metadata
+        self.features = []
+
+        # Hook the layers of the encoder (adapt if needed for SMP)
+        layers = [
+            self.model.encoder.layer1[-1],
+            self.model.encoder.layer2[-1],
+            self.model.encoder.layer3[-1],
+            self.model.encoder.layer4[-1],
+        ]
+        for layer in layers:
+            layer.register_forward_hook(self.hook)
+
+    def hook(self, module, input, output):
+        self.features.append(output)
+
+    def forward(self, x, met=None):
+        self.features = []
+        if self.use_metadata:
+            self.model(x, met)
+        else:
+            self.model(x)
+        return self.features
+
+# New: Standard Combined Model (for no self-attention variants)
+class StandardCombinedModel(nn.Module):
+    def __init__(self, pretrained_model, n_classes=3, output_size=256):
+        super(StandardCombinedModel, self).__init__()
+        self.feature_extractor = StandardFeatureExtractor(pretrained_model)  # Reuse or adapt if needed
+        self.decoder = StandardUNetDecoder(
+            n_classes=n_classes,
+            depth=4,
+            wf=6,
+            padding=True,
+            batch_norm=False,
+            up_mode="upconv",
+            kernel_size=3,
+        )
+        self.upsample = nn.Upsample(
+            size=(output_size, output_size), mode="bilinear", align_corners=False
+        )
+
+    def forward(self, x):
+        encoder_features = self.feature_extractor(x)
+        decoder_output = self.decoder(encoder_features[-1], encoder_features)
+        upsampled_output = self.upsample(decoder_output)
+        return upsampled_output
+
