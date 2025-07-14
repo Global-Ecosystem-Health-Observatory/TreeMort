@@ -4,7 +4,6 @@ import torch.nn.functional as F
 
 from typing import Optional, List, Tuple
 
-
 class TreeMortalityLoss(nn.Module):
     def __init__(self, mask_weight=1.0, centroid_weight=0.7, sdt_weight=0.5, boundary_weight=1.0):
         super().__init__()
@@ -14,18 +13,28 @@ class TreeMortalityLoss(nn.Module):
         self.boundary_weight = boundary_weight
 
     def forward(self, pred, target):
+        num_channels = pred.shape[1]
         buffer_mask = target[:, 3]
 
-        mask_loss = self._mask_loss(pred[:, 0], target[:, 0], buffer_mask)
-        centroid_loss = self._centroid_loss(pred[:, 1], target[:, 1], buffer_mask)
-        sdt_loss, boundary_loss = self._sdt_boundary_loss(pred[:, 2], target[:, 2], buffer_mask)
+        if num_channels == 1:
+            # Single-task: only mask loss
+            return self._mask_loss(pred[:, 0], target[:, 0], buffer_mask)
+        
+        elif num_channels == 3:
+            # Multi-task: full loss
+            mask_loss = self._mask_loss(pred[:, 0], target[:, 0], buffer_mask)
+            centroid_loss = self._centroid_loss(pred[:, 1], target[:, 1], buffer_mask)
+            sdt_loss, boundary_loss = self._sdt_boundary_loss(pred[:, 2], target[:, 2], buffer_mask)
 
-        return (
-            self.mask_weight * mask_loss
-            + self.centroid_weight * centroid_loss
-            + self.sdt_weight * sdt_loss
-            + self.boundary_weight * boundary_loss
-        )
+            return (
+                self.mask_weight * mask_loss
+                + self.centroid_weight * centroid_loss
+                + self.sdt_weight * sdt_loss
+                + self.boundary_weight * boundary_loss
+            )
+        
+        else:
+            raise ValueError(f"Unsupported number of channels in pred: {num_channels}. Expected 1 or 3.")
 
     def _mask_loss(self, pred, target, buffer_mask):
         valid = buffer_mask.bool()

@@ -42,6 +42,10 @@ def build_model(conf, id2label, device, total_steps=1):
     logger.info(f"Model successfully moved to {device}.")
 
     optimizer, scheduler = configure_optimizer(model, conf.learning_rate, total_steps)
-    criterion, metrics = configure_loss_and_metrics(conf)
+
+    if conf.model in ("flair_unet_baseline", "flair_unet_pretrained", "flair_unet_attention"):
+        criterion, metrics = configure_loss_and_metrics(conf, use_multi_task=False)
+    else:
+        criterion, metrics = configure_loss_and_metrics(conf)
 
     return model, optimizer, scheduler, criterion, metrics
