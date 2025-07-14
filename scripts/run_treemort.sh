@@ -24,33 +24,34 @@ SBATCH_SCRIPT=$(mktemp)
 cat <<EOT > $SBATCH_SCRIPT
 #!/bin/bash
 #SBATCH --job-name=tree-mort
-#SBATCH --account=project_2004205
+#SBATCH --account=project_462000684
 #SBATCH --output=output/stdout/%A_%a
 #SBATCH --ntasks=1 --cpus-per-task=4
 #SBATCH --mem-per-cpu=32G
-#SBATCH --gres=gpu:v100:1
+#SBATCH --gpus-per-node=1
 EOT
 
 if [ "$TEST_RUN" = true ]; then
     echo "#SBATCH --time=00:15:00" >> $SBATCH_SCRIPT
-    echo "#SBATCH --partition=gputest" >> $SBATCH_SCRIPT
+    echo "#SBATCH --partition=dev-g" >> $SBATCH_SCRIPT
 elif [ "$EVAL_ONLY" = true ]; then
     echo "#SBATCH --time=01:00:00" >> $SBATCH_SCRIPT
-    echo "#SBATCH --partition=gpu" >> $SBATCH_SCRIPT
+    echo "#SBATCH --partition=small-g" >> $SBATCH_SCRIPT
 else
     echo "#SBATCH --time=36:00:00" >> $SBATCH_SCRIPT
-    echo "#SBATCH --partition=gpu" >> $SBATCH_SCRIPT
+    echo "#SBATCH --partition=small-g" >> $SBATCH_SCRIPT
 fi
 
 # Add the rest of the script
 cat <<EOT >> $SBATCH_SCRIPT
 
-MODULE_NAME="pytorch/2.3"
+MODULE_NAME="pytorch/2.5"
 
 echo "Loading module: \$MODULE_NAME"
+module use /appl/local/csc/modulefiles/
 module load \$MODULE_NAME
 
-TREEMORT_VENV_PATH="\${TREEMORT_VENV_PATH:-/projappl/project_2004205/rahmanan/venv}"
+TREEMORT_VENV_PATH="\${TREEMORT_VENV_PATH:-/projappl/project_462000684/rahmanan/venv}"
 
 if [ -d "\$TREEMORT_VENV_PATH" ]; then
     echo "[INFO] Activating virtual environment at \$TREEMORT_VENV_PATH"
