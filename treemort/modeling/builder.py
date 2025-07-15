@@ -15,7 +15,7 @@ def resume_or_load(conf, id2label, n_batches, device):
 
     model, optimizer, schedular, criterion, metrics = build_model(conf, id2label, device, total_steps=conf.epochs * n_batches)
 
-    callbacks = build_callbacks(n_batches, conf.output_dir, optimizer)
+    callbacks = build_callbacks(n_batches, conf.output_dir, optimizer, model_name=f"best.weights.{conf.model}.pth")
 
     if conf.resume:
         load_checkpoint_if_available(model, conf)
