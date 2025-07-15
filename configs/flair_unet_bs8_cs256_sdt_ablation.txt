@@ -36,4 +36,4 @@ loss = hybrid # available options [mse, hybrid]
 val-size = 0.2
 test-size = 0.1
 
-resume
+resume = False
