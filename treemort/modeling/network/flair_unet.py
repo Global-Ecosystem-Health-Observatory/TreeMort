@@ -322,12 +322,12 @@ class StandardFeatureExtractor(nn.Module):
         self.use_metadata = use_metadata
         self.features = []
 
-        # Hook the layers of the encoder (adapt if needed for SMP)
+        # Hook the layers of the encoder (use seg_model as in original FeatureExtractor)
         layers = [
-            self.model.encoder.layer1[-1],
-            self.model.encoder.layer2[-1],
-            self.model.encoder.layer3[-1],
-            self.model.encoder.layer4[-1],
+            self.model.seg_model.encoder.layer1[-1],
+            self.model.seg_model.encoder.layer2[-1],
+            self.model.seg_model.encoder.layer3[-1],
+            self.model.seg_model.encoder.layer4[-1],
         ]
         for layer in layers:
             layer.register_forward_hook(self.hook)
@@ -342,7 +342,7 @@ class StandardFeatureExtractor(nn.Module):
         else:
             self.model(x)
         return self.features
-
+    
 # New: Standard Combined Model (for no self-attention variants)
 class StandardCombinedModel(nn.Module):
     def __init__(self, pretrained_model, n_classes=3, output_size=256):
