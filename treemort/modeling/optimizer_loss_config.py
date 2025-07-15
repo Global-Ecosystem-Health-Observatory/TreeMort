@@ -27,10 +27,10 @@ def configure_optimizer(model, learning_rate, total_steps):
     return optimizer, scheduler
 
 
-def configure_loss_and_metrics(conf, class_weights=None, use_multi_task=True):
+def configure_loss_and_metrics(conf, class_weights=None, mask_weight=1.0, centroid_weight=0.7, sdt_weight=0.5, boundary_weight=1.0, use_multi_task=True):
     if conf.loss == "hybrid":
         if use_multi_task:
-            tree_mortality_loss = TreeMortalityLoss()
+            tree_mortality_loss = TreeMortalityLoss(mask_weight=mask_weight, centroid_weight=centroid_weight, sdt_weight=sdt_weight, boundary_weight=boundary_weight)
 
             def criterion(pred, target):
                 return tree_mortality_loss(pred, target)
@@ -55,7 +55,7 @@ def configure_loss_and_metrics(conf, class_weights=None, use_multi_task=True):
 
                 return {**seg_metrics, **centroid_metrics}
 
-            logger.info("Configured hybrid loss using TreeMortalityLoss class (BCE, MSE, and L1-based hybrid loss) for multi-task.")
+            logger.info(f"Configured hybrid loss with λMask={mask_weight}, λCentroid={centroid_weight}, λSDT={sdt_weight}, λboundary={boundary_weight}.")
         else:
             # Single-task: only mask, using hybrid_loss
             def criterion(pred, target):
