@@ -38,7 +38,10 @@ def resume_or_load(conf, id2label, n_batches, device):
 
     model, optimizer, schedular, criterion, metrics = build_model(conf, id2label, device, total_steps=conf.epochs * n_batches)
 
-    callbacks = build_callbacks(n_batches, conf.output_dir, optimizer, model_name=f"best.weights.{conf.model}.{combo['mask_weight']}.{combo['centroid_weight']}.{combo['sdt_weight']}.{combo['boundary_weight']}.pth")
+    if conf.model in ("flair_unet_baseline", "flair_unet_pretrained", "flair_unet_attention"):
+        callbacks = build_callbacks(n_batches, conf.output_dir, optimizer, model_name=f"best.weights.{conf.model}.pth")
+    else:
+        callbacks = build_callbacks(n_batches, conf.output_dir, optimizer, model_name=f"best.weights.{conf.model}.{combo['mask_weight']}.{combo['centroid_weight']}.{combo['sdt_weight']}.{combo['boundary_weight']}.pth")
 
     if conf.resume:
         load_checkpoint_if_available(model, conf)
