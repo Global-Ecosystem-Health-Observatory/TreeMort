@@ -527,6 +527,10 @@ def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
         ellipse_arr = np.array(ellipse_coords)
         transformed_ellipse = _apply_transform(ellipse_arr, transform)
 
+        # Ensure the polygon is closed after transform
+        if not np.array_equal(transformed_ellipse[0], transformed_ellipse[-1]):
+            transformed_ellipse = np.vstack([transformed_ellipse, transformed_ellipse[0]])
+
         # Create and validate polygon
         ellipse_poly = Polygon(transformed_ellipse.tolist())
         if ellipse_poly.is_valid and not ellipse_poly.is_empty:
