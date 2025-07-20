@@ -57,24 +57,36 @@ def process_image(
             f"Sliding window inference completed in {time.time() - start_time:.2f} seconds."
         )
         start_time = time.time()
-        segment_map, centroid_map, hybrid_map = prediction_maps
 
-        image_np = image.cpu().numpy()
-        segment_map_np = segment_map.cpu().numpy()
-        centroid_map_np = centroid_map.cpu().numpy()
-        hybrid_map_np = hybrid_map.cpu().numpy()
+        use_multi_task = conf.output_channels > 1
+
+        if use_multi_task:
+            segment_map, centroid_map, hybrid_map = prediction_maps
+
+            image_np = image.cpu().numpy()
+            segment_map_np = segment_map.cpu().numpy()
+            centroid_map_np = centroid_map.cpu().numpy()
+            hybrid_map_np = hybrid_map.cpu().numpy()
+        else:
+            segment_map = prediction_maps[0]
+        
+            image_np = image.cpu().numpy()
+            segment_map_np = segment_map.cpu().numpy()
+            
         logger.info(
             f"Converted prediction maps to numpy in {time.time() - start_time:.2f} seconds."
         )
 
         if post_process:
             start_time = time.time()
-            labels_ws = compute_watershed(
-                segment_map_np, centroid_map_np, hybrid_map_np, conf
-            )
-            logger.info(
-                f"Watershed segmentation took {time.time() - start_time:.2f} seconds."
-            )
+
+            if use_multi_task:
+                labels_ws = compute_watershed(segment_map_np, centroid_map_np, hybrid_map_np, conf)
+            else:
+                labels_ws = compute_watershed(segment_map_np, conf)
+            
+            logger.info(f"Watershed segmentation took {time.time() - start_time:.2f} seconds.")
+
             start_time = time.time()
             features = list(extract_ellipses(labels_ws, transform, conf))
             logger.info(
@@ -83,6 +95,10 @@ def process_image(
             start_time = time.time()
             save_geojson(features, geojson_path, crs, transform, name="FittedEllipses")
             logger.info(f"GeoJSON saved in {time.time() - start_time:.2f} seconds.")
+
+            
+            features = extract_ellipses(labels_ws, transform, conf)
+            save_geojson(features, geojson_path, crs, transform, name="FittedEllipses")
 
             # # Filtering-only variant
             # start_time = time.time()
