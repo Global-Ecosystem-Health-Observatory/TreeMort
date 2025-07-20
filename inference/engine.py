@@ -31,10 +31,12 @@ def process_image(
     image_path: str,
     geojson_path: str,
     conf: object,
-    post_process: bool,
+    post_process: bool
 ) -> None:
     logger = get_logger()
     logger.debug(f"Processing image: {os.path.basename(image_path)}")
+
+    use_multi_task = conf.output_channels > 1
 
     try:
         total_start_time = time.time()
@@ -52,13 +54,12 @@ def process_image(
             stride=conf.stride,
             threshold=conf.segment_threshold,
             output_channels=conf.output_channels,
+            use_multi_task=use_multi_task,
         )
         logger.info(
             f"Sliding window inference completed in {time.time() - start_time:.2f} seconds."
         )
         start_time = time.time()
-
-        use_multi_task = conf.output_channels > 1
 
         if use_multi_task:
             segment_map, centroid_map, hybrid_map = prediction_maps

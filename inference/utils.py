@@ -180,6 +180,7 @@ def sliding_window_inference(
     batch_size: int = 1,
     threshold: float = 0.5,
     output_channels: int = 1,
+    use_multi_task: bool = False,
 ) -> torch.Tensor:
     _validate_inference_params(window_size, stride, threshold)
 
@@ -200,6 +201,7 @@ def sliding_window_inference(
             model,
             threshold,
             device,
+            use_multi_task=use_multi_task
         )
 
     return _finalize_prediction(prediction_map, count_map, image.shape, threshold)
@@ -278,6 +280,7 @@ def process_batch(
     model: torch.nn.Module,
     threshold: float,
     device: torch.device,
+    use_multi_task: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     logger = get_logger()
 
@@ -286,20 +289,38 @@ def process_batch(
     predictions = _infer_patches(patches, model, device)
 
     for i, (y, x) in enumerate(coords):
-        binary_confidence = predictions[i, 0]
-        centroid_confidence = predictions[i, 1]
-        hybrid_confidence = predictions[i, 2]
 
-        _update_maps(
-            prediction_map,
-            count_map,
-            binary_confidence,
-            centroid_confidence,
-            hybrid_confidence,
-            threshold,
-            y,
-            x,
-        )
+        if use_multi_task:
+            binary_confidence = predictions[i, 0]
+            centroid_confidence = predictions[i, 1]
+            hybrid_confidence = predictions[i, 2]
+
+            _update_maps(
+                prediction_map,
+                count_map,
+                binary_confidence,
+                centroid_confidence,
+                hybrid_confidence,
+                threshold,
+                y,
+                x,
+                use_multi_task=use_multi_task
+            )
+                            
+        else:
+            binary_confidence = predictions[i, 0]
+
+            _update_maps(
+                prediction_map,
+                count_map,
+                binary_confidence,
+                None,
+                None,
+                threshold,
+                y,
+                x,
+                use_multi_task=use_multi_task
+            )
 
     return prediction_map, count_map
 
@@ -344,16 +365,23 @@ def _update_maps(
     threshold: float,
     y: int,
     x: int,
+    use_multi_task: bool = False,
 ) -> None:
     binary_mask = (binary_confidence >= threshold).float()
 
-    prediction_map[
-        :, y : y + binary_confidence.shape[0], x : x + binary_confidence.shape[1]
-    ] += torch.stack([binary_confidence, centroid_confidence, hybrid_confidence])
+    if use_multi_task:
+        prediction_map[
+            :, y : y + binary_confidence.shape[0], x : x + binary_confidence.shape[1]
+        ] += torch.stack([binary_confidence, centroid_confidence, hybrid_confidence])
 
-    count_map[
-        y : y + binary_confidence.shape[0], x : x + binary_confidence.shape[1]
-    ] += binary_mask
+        count_map[
+            y : y + binary_confidence.shape[0], x : x + binary_confidence.shape[1]
+        ] += binary_mask
+
+    else:
+        prediction_map[:, y : y + binary_confidence.shape[0], x : x + binary_confidence.shape[1]] += binary_confidence
+
+        count_map[y : y + binary_confidence.shape[0], x : x + binary_confidence.shape[1]] += binary_mask
 
 
 def threshold_prediction_map(
