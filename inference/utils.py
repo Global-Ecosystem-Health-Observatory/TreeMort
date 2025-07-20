@@ -418,7 +418,7 @@ def _apply_transform(contour: np.ndarray, transform: Affine) -> np.ndarray:
     return transformed
 
 
-def compute_watershed(segment_map, centroid_map, hybrid_map, conf):
+def compute_watershed_multi(segment_map, centroid_map, hybrid_map, conf):
     binary_seg = (segment_map > conf.segment_threshold).astype(np.uint8)
     binary_seg = remove_small_objects(
         binary_seg.astype(bool), min_size=conf.min_area_pixels
@@ -448,6 +448,32 @@ def compute_watershed(segment_map, centroid_map, hybrid_map, conf):
         min_region_size=conf.min_area_pixels,
         dilation_radius=conf.dilation_radius,
     )
+
+    return new_labels
+
+
+def compute_watershed_single(segment_map, conf):
+    binary_seg = (segment_map > conf.segment_threshold).astype(np.uint8)
+    binary_seg = remove_small_objects(binary_seg.astype(bool), min_size=conf.min_area_pixels).astype(np.uint8)
+
+    smoothed_segment_map = ndi.gaussian_filter(binary_seg, sigma=conf.blur_sigma)
+
+    mask_grown = binary_dilation(binary_seg, disk(conf.dilation_radius))
+
+    local_max = peak_local_max(
+        smoothed_segment_map,
+        min_distance=conf.min_distance,
+        exclude_border=False,
+        labels=mask_grown
+    )
+
+    markers = np.zeros(segment_map.shape, dtype=np.int32)
+    for i, (y, x) in enumerate(local_max):
+        markers[y, x] = i + 1  # Ensure marker values are unique and nonzero
+
+    labels_ws = watershed(-smoothed_segment_map, markers, mask=mask_grown)
+
+    new_labels = _postprocess_labels(labels_ws, min_region_size=conf.min_area_pixels, dilation_radius=conf.dilation_radius)
 
     return new_labels
 

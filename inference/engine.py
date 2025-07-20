@@ -19,7 +19,8 @@ from inference.utils import (
     log_and_raise,
     validate_path,
     expand_path,
-    compute_watershed,
+    compute_watershed_single,
+    compute_watershed_multi,
     extract_ellipses,
     segment_filtering_only,
     watershed_segmentation_only,
@@ -82,9 +83,9 @@ def process_image(
             start_time = time.time()
 
             if use_multi_task:
-                labels_ws = compute_watershed(segment_map_np, centroid_map_np, hybrid_map_np, conf)
+                labels_ws = compute_watershed_multi(segment_map_np, centroid_map_np, hybrid_map_np, conf)
             else:
-                labels_ws = compute_watershed(segment_map_np, conf)
+                labels_ws = compute_watershed_single(segment_map_np, conf)
             
             logger.info(f"Watershed segmentation took {time.time() - start_time:.2f} seconds.")
 
