@@ -257,6 +257,7 @@ def _finalize_prediction(
     count_map: torch.Tensor,
     original_shape: Tuple[int, int, int],
     threshold: float,
+    use_multi_task: bool = False,
 ) -> torch.Tensor:
     no_contribution_mask = count_map == 0
     count_map[no_contribution_mask] = 1
@@ -265,8 +266,10 @@ def _finalize_prediction(
     final_prediction[:, no_contribution_mask] = 0
 
     final_prediction[0] = torch.clamp(final_prediction[0], 0, 1)
-    final_prediction[1] = torch.clamp(final_prediction[1], 0, 1)
-    final_prediction[2] = torch.clamp(final_prediction[2], -1, 1)
+
+    if use_multi_task:
+        final_prediction[1] = torch.clamp(final_prediction[1], 0, 1)
+        final_prediction[2] = torch.clamp(final_prediction[2], -1, 1)
 
     _, original_h, original_w = original_shape
     return final_prediction[:, :original_h, :original_w]
