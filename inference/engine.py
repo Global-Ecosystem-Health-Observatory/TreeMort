@@ -98,9 +98,6 @@ def process_image(
             save_geojson(features, geojson_path, crs, transform, name="FittedEllipses")
             logger.info(f"GeoJSON saved in {time.time() - start_time:.2f} seconds.")
 
-            
-            features = extract_ellipses(labels_ws, transform, conf)
-            save_geojson(features, geojson_path, crs, transform, name="FittedEllipses")
 
             # # Filtering-only variant
             # start_time = time.time()
