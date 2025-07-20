@@ -204,7 +204,7 @@ def sliding_window_inference(
             use_multi_task=use_multi_task
         )
 
-    return _finalize_prediction(prediction_map, count_map, image.shape, threshold)
+    return _finalize_prediction(prediction_map, count_map, image.shape, threshold, use_multi_task=use_multi_task)
 
 
 def _validate_inference_params(window_size: int, stride: int, threshold: float) -> None:
