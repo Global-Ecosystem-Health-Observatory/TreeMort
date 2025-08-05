@@ -4,6 +4,8 @@ import argparse
 import numpy as np
 import geopandas as gpd
 
+from collections import OrderedDict
+
 from tqdm import tqdm
 from typing import Tuple, List, Dict
 from scipy.stats import norm
@@ -395,6 +397,9 @@ if __name__ == "__main__":
     output_folder = args.output_folder
     eval_test_only = args.eval_test_only
 
+    if not pred_folder:
+        pred_folder = data_folder
+    
     # Find all subdirectories in data_folder that start with 'Predictions'
     predictions_folders = []
     for entry in os.listdir(pred_folder):
@@ -409,12 +414,30 @@ if __name__ == "__main__":
     # Ensure output folder exists
     os.makedirs(output_folder, exist_ok=True)
 
+    summary_all = OrderedDict()
+
     for predictions_folder in predictions_folders:
         folder_name = os.path.basename(predictions_folder)
         output_csv = os.path.join(output_folder, f"eval_{folder_name}.csv")
         print(f"\nProcessing Predictions Folder: {predictions_folder}")
 
         results = calculate_mean_ious(data_folder, predictions_folder, output_csv, eval_test_only=eval_test_only)
+
+        # Add results to summary_all for later summary
+        summary_all[folder_name] = {
+            "Mean Pixel IoU": results["mean_pixel_iou"],
+            "Mean Tree IoU": results["mean_tree_iou"],
+            "Instance Precision": results["mean_instance_precision"],
+            "Instance Recall": results["mean_instance_recall"],
+            "Instance F1-Score": results["mean_instance_f1_score"],
+            "Pixel Precision": results["mean_pixel_precision"],
+            "Pixel Recall": results["mean_pixel_recall"],
+            "Pixel F1-Score": results["mean_pixel_f1_score"],
+            "Mean Centroid Error": results["mean_centroid_err"],
+            "Total True Positives": results["total_tp"],
+            "Total False Positives": results["total_fp"],
+            "Total False Negatives": results["total_fn"]
+        }
 
         print(f"\nEvaluation Results for folder: {folder_name}")
         print("=" * 50)
@@ -467,4 +490,34 @@ if __name__ == "__main__":
         print(f"Total True Positives  : {results['total_tp']}")
         print(f"Total False Positives : {results['total_fp']}")
         print(f"Total False Negatives : {results['total_fn']}")
+        # Save formatted results to CSV
+        summary_csv = os.path.join(output_folder, f"summary_{folder_name}.csv")
+        with open(summary_csv, mode='w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(["Metric", "Value", "95% CI Lower", "95% CI Upper", "Std"])
+            writer.writerow(["Mean Pixel IoU", results['mean_pixel_iou'], results['ci_pixel_iou'][0], results['ci_pixel_iou'][1], results['std_pixel_iou']])
+            writer.writerow(["Mean Tree IoU", results['mean_tree_iou'], results['ci_tree_iou'][0], results['ci_tree_iou'][1], results['std_tree_iou']])
+            writer.writerow(["Instance Precision", results['mean_instance_precision'], results['ci_instance_precision'][0], results['ci_instance_precision'][1], results['std_instance_precision']])
+            writer.writerow(["Instance Recall", results['mean_instance_recall'], results['ci_instance_recall'][0], results['ci_instance_recall'][1], results['std_instance_recall']])
+            writer.writerow(["Instance F1-Score", results['mean_instance_f1_score'], results['ci_instance_f1_score'][0], results['ci_instance_f1_score'][1], results['std_instance_f1_score']])
+            writer.writerow(["Pixel Precision", results['mean_pixel_precision'], results['ci_pixel_precision'][0], results['ci_pixel_precision'][1], results['std_pixel_precision']])
+            writer.writerow(["Pixel Recall", results['mean_pixel_recall'], results['ci_pixel_recall'][0], results['ci_pixel_recall'][1], results['std_pixel_recall']])
+            writer.writerow(["Pixel F1-Score", results['mean_pixel_f1_score'], results['ci_pixel_f1_score'][0], results['ci_pixel_f1_score'][1], results['std_pixel_f1_score']])
+            writer.writerow(["Mean Centroid Error", results['mean_centroid_err'], results['ci_centroid_err'][0], results['ci_centroid_err'][1], results['std_centroid_err']])
+            writer.writerow(["Total True Positives", results['total_tp'], "", "", ""])
+            writer.writerow(["Total False Positives", results['total_fp'], "", "", ""])
+            writer.writerow(["Total False Negatives", results['total_fn'], "", "", ""])
+        print(f"Summary written to {summary_csv}")
         print("=" * 50)
+
+    # Save summary across all folders
+    summary_all_csv = os.path.join(output_folder, "summary_all_folders.csv")
+    with open(summary_all_csv, mode='w', newline='') as file:
+        writer = csv.writer(file)
+        metrics = list(next(iter(summary_all.values())).keys())
+        header = ["Folder"] + metrics
+        writer.writerow(header)
+        for folder, values in summary_all.items():
+            row = [folder] + [values[m] for m in metrics]
+            writer.writerow(row)
+    print(f"Summary across all folders written to {summary_all_csv}")
