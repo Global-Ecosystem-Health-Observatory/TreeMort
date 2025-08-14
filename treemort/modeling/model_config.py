@@ -117,7 +117,6 @@ def configure_flair_unet(conf):
     model = CombinedModel(
         pretrained_model=pretrained_model,
         n_classes=conf.output_channels,
-        output_size=conf.test_crop_size,
     )
     return model
 

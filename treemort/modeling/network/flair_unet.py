@@ -196,7 +196,7 @@ class FeatureExtractor(nn.Module):
 
 
 class CombinedModel(nn.Module):
-    def __init__(self, pretrained_model, n_classes=3, output_size=256):
+    def __init__(self, pretrained_model, n_classes=3):
         super(CombinedModel, self).__init__()
         self.feature_extractor = FeatureExtractor(pretrained_model)
         self.decoder = SelfAttentionUNetDecoder(
@@ -209,12 +209,15 @@ class CombinedModel(nn.Module):
             kernel_size=3,
         )
         # Additional upsampling layer
-        self.upsample = nn.Upsample(
-            size=(output_size, output_size), mode="bilinear", align_corners=False
-        )
+        self.upsample = None  # we will interpolate dynamically in forward
 
     def forward(self, x):
         encoder_features = self.feature_extractor(x)
         decoder_output = self.decoder(encoder_features[-1], encoder_features)
-        upsampled_output = self.upsample(decoder_output)
+        upsampled_output = F.interpolate(
+            decoder_output,
+            size=(x.shape[2], x.shape[3]),
+            mode="bilinear",
+            align_corners=False
+        )
         return upsampled_output
