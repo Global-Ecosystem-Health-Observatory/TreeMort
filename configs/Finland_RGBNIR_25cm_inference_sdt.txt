@@ -7,7 +7,7 @@ nir-rgb-order = [3, 0, 1, 2]
 input-channels = 4
 output-channels = 3
 
-best-model = ./output/flair_unet_sdt/best.weights.pth
+best-model = ./output/flair_unet_sdt/best.weights.finland.pth
 
 model-config = ${TREEMORT_REPO_PATH}/configs/flair_unet_bs8_cs256_sdt.txt
 
