@@ -17,12 +17,10 @@ def prepare_datasets(conf):
     image_patch_map = load_and_organize_data(hdf5_path)
 
     train_keys, val_keys, test_keys = stratify_images_by_region(
-        image_patch_map,
-        val_ratio=conf.val_size,
-        test_ratio=conf.test_size
+        image_patch_map, val_ratio=conf.val_size, test_ratio=conf.test_size
     )
 
-    random.seed(None) # makes loader non-deterministic
+    random.seed(None)  # makes loader non-deterministic
 
     train_transform = Augmentations()
     val_transform = None
@@ -52,8 +50,27 @@ def prepare_datasets(conf):
         image_processor=image_processor,
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=conf.train_batch_size, sampler=BalancedSampler(hdf5_path, train_keys), drop_last=True)
-    val_loader = DataLoader(val_dataset, batch_size=conf.val_batch_size, sampler=BalancedSampler(hdf5_path, val_keys), shuffle=False, drop_last=True)
-    test_loader = DataLoader(test_dataset, batch_size=conf.test_batch_size, sampler=BalancedSampler(hdf5_path, test_keys), shuffle=False, drop_last=True)
-    
+    train_loader = DataLoader(
+        train_dataset, 
+        batch_size=conf.train_batch_size, 
+        sampler=BalancedSampler(hdf5_path, train_keys), 
+        drop_last=True
+    )
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=conf.val_batch_size,
+        sampler=BalancedSampler(hdf5_path, val_keys),
+        shuffle=False,
+        drop_last=True,
+    )
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=conf.test_batch_size,
+        # sampler=BalancedSampler(hdf5_path, test_keys),
+        # shuffle=False,
+        # drop_last=True,
+        shuffle=False,  # No balanced sampler
+        drop_last=False,
+    )
+
     return train_loader, val_loader, test_loader
