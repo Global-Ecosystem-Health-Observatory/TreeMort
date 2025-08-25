@@ -58,8 +58,8 @@ def configure_loss_and_metrics(conf, class_weights=None):
             # Instance-level metrics (centroid-based)
             # Use proximity_metrics to get instance precision/recall/f1 and centroid error
             prox = proximity_metrics(
-                pred_probs.unsqueeze(1),  # shape (B, 1, H, W) expected; but our function expects (B, H, W)
-                true_mask.unsqueeze(1),
+                pred_probs,
+                true_mask,
                 buffer_mask=buffer_mask,
                 proximity_threshold=5,
                 threshold=0.1,
