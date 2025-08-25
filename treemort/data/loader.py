@@ -1,7 +1,7 @@
 import random
 
 from pathlib import Path
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, SequentialSampler
 
 from treemort.data.dataset import DeadTreeDataset
 from treemort.data.sampler import BalancedSampler
@@ -17,12 +17,10 @@ def prepare_datasets(conf):
     image_patch_map = load_and_organize_data(hdf5_path)
 
     train_keys, val_keys, test_keys = stratify_images_by_region(
-        image_patch_map,
-        val_ratio=conf.val_size,
-        test_ratio=conf.test_size
+        image_patch_map, val_ratio=conf.val_size, test_ratio=conf.test_size
     )
 
-    random.seed(42) # makes loader deterministic
+    random.seed(42)  # makes loader deterministic
 
     train_transform = Augmentations()
     val_transform = None
@@ -52,8 +50,25 @@ def prepare_datasets(conf):
         image_processor=image_processor,
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=conf.train_batch_size, sampler=BalancedSampler(hdf5_path, train_keys), drop_last=True)
-    val_loader = DataLoader(val_dataset, batch_size=conf.val_batch_size, sampler=BalancedSampler(hdf5_path, val_keys), shuffle=False, drop_last=True)
-    test_loader = DataLoader(test_dataset, batch_size=conf.test_batch_size, sampler=BalancedSampler(hdf5_path, test_keys), shuffle=False, drop_last=True)
-    
+    train_loader = DataLoader(
+        train_dataset, 
+        batch_size=conf.train_batch_size, 
+        sampler=BalancedSampler(hdf5_path, train_keys), 
+        drop_last=True,
+    )
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=conf.val_batch_size,
+        sampler=BalancedSampler(hdf5_path, val_keys),
+        shuffle=False,
+        drop_last=True,
+    )
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=conf.test_batch_size,
+        sampler=SequentialSampler(test_dataset),  # ensures deterministic full pass
+        shuffle=False,
+        drop_last=False                           # keep all samples
+    )
+
     return train_loader, val_loader, test_loader
