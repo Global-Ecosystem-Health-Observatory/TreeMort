@@ -1,3 +1,4 @@
+import torch
 import torch.nn.functional as F
 
 from torch.optim import AdamW
@@ -35,13 +36,18 @@ def configure_loss_and_metrics(conf, class_weights=None):
             return hybrid_loss(pred_mask, true_mask, buffer_mask)
 
         def metrics(pred, target):
+            pred_channels = pred.shape[1]
+            target_channels = target.shape[1]
+
             pred_mask = pred[:, 0, :, :]
-            pred_centroid = pred[:, 1, :, :]
-            buffer_mask = target[:, 3, :, :]
             true_mask = target[:, 0, :, :]
-            true_centroid = target[:, 1, :, :]
+
+            if target_channels > 3:
+                buffer_mask = target[:, 3, :, :]
+            else:
+                buffer_mask = torch.ones_like(true_mask)
+
             pred_probs = apply_activation(pred_mask, activation=conf.activation)
-            pred_centroid_probs = apply_activation(pred_centroid, activation=conf.activation)
 
             # Segmentation-level metrics
             iou_segments = masked_iou(pred_probs, true_mask, buffer_mask, threshold=conf.segment_threshold)
@@ -58,20 +64,30 @@ def configure_loss_and_metrics(conf, class_weights=None):
             pixel_recall = intersection / (true_area + 1e-8)
             pixel_f1_score = 2 * pixel_precision * pixel_recall / (pixel_precision + pixel_recall + 1e-8)
 
-            # Instance-level metrics (centroid-based)
-            # Use proximity_metrics to get instance precision/recall/f1 and centroid error
-            prox = proximity_metrics(
-                pred_centroid_probs,
-                true_centroid,
-                buffer_mask=buffer_mask,
-                proximity_threshold=5,
-                threshold=0.1,
-                min_distance=5
-            )
-            instance_precision = prox["precision"]
-            instance_recall = prox["recall"]
-            instance_f1_score = prox["f1_score"]
-            centroid_err = prox["localization_error"]
+            if pred_channels > 1 and target_channels > 1:
+                pred_centroid = pred[:, 1, :, :]
+                true_centroid = target[:, 1, :, :]
+                pred_centroid_probs = apply_activation(pred_centroid, activation=conf.activation)
+
+                # Instance-level metrics (centroid-based)
+                # Use proximity_metrics to get instance precision/recall/f1 and centroid error
+                prox = proximity_metrics(
+                    pred_centroid_probs,
+                    true_centroid,
+                    buffer_mask=buffer_mask,
+                    proximity_threshold=5,
+                    threshold=0.1,
+                    min_distance=5
+                )
+                instance_precision = prox["precision"]
+                instance_recall = prox["recall"]
+                instance_f1_score = prox["f1_score"]
+                centroid_err = prox["localization_error"]
+            else:
+                instance_precision = torch.tensor(0.0, device=pred_mask.device)
+                instance_recall = torch.tensor(0.0, device=pred_mask.device)
+                instance_f1_score = torch.tensor(0.0, device=pred_mask.device)
+                centroid_err = torch.tensor(float('inf'), device=pred_mask.device)
 
             return {
                 "iou_segments": iou_segments,
