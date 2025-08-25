@@ -3,6 +3,7 @@ import numpy as np
 
 from scipy.spatial.distance import cdist
 from scipy.ndimage import maximum_filter
+from scipy.ndimage import label
 
 from treemort.utils.logger import get_logger
 

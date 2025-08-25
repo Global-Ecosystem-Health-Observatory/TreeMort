@@ -6,7 +6,7 @@ from torch.optim.lr_scheduler import OneCycleLR
 
 from treemort.utils.loss import weighted_dice_loss, hybrid_loss
 from treemort.utils.logger import get_logger
-from treemort.utils.metrics import masked_iou, masked_f1, apply_activation, proximity_metrics
+from treemort.utils.metrics import masked_iou, masked_f1, apply_activation, proximity_metrics, raster_calculate_iou_metrics
 
 logger = get_logger(__name__)
 
@@ -84,10 +84,19 @@ def configure_loss_and_metrics(conf, class_weights=None):
                 instance_f1_score = prox["f1_score"]
                 centroid_err = prox["localization_error"]
             else:
-                instance_precision = torch.tensor(0.0, device=pred_mask.device)
-                instance_recall = torch.tensor(0.0, device=pred_mask.device)
-                instance_f1_score = torch.tensor(0.0, device=pred_mask.device)
-                centroid_err = torch.tensor(float('inf'), device=pred_mask.device)
+                # Fallback: Use proximity_metrics on segmentation maps
+                prox = proximity_metrics(
+                    pred_probs,
+                    true_mask,
+                    buffer_mask=buffer_mask,
+                    proximity_threshold=5,
+                    threshold=0.5,
+                    min_distance=5
+                )
+                instance_precision = torch.tensor(prox["precision"], device=pred_mask.device)
+                instance_recall = torch.tensor(prox["recall"], device=pred_mask.device)
+                instance_f1_score = torch.tensor(prox["f1_score"], device=pred_mask.device)
+                centroid_err = torch.tensor(prox["localization_error"], device=pred_mask.device)
 
             return {
                 "iou_segments": iou_segments,
