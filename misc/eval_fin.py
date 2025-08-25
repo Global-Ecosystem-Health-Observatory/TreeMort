@@ -97,10 +97,8 @@ def process_prediction_file(
 
         instance_precision, instance_recall, instance_f1_score = calculate_precision_recall_f1(tp_centroid, fp_centroid, fn_centroid)
 
-        # New: Compute pixel-level Precision, Recall, F1
-        # Assuming calculate_iou_metrics returns total_intersection_area, total_union_area, pred_area, gt_area
-        # Update calculate_iou_metrics in utils to return these, or compute here
-        total_intersection_area, total_union_area, total_pred_area, total_gt_area = calculate_area_metrics(prediction_gdf, ground_truth_gdf)  # Assume new function in utils
+        # Compute pixel-level Precision, Recall, F1
+        total_intersection_area, total_union_area, total_pred_area, total_gt_area = calculate_area_metrics(prediction_gdf, ground_truth_gdf)
 
         pixel_precision = total_intersection_area / total_pred_area if total_pred_area > 0 else 0
         pixel_recall = total_intersection_area / total_gt_area if total_gt_area > 0 else 0
@@ -111,18 +109,21 @@ def process_prediction_file(
         prediction_count = len(prediction_gdf)
         ground_truth_count = len(ground_truth_gdf)
 
+        # Return values in the new CSV header order:
+        # Pixel IoU, Tree IoU, Pixel Precision, Pixel Recall, Pixel F1-Score, Instance Precision, Instance Recall, Instance F1-Score,
+        # True Positives, False Positives, False Negatives, Centroid Error, Latitude, Longitude, Prediction Count, Ground Truth Count
         return (
             pixel_iou,
             tree_iou,
-            tp_centroid,
-            fp_centroid,
-            fn_centroid,
-            instance_precision,
-            instance_recall,
-            instance_f1_score,
             pixel_precision,
             pixel_recall,
             pixel_f1_score,
+            instance_precision,
+            instance_recall,
+            instance_f1_score,
+            tp_centroid,
+            fp_centroid,
+            fn_centroid,
             centroid_error,
             latitude,
             longitude,
@@ -159,15 +160,15 @@ def save_results_to_csv(results, output_file):
                 "File",
                 "Pixel IoU",
                 "Tree IoU",
-                "True Positives",
-                "False Positives",
-                "False Negatives",
-                "Instance Precision",
-                "Instance Recall",
-                "Instance F1-Score",
                 "Pixel Precision",
                 "Pixel Recall",
                 "Pixel F1-Score",
+                "Instance Precision",
+                "Instance Recall",
+                "Instance F1-Score",
+                "True Positives",
+                "False Positives",
+                "False Negatives",
                 "Centroid Error",
                 "Latitude",
                 "Longitude",
@@ -231,7 +232,8 @@ def calculate_mean_ious(data_folder: str, predictions_folder: str = None, output
         }
         for future in tqdm(as_completed(futures), total=len(futures), desc="Processing File Pairs"):
             try:
-                pixel_iou, tree_iou, tp, fp, fn, i_p, i_r, i_f1, p_p, p_r, p_f1, cerr, lat, lon, pred_count, gt_count = future.result()
+                # Unpack in new consistent order:
+                pixel_iou, tree_iou, pixel_precision, pixel_recall, pixel_f1_score, i_p, i_r, i_f1, tp, fp, fn, cerr, lat, lon, pred_count, gt_count = future.result()
 
                 metrics["pixel_iou"].append(pixel_iou * pred_count)
                 metrics["tree_iou"].append(tree_iou * gt_count)
@@ -243,9 +245,9 @@ def calculate_mean_ious(data_folder: str, predictions_folder: str = None, output
                 metrics["instance_precision"].append(i_p)
                 metrics["instance_recall"].append(i_r)
                 metrics["instance_f1_score"].append(i_f1)
-                metrics["pixel_precision"].append(p_p)
-                metrics["pixel_recall"].append(p_r)
-                metrics["pixel_f1_score"].append(p_f1)
+                metrics["pixel_precision"].append(pixel_precision)
+                metrics["pixel_recall"].append(pixel_recall)
+                metrics["pixel_f1_score"].append(pixel_f1_score)
                 metrics["centroid_err"].append(cerr)
 
                 detailed_results.append(
@@ -253,15 +255,15 @@ def calculate_mean_ious(data_folder: str, predictions_folder: str = None, output
                         os.path.basename(futures[future][0]),
                         pixel_iou,
                         tree_iou,
-                        tp,
-                        fp,
-                        fn,
+                        pixel_precision,
+                        pixel_recall,
+                        pixel_f1_score,
                         i_p,
                         i_r,
                         i_f1,
-                        p_p,
-                        p_r,
-                        p_f1,
+                        tp,
+                        fp,
+                        fn,
                         cerr,
                         lat,
                         lon,
@@ -286,15 +288,15 @@ def calculate_mean_ious(data_folder: str, predictions_folder: str = None, output
             "File",
             "Pixel IoU",
             "Tree IoU",
-            "True Positives",
-            "False Positives",
-            "False Negatives",
-            "Instance Precision",
-            "Instance Recall",
-            "Instance F1-Score",
             "Pixel Precision",
             "Pixel Recall",
             "Pixel F1-Score",
+            "Instance Precision",
+            "Instance Recall",
+            "Instance F1-Score",
+            "True Positives",
+            "False Positives",
+            "False Negatives",
             "Centroid Error",
             "Latitude",
             "Longitude",
@@ -348,37 +350,39 @@ def calculate_mean_ious(data_folder: str, predictions_folder: str = None, output
     total_fp = df["False Positives"].sum()
     total_fn = df["False Negatives"].sum()
 
+    # Return dictionary with consistent key order:
     results = {
         "mean_pixel_iou": mean_pixel_iou,
-        "std_pixel_iou": std_pixel_iou,
-        "ci_pixel_iou": ci_pixel_iou,
         "mean_tree_iou": mean_tree_iou,
-        "std_tree_iou": std_tree_iou,
-        "ci_tree_iou": ci_tree_iou,
-        "mean_instance_precision": mean_instance_precision,
-        "std_instance_precision": std_instance_precision,
-        "ci_instance_precision": ci_instance_precision,
-        "mean_instance_recall": mean_instance_recall,
-        "std_instance_recall": std_instance_recall,
-        "ci_instance_recall": ci_instance_recall,
-        "mean_instance_f1_score": mean_instance_f1_score,
-        "std_instance_f1_score": std_instance_f1_score,
-        "ci_instance_f1_score": ci_instance_f1_score,
         "mean_pixel_precision": mean_pixel_precision,
-        "std_pixel_precision": std_pixel_precision,
-        "ci_pixel_precision": ci_pixel_precision,
         "mean_pixel_recall": mean_pixel_recall,
-        "std_pixel_recall": std_pixel_recall,
-        "ci_pixel_recall": ci_pixel_recall,
         "mean_pixel_f1_score": mean_pixel_f1_score,
-        "std_pixel_f1_score": std_pixel_f1_score,
-        "ci_pixel_f1_score": ci_pixel_f1_score,
+        "mean_instance_precision": mean_instance_precision,
+        "mean_instance_recall": mean_instance_recall,
+        "mean_instance_f1_score": mean_instance_f1_score,
         "mean_centroid_err": mean_centroid_err,
-        "std_centroid_err": std_centroid_err,
-        "ci_centroid_err": ci_centroid_err,
         "total_tp": total_tp,
         "total_fp": total_fp,
         "total_fn": total_fn,
+        # Also add CI and std in the same order
+        "ci_pixel_iou": ci_pixel_iou,
+        "ci_tree_iou": ci_tree_iou,
+        "ci_pixel_precision": ci_pixel_precision,
+        "ci_pixel_recall": ci_pixel_recall,
+        "ci_pixel_f1_score": ci_pixel_f1_score,
+        "ci_instance_precision": ci_instance_precision,
+        "ci_instance_recall": ci_instance_recall,
+        "ci_instance_f1_score": ci_instance_f1_score,
+        "ci_centroid_err": ci_centroid_err,
+        "std_pixel_iou": std_pixel_iou,
+        "std_tree_iou": std_tree_iou,
+        "std_pixel_precision": std_pixel_precision,
+        "std_pixel_recall": std_pixel_recall,
+        "std_pixel_f1_score": std_pixel_f1_score,
+        "std_instance_precision": std_instance_precision,
+        "std_instance_recall": std_instance_recall,
+        "std_instance_f1_score": std_instance_f1_score,
+        "std_centroid_err": std_centroid_err,
     }
     return results
 
@@ -423,20 +427,21 @@ if __name__ == "__main__":
 
         results = calculate_mean_ious(data_folder, predictions_folder, output_csv, eval_test_only=eval_test_only)
 
-        # Add results to summary_all for later summary
+        # Add results to summary_all for later summary, consistent metric ordering:
+        # Pixel IoU → Tree IoU → Pixel Precision → Pixel Recall → Pixel F1-Score → Instance Precision → Instance Recall → Instance F1-Score → Mean Centroid Error → Totals
         summary_all[folder_name] = {
             "Mean Pixel IoU": results["mean_pixel_iou"],
             "Mean Tree IoU": results["mean_tree_iou"],
-            "Instance Precision": results["mean_instance_precision"],
-            "Instance Recall": results["mean_instance_recall"],
-            "Instance F1-Score": results["mean_instance_f1_score"],
             "Pixel Precision": results["mean_pixel_precision"],
             "Pixel Recall": results["mean_pixel_recall"],
             "Pixel F1-Score": results["mean_pixel_f1_score"],
+            "Instance Precision": results["mean_instance_precision"],
+            "Instance Recall": results["mean_instance_recall"],
+            "Instance F1-Score": results["mean_instance_f1_score"],
             "Mean Centroid Error": results["mean_centroid_err"],
             "Total True Positives": results["total_tp"],
             "Total False Positives": results["total_fp"],
-            "Total False Negatives": results["total_fn"]
+            "Total False Negatives": results["total_fn"],
         }
 
         print(f"\nEvaluation Results for folder: {folder_name}")
@@ -450,21 +455,6 @@ if __name__ == "__main__":
             f"Mean Tree IoU         : {results['mean_tree_iou']:.4f} "
             f"(CI: {results['ci_tree_iou'][0]:.4f} - {results['ci_tree_iou'][1]:.4f}, "
             f"Std: {results['std_tree_iou']:.4f})"
-        )
-        print(
-            f"Instance Precision    : {results['mean_instance_precision']:.4f} "
-            f"(CI: {results['ci_instance_precision'][0]:.4f} - {results['ci_instance_precision'][1]:.4f}, "
-            f"Std: {results['std_instance_precision']:.4f})"
-        )
-        print(
-            f"Instance Recall       : {results['mean_instance_recall']:.4f} "
-            f"(CI: {results['ci_instance_recall'][0]:.4f} - {results['ci_instance_recall'][1]:.4f}, "
-            f"Std: {results['std_instance_recall']:.4f})"
-        )
-        print(
-            f"Instance F1-Score     : {results['mean_instance_f1_score']:.4f} "
-            f"(CI: {results['ci_instance_f1_score'][0]:.4f} - {results['ci_instance_f1_score'][1]:.4f}, "
-            f"Std: {results['std_instance_f1_score']:.4f})"
         )
         print(
             f"Pixel Precision       : {results['mean_pixel_precision']:.4f} "
@@ -482,6 +472,21 @@ if __name__ == "__main__":
             f"Std: {results['std_pixel_f1_score']:.4f})"
         )
         print(
+            f"Instance Precision    : {results['mean_instance_precision']:.4f} "
+            f"(CI: {results['ci_instance_precision'][0]:.4f} - {results['ci_instance_precision'][1]:.4f}, "
+            f"Std: {results['std_instance_precision']:.4f})"
+        )
+        print(
+            f"Instance Recall       : {results['mean_instance_recall']:.4f} "
+            f"(CI: {results['ci_instance_recall'][0]:.4f} - {results['ci_instance_recall'][1]:.4f}, "
+            f"Std: {results['std_instance_recall']:.4f})"
+        )
+        print(
+            f"Instance F1-Score     : {results['mean_instance_f1_score']:.4f} "
+            f"(CI: {results['ci_instance_f1_score'][0]:.4f} - {results['ci_instance_f1_score'][1]:.4f}, "
+            f"Std: {results['std_instance_f1_score']:.4f})"
+        )
+        print(
             f"Mean Centroid Error   : {results['mean_centroid_err']:.4f} "
             f"(CI: {results['ci_centroid_err'][0]:.4f} - {results['ci_centroid_err'][1]:.4f}, "
             f"Std: {results['std_centroid_err']:.4f})"
@@ -495,14 +500,15 @@ if __name__ == "__main__":
         with open(summary_csv, mode='w', newline='') as file:
             writer = csv.writer(file)
             writer.writerow(["Metric", "Value", "95% CI Lower", "95% CI Upper", "Std"])
+            # Consistent order: Pixel IoU → Tree IoU → Pixel Precision → Pixel Recall → Pixel F1-Score → Instance Precision → Instance Recall → Instance F1-Score → Mean Centroid Error → Totals
             writer.writerow(["Mean Pixel IoU", results['mean_pixel_iou'], results['ci_pixel_iou'][0], results['ci_pixel_iou'][1], results['std_pixel_iou']])
             writer.writerow(["Mean Tree IoU", results['mean_tree_iou'], results['ci_tree_iou'][0], results['ci_tree_iou'][1], results['std_tree_iou']])
-            writer.writerow(["Instance Precision", results['mean_instance_precision'], results['ci_instance_precision'][0], results['ci_instance_precision'][1], results['std_instance_precision']])
-            writer.writerow(["Instance Recall", results['mean_instance_recall'], results['ci_instance_recall'][0], results['ci_instance_recall'][1], results['std_instance_recall']])
-            writer.writerow(["Instance F1-Score", results['mean_instance_f1_score'], results['ci_instance_f1_score'][0], results['ci_instance_f1_score'][1], results['std_instance_f1_score']])
             writer.writerow(["Pixel Precision", results['mean_pixel_precision'], results['ci_pixel_precision'][0], results['ci_pixel_precision'][1], results['std_pixel_precision']])
             writer.writerow(["Pixel Recall", results['mean_pixel_recall'], results['ci_pixel_recall'][0], results['ci_pixel_recall'][1], results['std_pixel_recall']])
             writer.writerow(["Pixel F1-Score", results['mean_pixel_f1_score'], results['ci_pixel_f1_score'][0], results['ci_pixel_f1_score'][1], results['std_pixel_f1_score']])
+            writer.writerow(["Instance Precision", results['mean_instance_precision'], results['ci_instance_precision'][0], results['ci_instance_precision'][1], results['std_instance_precision']])
+            writer.writerow(["Instance Recall", results['mean_instance_recall'], results['ci_instance_recall'][0], results['ci_instance_recall'][1], results['std_instance_recall']])
+            writer.writerow(["Instance F1-Score", results['mean_instance_f1_score'], results['ci_instance_f1_score'][0], results['ci_instance_f1_score'][1], results['std_instance_f1_score']])
             writer.writerow(["Mean Centroid Error", results['mean_centroid_err'], results['ci_centroid_err'][0], results['ci_centroid_err'][1], results['std_centroid_err']])
             writer.writerow(["Total True Positives", results['total_tp'], "", "", ""])
             writer.writerow(["Total False Positives", results['total_fp'], "", "", ""])
@@ -514,10 +520,24 @@ if __name__ == "__main__":
     summary_all_csv = os.path.join(output_folder, "summary_all_folders.csv")
     with open(summary_all_csv, mode='w', newline='') as file:
         writer = csv.writer(file)
-        metrics = list(next(iter(summary_all.values())).keys())
-        header = ["Folder"] + metrics
+        # Consistent metric order
+        summary_metric_order = [
+            "Mean Pixel IoU",
+            "Mean Tree IoU",
+            "Pixel Precision",
+            "Pixel Recall",
+            "Pixel F1-Score",
+            "Instance Precision",
+            "Instance Recall",
+            "Instance F1-Score",
+            "Mean Centroid Error",
+            "Total True Positives",
+            "Total False Positives",
+            "Total False Negatives",
+        ]
+        header = ["Folder"] + summary_metric_order
         writer.writerow(header)
         for folder, values in summary_all.items():
-            row = [folder] + [values[m] for m in metrics]
+            row = [folder] + [values[m] for m in summary_metric_order]
             writer.writerow(row)
     print(f"Summary across all folders written to {summary_all_csv}")

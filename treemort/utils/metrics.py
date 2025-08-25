@@ -169,24 +169,73 @@ def apply_activation(logits, activation="sigmoid"):
 def log_metrics(metrics, phase):
     logger = get_logger()
 
-    seg_metrics = {k:v for k,v in metrics.items() if "segments" in k}
-    logger.info(f"{phase} Segmentation Metrics:")
-    for metric, value in seg_metrics.items():
-        logger.info(f"  {metric.replace('_segments', '').title()}: {value:.4f}")
+    # Segmentation metrics: IoU, F-Score
+    seg_metrics = {k: v for k, v in metrics.items() if "segments" in k}
+    seg_order = ["iou_segments", "f_score_segments"]
+    if seg_metrics:
+        logger.info(f"{phase} Segmentation Metrics:")
+        seg_name_map = {
+            "iou_segments": "IoU",
+            "f_score_segments": "F-Score",
+        }
+        for key in seg_order:
+            if key in seg_metrics:
+                display_name = seg_name_map.get(key, key.replace("_segments", "").replace("_", " ").title())
+                logger.info(f"  {display_name}: {seg_metrics[key]:.4f}")
 
-    cent_metrics = {k:v for k,v in metrics.items() if "points" in k}
-    logger.info(f"{phase} Centroid Metrics:")
-    for metric, value in cent_metrics.items():
-        logger.info(f"  {metric.replace('_points', '').title()}: {value:.4f}")
+    # Centroid metrics: IoU, F-Score
+    cent_metrics = {k: v for k, v in metrics.items() if "points" in k}
+    cent_order = ["iou_points", "f_score_points"]
+    if cent_metrics:
+        logger.info(f"{phase} Centroid Metrics:")
+        cent_name_map = {
+            "iou_points": "IoU",
+            "f_score_points": "F-Score",
+        }
+        for key in cent_order:
+            if key in cent_metrics:
+                display_name = cent_name_map.get(key, key.replace("_points", "").replace("_", " ").title())
+                logger.info(f"  {display_name}: {cent_metrics[key]:.4f}")
 
-    inst_metrics = {k:v for k,v in metrics.items() if "instance" in k}
+    # Pixel-level metrics: Pixel Precision, Pixel Recall, Pixel F1-Score
+    pixel_order = ["pixel_precision", "pixel_recall", "pixel_f1_score"]
+    pixel_metrics = {k: v for k, v in metrics.items() if k in pixel_order}
+    if pixel_metrics:
+        logger.info(f"{phase} Pixel-level Metrics:")
+        pixel_name_map = {
+            "pixel_precision": "Pixel Precision",
+            "pixel_recall": "Pixel Recall",
+            "pixel_f1_score": "Pixel F1-Score",
+        }
+        for key in pixel_order:
+            if key in pixel_metrics:
+                display_name = pixel_name_map.get(key, key.replace("pixel_", "").replace("_", " ").title())
+                logger.info(f"  {display_name}: {pixel_metrics[key]:.4f}")
+
+    # Instance-level metrics: Instance Precision, Instance Recall, Instance F1-Score
+    inst_order = ["instance_precision", "instance_recall", "instance_f1_score"]
+    inst_metrics = {k: v for k, v in metrics.items() if k in inst_order}
     if inst_metrics:
         logger.info(f"{phase} Instance Metrics:")
-        for metric, value in inst_metrics.items():
-            logger.info(f"  {metric.replace('_instance', '').title()}: {value:.4f}")
+        inst_name_map = {
+            "instance_precision": "Instance Precision",
+            "instance_recall": "Instance Recall",
+            "instance_f1_score": "Instance F1-Score",
+        }
+        for key in inst_order:
+            if key in inst_metrics:
+                display_name = inst_name_map.get(key, key.replace("_instance", "").replace("_", " ").title())
+                logger.info(f"  {display_name}: {inst_metrics[key]:.4f}")
 
-    prox_metrics = {k:v for k,v in metrics.items() if "proximity" in k}
+    # Log Centroid Error after instance metrics
+    if "centroid_err" in metrics:
+        logger.info(f"{phase} Centroid Error: {metrics['centroid_err']:.4f}")
+
+    # Proximity metrics: log in alphabetical order, but ensure display name consistency
+    prox_metrics = {k: v for k, v in metrics.items() if "proximity" in k}
     if prox_metrics:
         logger.info(f"{phase} Proximity Metrics:")
-        for metric, value in prox_metrics.items():
-            logger.info(f"  {metric.title()}: {value:.4f}")
+        prox_keys = sorted(prox_metrics.keys())
+        for key in prox_keys:
+            display_name = key.replace("_", " ").title()
+            logger.info(f"  {display_name}: {prox_metrics[key]:.4f}")

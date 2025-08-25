@@ -5,7 +5,7 @@ from torch.optim.lr_scheduler import OneCycleLR
 
 from treemort.utils.loss import weighted_dice_loss, hybrid_loss
 from treemort.utils.logger import get_logger
-from treemort.utils.metrics import masked_iou, masked_f1, apply_activation
+from treemort.utils.metrics import masked_iou, masked_f1, apply_activation, proximity_metrics
 
 logger = get_logger(__name__)
 
@@ -36,18 +36,51 @@ def configure_loss_and_metrics(conf, class_weights=None):
 
         def metrics(pred, target):
             pred_mask = pred[:, 0, :, :]
-
             buffer_mask = target[:, 3, :, :]
             true_mask = target[:, 0, :, :]
-
             pred_probs = apply_activation(pred_mask, activation=conf.activation)
 
-            seg_metrics = {
-                "iou_segments": masked_iou(pred_probs, true_mask, buffer_mask, threshold=conf.segment_threshold),
-                "f_score_segments": masked_f1(pred_probs, true_mask, buffer_mask, threshold=conf.segment_threshold)
-            }
+            # Segmentation-level metrics
+            iou_segments = masked_iou(pred_probs, true_mask, buffer_mask, threshold=conf.segment_threshold)
+            f_score_segments = masked_f1(pred_probs, true_mask, buffer_mask, threshold=conf.segment_threshold)
 
-            return {**seg_metrics}
+            # Pixel-level metrics
+            pred_bin = (pred_probs > conf.segment_threshold).float() * buffer_mask
+            true_bin = (true_mask > conf.segment_threshold).float() * buffer_mask
+            intersection = (pred_bin * true_bin).sum()
+            pred_area = pred_bin.sum()
+            true_area = true_bin.sum()
+            union = ((pred_bin + true_bin) > 0).float().sum()
+            pixel_precision = intersection / (pred_area + 1e-8)
+            pixel_recall = intersection / (true_area + 1e-8)
+            pixel_f1_score = 2 * pixel_precision * pixel_recall / (pixel_precision + pixel_recall + 1e-8)
+
+            # Instance-level metrics (centroid-based)
+            # Use proximity_metrics to get instance precision/recall/f1 and centroid error
+            prox = proximity_metrics(
+                pred_probs.unsqueeze(1),  # shape (B, 1, H, W) expected; but our function expects (B, H, W)
+                true_mask.unsqueeze(1),
+                buffer_mask=buffer_mask,
+                proximity_threshold=5,
+                threshold=0.1,
+                min_distance=5
+            )
+            instance_precision = prox["precision"]
+            instance_recall = prox["recall"]
+            instance_f1_score = prox["f1_score"]
+            centroid_err = prox["localization_error"]
+
+            return {
+                "iou_segments": iou_segments,
+                "f_score_segments": f_score_segments,
+                "pixel_precision": pixel_precision,
+                "pixel_recall": pixel_recall,
+                "pixel_f1_score": pixel_f1_score,
+                "instance_precision": instance_precision,
+                "instance_recall": instance_recall,
+                "instance_f1_score": instance_f1_score,
+                "centroid_err": centroid_err,
+            }
 
         logger.info("Configured hybrid loss using TreeMortalityLoss class (BCE, MSE, and L1-based hybrid loss).")
         return criterion, metrics
