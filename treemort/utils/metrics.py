@@ -95,57 +95,80 @@ def extract_centroids_from_heatmap(heatmap, threshold=0.5, min_distance=5):
 
 def proximity_metrics(pred_centroid_map, true_centroid_map, buffer_mask=None,
                       proximity_threshold=5, threshold=0.1, min_distance=5):
-    
+    # Ensure input arrays are numpy arrays with shape (B, H, W)
     pred_centroid_map = pred_centroid_map.detach().cpu().numpy() if isinstance(pred_centroid_map, torch.Tensor) else np.asarray(pred_centroid_map)
     true_centroid_map = true_centroid_map.detach().cpu().numpy() if isinstance(true_centroid_map, torch.Tensor) else np.asarray(true_centroid_map)
-    
+    if pred_centroid_map.ndim == 2:
+        pred_centroid_map = pred_centroid_map[None, ...]
+    if true_centroid_map.ndim == 2:
+        true_centroid_map = true_centroid_map[None, ...]
     if buffer_mask is not None:
         buffer_mask = buffer_mask.detach().cpu().numpy() if isinstance(buffer_mask, torch.Tensor) else np.asarray(buffer_mask)
-        pred_centroid_map *= buffer_mask
-        true_centroid_map *= buffer_mask
+        if buffer_mask.ndim == 2:
+            buffer_mask = buffer_mask[None, ...]
 
-    def safe_extract(heatmap):
-        centroids_list = extract_centroids_from_heatmap(heatmap, threshold, min_distance)  # List of (N_i, 2) arrays
-        centroids = np.concatenate(centroids_list, axis=0) if centroids_list else np.empty((0, 2), dtype=np.float32)        
-        return centroids
+    B = pred_centroid_map.shape[0]
+    total_tp = 0
+    total_fp = 0
+    total_fn = 0
+    matched_distances = []
 
-    pred_centroids = safe_extract(pred_centroid_map)
-    true_centroids = safe_extract(true_centroid_map)
+    def extract_centroids_single(heatmap2d, threshold, min_distance):
+        # heatmap2d: (H, W)
+        footprint = np.ones((min_distance, min_distance), dtype=bool)
+        max_filter = maximum_filter(heatmap2d, footprint=footprint, mode='constant')
+        peaks = (heatmap2d == max_filter) & (heatmap2d > threshold)
+        centroids = np.column_stack(np.where(peaks))
+        return centroids.astype(np.float32) if centroids.size > 0 else np.empty((0, 2), dtype=np.float32)
 
-    if pred_centroids.shape[0] == 0 or true_centroids.shape[0] == 0:
-        return {
-            "precision": 0.0,
-            "recall": 0.0,
-            "f1_score": 0.0,
-            "localization_error": float("inf")
-        }
+    for i in range(B):
+        pred_map = pred_centroid_map[i]
+        true_map = true_centroid_map[i]
+        if buffer_mask is not None:
+            mask = buffer_mask[i]
+            pred_map = pred_map * mask
+            true_map = true_map * mask
+        pred_centroids = extract_centroids_single(pred_map, threshold, min_distance)
+        true_centroids = extract_centroids_single(true_map, threshold, min_distance)
 
-    assert pred_centroids.shape[1] == 2, f"Pred centroids shape: {pred_centroids.shape}"
-    assert true_centroids.shape[1] == 2, f"True centroids shape: {true_centroids.shape}"
-    
-    distances = cdist(pred_centroids, true_centroids)
-
-    matches = distances <= proximity_threshold
-    matched_pred = set()
-    matched_true = set()
-
-    for p_idx, p_row in enumerate(matches):
-        for t_idx, is_match in enumerate(p_row):
-            if is_match and p_idx not in matched_pred and t_idx not in matched_true:
+        if pred_centroids.shape[0] == 0 or true_centroids.shape[0] == 0:
+            tp = 0
+            fp = len(pred_centroids)
+            fn = len(true_centroids)
+            total_tp += tp
+            total_fp += fp
+            total_fn += fn
+            continue
+        # Pairwise distances
+        distances = cdist(pred_centroids, true_centroids)
+        # Find all pairs with distance <= proximity_threshold
+        pairs = []
+        for p_idx in range(distances.shape[0]):
+            for t_idx in range(distances.shape[1]):
+                if distances[p_idx, t_idx] <= proximity_threshold:
+                    pairs.append((distances[p_idx, t_idx], p_idx, t_idx))
+        # Sort pairs by distance (greedy matching)
+        pairs.sort()
+        matched_pred = set()
+        matched_true = set()
+        matched_this = []
+        for dist, p_idx, t_idx in pairs:
+            if p_idx not in matched_pred and t_idx not in matched_true:
                 matched_pred.add(p_idx)
                 matched_true.add(t_idx)
+                matched_this.append(dist)
+        tp = len(matched_pred)
+        fp = len(pred_centroids) - tp
+        fn = len(true_centroids) - tp
+        total_tp += tp
+        total_fp += fp
+        total_fn += fn
+        matched_distances.extend(matched_this)
 
-    tp = len(matched_pred)
-    fp = len(pred_centroids) - tp
-    fn = len(true_centroids) - tp
-
-    precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-    recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+    precision = total_tp / (total_tp + total_fp) if (total_tp + total_fp) > 0 else 0.0
+    recall = total_tp / (total_tp + total_fn) if (total_tp + total_fn) > 0 else 0.0
     f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
-
-    matched_dists = [distances[p, t] for p, t in zip(matched_pred, matched_true)]
-    loc_error = np.mean(matched_dists) if matched_dists else float('inf')
-
+    loc_error = np.mean(matched_distances) if matched_distances else float('inf')
     return {
         "precision": precision,
         "recall": recall,
