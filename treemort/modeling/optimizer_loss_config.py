@@ -36,9 +36,12 @@ def configure_loss_and_metrics(conf, class_weights=None):
 
         def metrics(pred, target):
             pred_mask = pred[:, 0, :, :]
+            pred_centroid = pred[:, 1, :, :]
             buffer_mask = target[:, 3, :, :]
             true_mask = target[:, 0, :, :]
+            true_centroid = target[:, 1, :, :]
             pred_probs = apply_activation(pred_mask, activation=conf.activation)
+            pred_centroid_probs = apply_activation(pred_centroid, activation=conf.activation)
 
             # Segmentation-level metrics
             iou_segments = masked_iou(pred_probs, true_mask, buffer_mask, threshold=conf.segment_threshold)
@@ -58,8 +61,8 @@ def configure_loss_and_metrics(conf, class_weights=None):
             # Instance-level metrics (centroid-based)
             # Use proximity_metrics to get instance precision/recall/f1 and centroid error
             prox = proximity_metrics(
-                pred_probs,
-                true_mask,
+                pred_centroid_probs,
+                true_centroid,
                 buffer_mask=buffer_mask,
                 proximity_threshold=5,
                 threshold=0.1,
