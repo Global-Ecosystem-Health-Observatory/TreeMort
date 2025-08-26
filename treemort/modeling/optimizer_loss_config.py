@@ -6,7 +6,7 @@ from torch.optim.lr_scheduler import OneCycleLR
 
 from treemort.utils.loss import weighted_dice_loss, hybrid_loss
 from treemort.utils.logger import get_logger
-from treemort.utils.metrics import masked_iou, masked_f1, apply_activation, proximity_metrics, raster_calculate_iou_metrics
+from treemort.utils.metrics import masked_iou, masked_f1, apply_activation, proximity_metrics
 
 logger = get_logger(__name__)
 
