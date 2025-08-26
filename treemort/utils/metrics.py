@@ -122,6 +122,8 @@ def proximity_metrics(
     total_tp = 0
     total_fp = 0
     total_fn = 0
+    total_pred_peaks = 0
+    total_true_peaks = 0
     matched_distances = []
 
     def extract_centroids_single(heatmap2d, threshold, min_distance):
@@ -141,6 +143,8 @@ def proximity_metrics(
             true_map = true_map * mask
         pred_centroids = extract_centroids_single(pred_map, threshold, min_distance)
         true_centroids = extract_centroids_single(true_map, thr_true, min_distance)
+        total_pred_peaks += int(pred_centroids.shape[0])
+        total_true_peaks += int(true_centroids.shape[0])
 
         if pred_centroids.shape[0] == 0 or true_centroids.shape[0] == 0:
             tp = 0
@@ -195,6 +199,11 @@ def proximity_metrics(
         "localization_error": loc_error,
         "localization_error_sum": loc_sum,
         "localization_count": int(loc_count),
+        "tp": int(total_tp),
+        "fp": int(total_fp),
+        "fn": int(total_fn),
+        "pred_peaks": int(total_pred_peaks),
+        "true_peaks": int(total_true_peaks),
     }
 
 
@@ -270,6 +279,26 @@ def log_metrics(metrics, phase):
             if key in inst_metrics:
                 display_name = inst_name_map.get(key, key.replace("_instance", "").replace("_", " ").title())
                 logger.info(f"  {display_name}: {inst_metrics[key]:.4f}")
+
+    # Instance counts (if provided)
+    counts_map = {
+        "tp": "Instance TP",
+        "fp": "Instance FP",
+        "fn": "Instance FN",
+        "pred_peaks": "Pred Peaks",
+        "true_peaks": "True Peaks",
+    }
+    have_any = any(k in metrics for k in counts_map)
+    if have_any:
+        for k, label in counts_map.items():
+            if k in metrics:
+                v = metrics[k]
+                if isinstance(v, torch.Tensor):
+                    try:
+                        v = int(v.detach().cpu().item())
+                    except Exception:
+                        v = int(v)
+                logger.info(f"  {label}: {v}")
 
     # Log Centroid Error after instance metrics (ignore NaNs)
     if "centroid_err" in metrics:

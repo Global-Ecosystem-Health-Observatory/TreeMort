@@ -94,6 +94,11 @@ def configure_loss_and_metrics(conf, class_weights=None):
                 centroid_err = prox["localization_error"]
                 centroid_err_sum = prox.get("localization_error_sum", 0.0)
                 centroid_err_count = prox.get("localization_count", 0)
+                tp = prox.get("tp", 0)
+                fp = prox.get("fp", 0)
+                fn = prox.get("fn", 0)
+                pred_peaks = prox.get("pred_peaks", 0)
+                true_peaks = prox.get("true_peaks", 0)
             else:
                 # Fallback: Use proximity_metrics on segmentation maps
                 prox = proximity_metrics(
@@ -111,6 +116,11 @@ def configure_loss_and_metrics(conf, class_weights=None):
                 centroid_err = torch.tensor(prox["localization_error"], device=pred_mask.device)
                 centroid_err_sum = torch.tensor(prox.get("localization_error_sum", 0.0), device=pred_mask.device)
                 centroid_err_count = torch.tensor(prox.get("localization_count", 0), device=pred_mask.device)
+                tp = torch.tensor(prox.get("tp", 0), device=pred_mask.device)
+                fp = torch.tensor(prox.get("fp", 0), device=pred_mask.device)
+                fn = torch.tensor(prox.get("fn", 0), device=pred_mask.device)
+                pred_peaks = torch.tensor(prox.get("pred_peaks", 0), device=pred_mask.device)
+                true_peaks = torch.tensor(prox.get("true_peaks", 0), device=pred_mask.device)
 
             return {
                 "iou_segments": iou_segments,
@@ -124,6 +134,11 @@ def configure_loss_and_metrics(conf, class_weights=None):
                 "centroid_err": centroid_err,
                 "centroid_err_sum": centroid_err_sum,
                 "centroid_err_count": centroid_err_count,
+                "tp": tp,
+                "fp": fp,
+                "fn": fn,
+                "pred_peaks": pred_peaks,
+                "true_peaks": true_peaks,
             }
 
         logger.info("Configured hybrid loss with configurable thresholds (seg_thresh, centroid/proximity/min_distance) for metrics alignment with eval pipeline.")
