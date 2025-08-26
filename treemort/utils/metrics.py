@@ -107,6 +107,7 @@ def proximity_metrics(pred_centroid_map, true_centroid_map, buffer_mask=None,
         buffer_mask = buffer_mask.detach().cpu().numpy() if isinstance(buffer_mask, torch.Tensor) else np.asarray(buffer_mask)
         if buffer_mask.ndim == 2:
             buffer_mask = buffer_mask[None, ...]
+        buffer_mask = (buffer_mask > 0.5).astype(buffer_mask.dtype)
 
     B = pred_centroid_map.shape[0]
     total_tp = 0

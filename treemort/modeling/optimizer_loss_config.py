@@ -39,6 +39,14 @@ def configure_loss_and_metrics(conf, class_weights=None):
             pred_channels = pred.shape[1]
             target_channels = target.shape[1]
 
+            # Read thresholds from conf with robust defaults
+            seg_thresh = getattr(conf, "segment_threshold", 0.5)
+            act_name = getattr(conf, "activation", "sigmoid")
+            # Centroid/instance matching thresholds (in pixels)
+            cent_thresh = getattr(conf, "centroid_threshold", 0.2)
+            prox_thresh_px = getattr(conf, "proximity_threshold_px", 7)
+            min_dist_px = getattr(conf, "centroid_min_distance_px", 5)
+
             pred_mask = pred[:, 0, :, :]
             true_mask = target[:, 0, :, :]
 
@@ -47,15 +55,15 @@ def configure_loss_and_metrics(conf, class_weights=None):
             else:
                 buffer_mask = torch.ones_like(true_mask)
 
-            pred_probs = apply_activation(pred_mask, activation=conf.activation)
+            pred_probs = apply_activation(pred_mask, activation=act_name)
 
             # Segmentation-level metrics
-            iou_segments = masked_iou(pred_probs, true_mask, buffer_mask, threshold=conf.segment_threshold)
-            f_score_segments = masked_f1(pred_probs, true_mask, buffer_mask, threshold=conf.segment_threshold)
+            iou_segments = masked_iou(pred_probs, true_mask, buffer_mask, threshold=seg_thresh)
+            f_score_segments = masked_f1(pred_probs, true_mask, buffer_mask, threshold=seg_thresh)
 
             # Pixel-level metrics
-            pred_bin = (pred_probs > conf.segment_threshold).float() * buffer_mask
-            true_bin = (true_mask > conf.segment_threshold).float() * buffer_mask
+            pred_bin = (pred_probs > seg_thresh).float() * buffer_mask
+            true_bin = (true_mask > seg_thresh).float() * buffer_mask
             intersection = (pred_bin * true_bin).sum()
             pred_area = pred_bin.sum()
             true_area = true_bin.sum()
@@ -67,7 +75,7 @@ def configure_loss_and_metrics(conf, class_weights=None):
             if pred_channels > 1 and target_channels > 1:
                 pred_centroid = pred[:, 1, :, :]
                 true_centroid = target[:, 1, :, :]
-                pred_centroid_probs = apply_activation(pred_centroid, activation=conf.activation)
+                pred_centroid_probs = apply_activation(pred_centroid, activation=act_name)
 
                 # Instance-level metrics (centroid-based)
                 # Use proximity_metrics to get instance precision/recall/f1 and centroid error
@@ -75,9 +83,9 @@ def configure_loss_and_metrics(conf, class_weights=None):
                     pred_centroid_probs,
                     true_centroid,
                     buffer_mask=buffer_mask,
-                    proximity_threshold=5,
-                    threshold=0.1,
-                    min_distance=5
+                    proximity_threshold=prox_thresh_px,
+                    threshold=cent_thresh,
+                    min_distance=min_dist_px
                 )
                 instance_precision = prox["precision"]
                 instance_recall = prox["recall"]
@@ -89,9 +97,9 @@ def configure_loss_and_metrics(conf, class_weights=None):
                     pred_probs,
                     true_mask,
                     buffer_mask=buffer_mask,
-                    proximity_threshold=5,
-                    threshold=0.5,
-                    min_distance=5
+                    proximity_threshold=prox_thresh_px,
+                    threshold=seg_thresh,
+                    min_distance=min_dist_px
                 )
                 instance_precision = torch.tensor(prox["precision"], device=pred_mask.device)
                 instance_recall = torch.tensor(prox["recall"], device=pred_mask.device)
@@ -110,7 +118,7 @@ def configure_loss_and_metrics(conf, class_weights=None):
                 "centroid_err": centroid_err,
             }
 
-        logger.info("Configured hybrid loss using TreeMortalityLoss class (BCE, MSE, and L1-based hybrid loss).")
+        logger.info("Configured hybrid loss with configurable thresholds (seg_thresh, centroid/proximity/min_distance) for metrics alignment with eval pipeline.")
         return criterion, metrics
 
     elif conf.loss == "mse":
