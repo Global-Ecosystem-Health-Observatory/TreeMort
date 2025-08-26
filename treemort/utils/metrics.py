@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+import math
 
 from scipy.spatial.distance import cdist
 from scipy.ndimage import maximum_filter
@@ -178,12 +179,22 @@ def proximity_metrics(
     precision = total_tp / (total_tp + total_fp) if (total_tp + total_fp) > 0 else 0.0
     recall = total_tp / (total_tp + total_fn) if (total_tp + total_fn) > 0 else 0.0
     f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
-    loc_error = np.mean(matched_distances) if matched_distances else float('nan')
+
+    loc_count = len(matched_distances)
+    if loc_count > 0:
+        loc_sum = float(np.sum(matched_distances))
+        loc_error = float(loc_sum / loc_count)
+    else:
+        loc_sum = 0.0
+        loc_error = 0.0  # ignore NaNs by using 0 for batches with no matches
+
     return {
         "precision": precision,
         "recall": recall,
         "f1_score": f1,
-        "localization_error": loc_error
+        "localization_error": loc_error,
+        "localization_error_sum": loc_sum,
+        "localization_count": int(loc_count),
     }
 
 
@@ -260,9 +271,25 @@ def log_metrics(metrics, phase):
                 display_name = inst_name_map.get(key, key.replace("_instance", "").replace("_", " ").title())
                 logger.info(f"  {display_name}: {inst_metrics[key]:.4f}")
 
-    # Log Centroid Error after instance metrics
+    # Log Centroid Error after instance metrics (ignore NaNs)
     if "centroid_err" in metrics:
-        logger.info(f"{phase} Centroid Error: {metrics['centroid_err']:.4f}")
+        val = metrics["centroid_err"]
+        # Convert tensors to plain float if needed
+        if isinstance(val, torch.Tensor):
+            try:
+                val = float(val.detach().cpu().item())
+            except Exception:
+                val = float(val.detach().cpu().numpy())
+        # Only log if the value is a real number (not NaN)
+        if isinstance(val, (float, int)) and not (isinstance(val, float) and (math.isnan(val) or np.isnan(val))):
+            logger.info(f"{phase} Centroid Error: {val:.4f}")
+
+    if "centroid_err_count" in metrics:
+        try:
+            cnt = int(metrics["centroid_err_count"]) if not isinstance(metrics["centroid_err_count"], torch.Tensor) else int(metrics["centroid_err_count"].detach().cpu().item())
+            logger.info(f"  Centroid Matches: {cnt}")
+        except Exception:
+            pass
 
     # Proximity metrics: log in alphabetical order, but ensure display name consistency
     prox_metrics = {k: v for k, v in metrics.items() if "proximity" in k}

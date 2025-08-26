@@ -92,6 +92,8 @@ def configure_loss_and_metrics(conf, class_weights=None):
                 instance_recall = prox["recall"]
                 instance_f1_score = prox["f1_score"]
                 centroid_err = prox["localization_error"]
+                centroid_err_sum = prox.get("localization_error_sum", 0.0)
+                centroid_err_count = prox.get("localization_count", 0)
             else:
                 # Fallback: Use proximity_metrics on segmentation maps
                 prox = proximity_metrics(
@@ -107,6 +109,8 @@ def configure_loss_and_metrics(conf, class_weights=None):
                 instance_recall = torch.tensor(prox["recall"], device=pred_mask.device)
                 instance_f1_score = torch.tensor(prox["f1_score"], device=pred_mask.device)
                 centroid_err = torch.tensor(prox["localization_error"], device=pred_mask.device)
+                centroid_err_sum = torch.tensor(prox.get("localization_error_sum", 0.0), device=pred_mask.device)
+                centroid_err_count = torch.tensor(prox.get("localization_count", 0), device=pred_mask.device)
 
             return {
                 "iou_segments": iou_segments,
@@ -118,6 +122,8 @@ def configure_loss_and_metrics(conf, class_weights=None):
                 "instance_recall": instance_recall,
                 "instance_f1_score": instance_f1_score,
                 "centroid_err": centroid_err,
+                "centroid_err_sum": centroid_err_sum,
+                "centroid_err_count": centroid_err_count,
             }
 
         logger.info("Configured hybrid loss with configurable thresholds (seg_thresh, centroid/proximity/min_distance) for metrics alignment with eval pipeline.")
