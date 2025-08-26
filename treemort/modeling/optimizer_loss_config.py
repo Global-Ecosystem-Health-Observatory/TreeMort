@@ -84,8 +84,9 @@ def configure_loss_and_metrics(conf, class_weights=None):
                     true_centroid,
                     buffer_mask=buffer_mask,
                     proximity_threshold=prox_thresh_px,
-                    threshold=cent_thresh,
-                    min_distance=min_dist_px
+                    threshold=cent_thresh,      # threshold for predicted peaks
+                    min_distance=min_dist_px,
+                    true_threshold=0.5,         # stricter threshold for binary GT centroids
                 )
                 instance_precision = prox["precision"]
                 instance_recall = prox["recall"]
@@ -99,7 +100,8 @@ def configure_loss_and_metrics(conf, class_weights=None):
                     buffer_mask=buffer_mask,
                     proximity_threshold=prox_thresh_px,
                     threshold=seg_thresh,
-                    min_distance=min_dist_px
+                    min_distance=min_dist_px,
+                    true_threshold=seg_thresh,
                 )
                 instance_precision = torch.tensor(prox["precision"], device=pred_mask.device)
                 instance_recall = torch.tensor(prox["recall"], device=pred_mask.device)

@@ -94,8 +94,15 @@ def extract_centroids_from_heatmap(heatmap, threshold=0.5, min_distance=5):
     return all_centroids
 
 
-def proximity_metrics(pred_centroid_map, true_centroid_map, buffer_mask=None,
-                      proximity_threshold=5, threshold=0.1, min_distance=5):
+def proximity_metrics(
+    pred_centroid_map,
+    true_centroid_map,
+    buffer_mask=None,
+    proximity_threshold=5,
+    threshold=0.1,
+    min_distance=5,
+    true_threshold=None,
+):
     # Ensure input arrays are numpy arrays with shape (B, H, W)
     pred_centroid_map = pred_centroid_map.detach().cpu().numpy() if isinstance(pred_centroid_map, torch.Tensor) else np.asarray(pred_centroid_map)
     true_centroid_map = true_centroid_map.detach().cpu().numpy() if isinstance(true_centroid_map, torch.Tensor) else np.asarray(true_centroid_map)
@@ -108,6 +115,7 @@ def proximity_metrics(pred_centroid_map, true_centroid_map, buffer_mask=None,
         if buffer_mask.ndim == 2:
             buffer_mask = buffer_mask[None, ...]
         buffer_mask = (buffer_mask > 0.5).astype(buffer_mask.dtype)
+    thr_true = threshold if true_threshold is None else true_threshold
 
     B = pred_centroid_map.shape[0]
     total_tp = 0
@@ -131,7 +139,7 @@ def proximity_metrics(pred_centroid_map, true_centroid_map, buffer_mask=None,
             pred_map = pred_map * mask
             true_map = true_map * mask
         pred_centroids = extract_centroids_single(pred_map, threshold, min_distance)
-        true_centroids = extract_centroids_single(true_map, threshold, min_distance)
+        true_centroids = extract_centroids_single(true_map, thr_true, min_distance)
 
         if pred_centroids.shape[0] == 0 or true_centroids.shape[0] == 0:
             tp = 0
@@ -170,7 +178,7 @@ def proximity_metrics(pred_centroid_map, true_centroid_map, buffer_mask=None,
     precision = total_tp / (total_tp + total_fp) if (total_tp + total_fp) > 0 else 0.0
     recall = total_tp / (total_tp + total_fn) if (total_tp + total_fn) > 0 else 0.0
     f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
-    loc_error = np.mean(matched_distances) if matched_distances else float('inf')
+    loc_error = np.mean(matched_distances) if matched_distances else float('nan')
     return {
         "precision": precision,
         "recall": recall,
