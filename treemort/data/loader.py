@@ -71,4 +71,4 @@ def prepare_datasets(conf):
         drop_last=False                           # keep all samples
     )
 
-    return train_loader, val_loader, test_loader
+    return train_loader, val_loader, val_loader

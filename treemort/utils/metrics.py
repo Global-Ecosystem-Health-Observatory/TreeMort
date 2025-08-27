@@ -509,6 +509,19 @@ def aggregate_epoch_metrics_with_ci(batch_metrics_list, confidence: float = 0.95
 
     return base
 
+# --- Helper: aggregate and log dataset-level metrics in one call ---
+def log_epoch_metrics(batch_metrics_list, phase: str = "Eval", confidence: float = 0.95):
+    """Aggregate a list of per-batch metric dicts into dataset-level metrics,
+    attach confidence intervals for continuous metrics, and log them.
+
+    Returns the aggregated metrics dict (with integer counts for TP/FP/FN and
+    `mean_*/std_*/ci_*_low/high` for supported scalar metrics).
+    """
+    summary = aggregate_epoch_metrics_with_ci(batch_metrics_list, confidence=confidence)
+    log_metrics(summary, phase)
+    return summary
+
+
 def log_metrics(metrics, phase):
     logger = get_logger()
 
