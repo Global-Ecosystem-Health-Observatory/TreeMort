@@ -6,10 +6,9 @@ from torch.optim.lr_scheduler import OneCycleLR
 
 from treemort.utils.loss import weighted_dice_loss, hybrid_loss
 from treemort.utils.logger import get_logger
-from treemort.utils.metrics import masked_iou, masked_f1, apply_activation, proximity_metrics
+from treemort.utils.metrics import masked_iou, masked_f1, apply_activation, proximity_metrics, tree_iou_from_masks, aggregate_epoch_metrics_with_ci
 import numpy as np
 from scipy.ndimage import label as cc_label
-from scipy.optimize import linear_sum_assignment
 
 logger = get_logger(__name__)
 
@@ -65,52 +64,35 @@ def configure_loss_and_metrics(conf, class_weights=None):
             pred_bin = (pred_probs > seg_thresh).float() * buffer_mask
             true_bin = (true_mask > seg_thresh).float() * buffer_mask
 
-            # Segmentation-level metrics (IoU/F-score with masking)
-            iou_segments = masked_iou(pred_probs, true_mask, buffer_mask, threshold=seg_thresh)
-            f_score_segments = masked_f1(pred_probs, true_mask, buffer_mask, threshold=seg_thresh)
-
-            # Pixel-level metrics (area-based precision/recall/F1 like eval_pol)
-            intersection = (pred_bin * true_bin).sum()
-            pred_area = pred_bin.sum()
-            true_area = true_bin.sum()
-            pixel_precision = intersection / (pred_area + 1e-8)
-            pixel_recall = intersection / (true_area + 1e-8)
-            pixel_f1_score = 2 * pixel_precision * pixel_recall / (pixel_precision + pixel_recall + 1e-8)
-
-            # --- Instance-level (centroid-based) metrics, mirroring eval_pol.calculate_centroid_errors ---
-            # Use connected components on thresholded masks to obtain instances and their centroids
+            # Build per-image metric dicts, then aggregate with CI across images in the batch
             B, H, W = pred_bin.shape
             structure = np.ones((3, 3), dtype=bool)  # 8-connectivity
 
-            total_tp = 0
-            total_fp = 0
-            total_fn = 0
-            total_pred_instances = 0
-            total_true_instances = 0
-            loc_sum = 0.0
-            loc_count = 0
-
-            # For tree IoU (Hungarian on instance IoUs)
-            tree_tp = 0
-            tree_fp_total = 0
-            tree_fn_total = 0
+            per_image_metrics = []
 
             pred_bin_np = pred_bin.detach().cpu().numpy().astype(np.uint8)
             true_bin_np = true_bin.detach().cpu().numpy().astype(np.uint8)
 
             for b in range(B):
-                # Connected components
+                # Per-image segmentation metrics
+                iou_b = masked_iou(pred_probs[b], true_mask[b], buffer_mask[b], threshold=seg_thresh)
+                f1_b  = masked_f1(pred_probs[b], true_mask[b], buffer_mask[b], threshold=seg_thresh)
+
+                # Pixel-area metrics per image
+                pred_b = pred_bin[b]
+                true_b = true_bin[b]
+                intersection = (pred_b * true_b).sum()
+                pred_area = pred_b.sum()
+                true_area = true_b.sum()
+                pixel_precision_b = float(intersection / (pred_area + 1e-8)) if float(pred_area) > 0 else 0.0
+                pixel_recall_b    = float(intersection / (true_area + 1e-8)) if float(true_area) > 0 else 0.0
+                pixel_f1_b = float(2 * pixel_precision_b * pixel_recall_b / (pixel_precision_b + pixel_recall_b + 1e-8))
+
+                # Connected components for centroid-based metrics
                 pred_labeled, n_pred = cc_label(pred_bin_np[b] > 0, structure=structure)
                 true_labeled, n_true = cc_label(true_bin_np[b] > 0, structure=structure)
 
-                total_pred_instances += int(n_pred)
-                total_true_instances += int(n_true)
-
-                # Skip if empty on either side
-                if n_pred == 0 and n_true == 0:
-                    continue
-
-                # Compute centroids for centroid-based matching
+                # Centroids
                 def centroids_from_labels(lbl_img, n):
                     cents = []
                     for i in range(1, n + 1):
@@ -124,97 +106,77 @@ def configure_loss_and_metrics(conf, class_weights=None):
                 pred_centroids = centroids_from_labels(pred_labeled, n_pred)
                 true_centroids = centroids_from_labels(true_labeled, n_true)
 
-                # Distance matrix (centroid-based)
+                # Greedy centroid matching within distance
+                tp_b = 0
+                fp_b = int(n_pred)
+                fn_b = int(n_true)
+                loc_sum_b = 0.0
+                loc_count_b = 0
+
                 if n_pred > 0 and n_true > 0:
-                    # Compute pairwise Euclidean distances
                     dists = np.sqrt(((pred_centroids[:, None, :] - true_centroids[None, :, :]) ** 2).sum(axis=2))
-                    # Gather candidate pairs within max distance
                     pairs = []
                     for i in range(n_pred):
                         for j in range(n_true):
                             if np.isfinite(dists[i, j]) and dists[i, j] <= max_centroid_dist:
                                 pairs.append((dists[i, j], i, j))
-                    pairs.sort(key=lambda x: x[0])  # greedy by distance
+                    pairs.sort(key=lambda x: x[0])
 
                     matched_pred = set()
                     matched_true = set()
-                    for dist, i, j in pairs:
-                        if i not in matched_pred and j not in matched_true:
-                            matched_pred.add(i)
-                            matched_true.add(j)
-                            total_tp += 1
-                            loc_sum += float(dist)
-                            loc_count += 1
-                    total_fp += int(n_pred - len(matched_pred))
-                    total_fn += int(n_true - len(matched_true))
-                else:
-                    total_fp += int(n_pred)
-                    total_fn += int(n_true)
+                    for dist, i_idx, j_idx in pairs:
+                        if i_idx not in matched_pred and j_idx not in matched_true:
+                            matched_pred.add(i_idx)
+                            matched_true.add(j_idx)
+                            tp_b += 1
+                            loc_sum_b += float(dist)
+                            loc_count_b += 1
+                    fp_b = int(n_pred - len(matched_pred))
+                    fn_b = int(n_true - len(matched_true))
 
-                # Tree IoU via Hungarian on instance IoU matrix (like eval_pol.calculate_tree_iou_hungarian)
-                if n_pred > 0 and n_true > 0:
-                    # Build IoU matrix between instances
-                    iou_mat = np.zeros((n_pred, n_true), dtype=float)
-                    for i in range(1, n_pred + 1):
-                        pred_mask_i = (pred_labeled == i)
-                        pred_area_i = pred_mask_i.sum()
-                        if pred_area_i == 0:
-                            continue
-                        for j in range(1, n_true + 1):
-                            true_mask_j = (true_labeled == j)
-                            inter = np.logical_and(pred_mask_i, true_mask_j).sum()
-                            union = pred_area_i + true_mask_j.sum() - inter
-                            iou_mat[i - 1, j - 1] = (inter / union) if union > 0 else 0.0
+                # Per-image instance rates
+                prec_b = float(tp_b / (tp_b + fp_b)) if (tp_b + fp_b) > 0 else 0.0
+                rec_b  = float(tp_b / (tp_b + fn_b)) if (tp_b + fn_b) > 0 else 0.0
+                f1i_b  = float(2 * prec_b * rec_b / (prec_b + rec_b)) if (prec_b + rec_b) > 0 else 0.0
+                cerr_b = float(loc_sum_b / loc_count_b) if loc_count_b > 0 else float("nan")
 
-                    # Hungarian on negative IoU (to maximize IoU)
-                    row_ind, col_ind = linear_sum_assignment(-iou_mat)
-                    batch_tp = 0
-                    matched_preds = set()
-                    matched_trues = set()
-                    for r, c in zip(row_ind, col_ind):
-                        if iou_mat[r, c] >= instance_iou_thresh:
-                            batch_tp += 1
-                            matched_preds.add(r)
-                            matched_trues.add(c)
-                    batch_fp = n_pred - len(matched_preds)
-                    batch_fn = n_true - len(matched_trues)
-                    tree_tp += batch_tp
-                    tree_fp_total += batch_fp
-                    tree_fn_total += batch_fn
-                else:
-                    tree_fp_total += int(n_pred)
-                    tree_fn_total += int(n_true)
+                # Per-image Tree IoU via utility on singleton batch
+                tree_stats_b = tree_iou_from_masks(
+                    pred_b[None, ...], true_b[None, ...], buffer_mask=buffer_mask[b][None, ...],
+                    seg_threshold=seg_thresh, iou_thresh=instance_iou_thresh,
+                )
 
-            # Instance precision/recall/F1 from centroid-based matching
-            instance_precision = float(total_tp / (total_tp + total_fp)) if (total_tp + total_fp) > 0 else 0.0
-            instance_recall = float(total_tp / (total_tp + total_fn)) if (total_tp + total_fn) > 0 else 0.0
-            instance_f1_score = float(2 * instance_precision * instance_recall / (instance_precision + instance_recall)) if (instance_precision + instance_recall) > 0 else 0.0
-            centroid_err = float(loc_sum / loc_count) if loc_count > 0 else float("nan")
+                per_image_metrics.append({
+                    # Segmentation/mask metrics
+                    "iou_segments": iou_b,
+                    "f_score_segments": f1_b,
+                    # Pixel-area metrics
+                    "pixel_precision": pixel_precision_b,
+                    "pixel_recall": pixel_recall_b,
+                    "pixel_f1_score": pixel_f1_b,
+                    # Instance (centroid) rates and localization
+                    "instance_precision": prec_b,
+                    "instance_recall": rec_b,
+                    "instance_f1_score": f1i_b,
+                    "centroid_err": cerr_b,
+                    "centroid_err_sum": float(loc_sum_b),
+                    "centroid_err_count": int(loc_count_b),
+                    # Integer counts for micro-aggregation
+                    "tp": int(tp_b),
+                    "fp": int(fp_b),
+                    "fn": int(fn_b),
+                    "pred_peaks": int(n_pred),
+                    "true_peaks": int(n_true),
+                    # Tree IoU and counts per image
+                    "tree_iou": float(tree_stats_b["tree_iou"]),
+                    "tree_tp": int(tree_stats_b["tree_tp"]),
+                    "tree_fp": int(tree_stats_b["tree_fp"]),
+                    "tree_fn": int(tree_stats_b["tree_fn"]),
+                })
 
-            # Tree IoU (set-level, IoU-thresholded matching)
-            tree_iou = float(tree_tp / (tree_tp + tree_fp_total + tree_fn_total)) if (tree_tp + tree_fp_total + tree_fn_total) > 0 else 0.0
-
-            return {
-                "iou_segments": iou_segments,
-                "f_score_segments": f_score_segments,
-                "pixel_precision": pixel_precision,
-                "pixel_recall": pixel_recall,
-                "pixel_f1_score": pixel_f1_score,
-                # Instance-level (centroid-based)
-                "instance_precision": instance_precision,
-                "instance_recall": instance_recall,
-                "instance_f1_score": instance_f1_score,
-                "centroid_err": centroid_err,
-                "centroid_err_sum": float(loc_sum),
-                "centroid_err_count": int(loc_count),
-                "tp": int(total_tp),
-                "fp": int(total_fp),
-                "fn": int(total_fn),
-                "pred_peaks": int(total_pred_instances),
-                "true_peaks": int(total_true_instances),
-                # Additional metric mirroring eval_pol tree IoU
-                "tree_iou": tree_iou,
-            }
+            # Aggregate across images in this batch with CIs
+            batch_agg = aggregate_epoch_metrics_with_ci(per_image_metrics, confidence=0.95)
+            return batch_agg
 
         logger.info("Configured hybrid loss + sigmoid activation with defaults aligned to eval_pol (instance_iou_threshold=0.4, centroid_max_distance_px=50).")
         return criterion, metrics
