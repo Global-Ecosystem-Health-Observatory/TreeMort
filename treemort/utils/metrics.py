@@ -165,10 +165,12 @@ def tree_iou_from_masks(pred_probs: torch.Tensor,
                         true_mask: torch.Tensor,
                         buffer_mask: torch.Tensor = None,
                         seg_threshold: float = 0.5,
-                        iou_thresh: float = 0.4):
+                        iou_thresh: float | None = None):
     """Compute Tree IoU via Hungarian matching on connected components.
 
-    Returns a dict with integer counts and scalar tree_iou.
+    If `iou_thresh` is None, it defaults to `seg_threshold`, so a single
+    threshold governs both binarization and instance matching. Returns a dict
+    with integer counts and scalar tree_iou.
     """
     if isinstance(pred_probs, torch.Tensor):
         pred_probs_np = pred_probs.detach().cpu().numpy()
@@ -185,11 +187,11 @@ def tree_iou_from_masks(pred_probs: torch.Tensor,
     else:
         buffer_np = None
 
-    # Binarize with optional buffer
+    # Binarize with optional buffer (use seg_threshold consistently)
     pred_bin = (pred_probs_np > seg_threshold).astype(np.uint8)
     true_bin = (true_mask_np > seg_threshold).astype(np.uint8)
     if buffer_np is not None:
-        m = (buffer_np > 0.5).astype(np.uint8)
+        m = (buffer_np > seg_threshold).astype(np.uint8)
         pred_bin = (pred_bin * m).astype(np.uint8)
         true_bin = (true_bin * m).astype(np.uint8)
 
@@ -202,8 +204,12 @@ def tree_iou_from_masks(pred_probs: torch.Tensor,
     tree_tp = 0
     tree_fp = 0
     tree_fn = 0
+
+    # If no explicit instance IoU threshold is provided, tie it to seg_threshold
+    iou_thresh_local = seg_threshold if (iou_thresh is None) else iou_thresh
+
     for b in range(B):
-        tp, fp, fn = _tree_iou_counts_single(pred_bin[b], true_bin[b], iou_thresh)
+        tp, fp, fn = _tree_iou_counts_single(pred_bin[b], true_bin[b], iou_thresh_local)
         tree_tp += tp
         tree_fp += fp
         tree_fn += fn
@@ -555,21 +561,21 @@ def log_metrics(metrics, phase):
     # Header
     logger.info(f"{phase} Metrics Summary:\n" + "-" * 34)
 
-    # 1) Segmentation (mask) metrics — pixel-space on binary masks within buffer
+    # 1) IoU metrics — group Pixel IoU and Tree IoU together
     seg_iou = g("iou_segments")
-    seg_f1  = g("f_score_segments")
-    if seg_iou is not None or seg_f1 is not None:
-        logger.info("Segmentation (Pixel-Mask) Metrics:")
+    t_iou   = g("tree_iou")
+    if (seg_iou is not None) or (t_iou is not None):
+        logger.info("IoU Metrics:")
         if seg_iou is not None:
             extra = ""
             if all(k in metrics for k in ("ci_iou_segments_low", "ci_iou_segments_high", "std_iou_segments")):
                 extra = f" (CI: {metrics['ci_iou_segments_low']:.4f}-{metrics['ci_iou_segments_high']:.4f}, Std: {metrics['std_iou_segments']:.4f})"
-            logger.info(f"  Pixel IoU            : {_fmt_f(seg_iou)}{extra}")
-        if seg_f1 is not None:
+            logger.info(f"  Pixel IoU (mask-level)           : {_fmt_f(seg_iou)}{extra}")
+        if t_iou is not None:
             extra = ""
-            if all(k in metrics for k in ("ci_f_score_segments_low", "ci_f_score_segments_high", "std_f_score_segments")):
-                extra = f" (CI: {metrics['ci_f_score_segments_low']:.4f}-{metrics['ci_f_score_segments_high']:.4f}, Std: {metrics['std_f_score_segments']:.4f})"
-            logger.info(f"  Segment F1-Score     : {_fmt_f(seg_f1)}{extra}")
+            if all(k in metrics for k in ("ci_tree_iou_low", "ci_tree_iou_high", "std_tree_iou")):
+                extra = f" (CI: {metrics['ci_tree_iou_low']:.4f}-{metrics['ci_tree_iou_high']:.4f}, Std: {metrics['std_tree_iou']:.4f})"
+            logger.info(f"  Tree IoU (instance/set-level, IoU-matched) : {_fmt_f(t_iou)}{extra}")
 
     # 2) Pixel-area metrics (area-based precision/recall/F1)
     p_prec = g("pixel_precision")
@@ -581,60 +587,53 @@ def log_metrics(metrics, phase):
             extra = ""
             if all(k in metrics for k in ("ci_pixel_precision_low", "ci_pixel_precision_high", "std_pixel_precision")):
                 extra = f" (CI: {metrics['ci_pixel_precision_low']:.4f}-{metrics['ci_pixel_precision_high']:.4f}, Std: {metrics['std_pixel_precision']:.4f})"
-            logger.info(f"  Pixel Precision      : {_fmt_f(p_prec)}{extra}")
+            logger.info(f"  Pixel Precision (area)            : {_fmt_f(p_prec)}{extra}")
         if p_rec is not None:
             extra = ""
             if all(k in metrics for k in ("ci_pixel_recall_low", "ci_pixel_recall_high", "std_pixel_recall")):
                 extra = f" (CI: {metrics['ci_pixel_recall_low']:.4f}-{metrics['ci_pixel_recall_high']:.4f}, Std: {metrics['std_pixel_recall']:.4f})"
-            logger.info(f"  Pixel Recall         : {_fmt_f(p_rec)}{extra}")
+            logger.info(f"  Pixel Recall (area)               : {_fmt_f(p_rec)}{extra}")
         if p_f1 is not None:
             extra = ""
             if all(k in metrics for k in ("ci_pixel_f1_score_low", "ci_pixel_f1_score_high", "std_pixel_f1_score")):
                 extra = f" (CI: {metrics['ci_pixel_f1_score_low']:.4f}-{metrics['ci_pixel_f1_score_high']:.4f}, Std: {metrics['std_pixel_f1_score']:.4f})"
-            logger.info(f"  Pixel F1-Score       : {_fmt_f(p_f1)}{extra}")
+            logger.info(f"  Pixel F1-Score (area)             : {_fmt_f(p_f1)}{extra}")
 
     # 3) Instance (centroid) metrics
     i_prec = g("instance_precision")
     i_rec  = g("instance_recall")
     i_f1   = g("instance_f1_score")
     if any(v is not None for v in (i_prec, i_rec, i_f1)):
-        logger.info("Instance (Centroid) Metrics:")
+        logger.info("Instance Metrics (centroid/distance-based):")
         if i_prec is not None:
             extra = ""
             if all(k in metrics for k in ("ci_instance_precision_low", "ci_instance_precision_high", "std_instance_precision")):
                 extra = f" (CI: {metrics['ci_instance_precision_low']:.4f}-{metrics['ci_instance_precision_high']:.4f}, Std: {metrics['std_instance_precision']:.4f})"
-            logger.info(f"  Instance Precision   : {_fmt_f(i_prec)}{extra}")
+            logger.info(f"  Centroid Precision (distance-based) : {_fmt_f(i_prec)}{extra}")
         if i_rec is not None:
             extra = ""
             if all(k in metrics for k in ("ci_instance_recall_low", "ci_instance_recall_high", "std_instance_recall")):
                 extra = f" (CI: {metrics['ci_instance_recall_low']:.4f}-{metrics['ci_instance_recall_high']:.4f}, Std: {metrics['std_instance_recall']:.4f})"
-            logger.info(f"  Instance Recall      : {_fmt_f(i_rec)}{extra}")
+            logger.info(f"  Centroid Recall (distance-based)    : {_fmt_f(i_rec)}{extra}")
         if i_f1 is not None:
             extra = ""
             if all(k in metrics for k in ("ci_instance_f1_score_low", "ci_instance_f1_score_high", "std_instance_f1_score")):
                 extra = f" (CI: {metrics['ci_instance_f1_score_low']:.4f}-{metrics['ci_instance_f1_score_high']:.4f}, Std: {metrics['std_instance_f1_score']:.4f})"
-            logger.info(f"  Instance F1-Score    : {_fmt_f(i_f1)}{extra}")
+            logger.info(f"  Centroid F1-Score (distance-based)  : {_fmt_f(i_f1)}{extra}")
 
-    # 4) Tree-level metric
-    t_iou = g("tree_iou")
-    if t_iou is not None:
-        logger.info("Set-Level Metric:")
-        extra = ""
-        if all(k in metrics for k in ("ci_tree_iou_low", "ci_tree_iou_high", "std_tree_iou")):
-            extra = f" (CI: {metrics['ci_tree_iou_low']:.4f}-{metrics['ci_tree_iou_high']:.4f}, Std: {metrics['std_tree_iou']:.4f})"
-        logger.info(f"  Tree IoU             : {_fmt_f(t_iou)}{extra}")
+    # (Tree-level metric section removed; now included above with IoU metrics)
 
     # 5) Counts
     counts = []
     for key, label in (
-        ("tp", "Instance TP"),
-        ("fp", "Instance FP"),
-        ("fn", "Instance FN"),
-        ("pred_peaks", "Pred Peaks"),
-        ("true_peaks", "True Peaks"),
-        ("tree_tp", "Tree TP"),
-        ("tree_fp", "Tree FP"),
-        ("tree_fn", "Tree FN"),
+        ("tp", "Centroid TP (distance-based)"),
+        ("fp", "Centroid FP (distance-based)"),
+        ("fn", "Centroid FN (distance-based)"),
+        ("pred_peaks", "Predicted Instances (peaks)"),
+        ("true_peaks", "True Instances (peaks)"),
+        ("tree_tp", "Tree TP (IoU-matched)"),
+        ("tree_fp", "Tree FP (IoU-matched)"),
+        ("tree_fn", "Tree FN (IoU-matched)"),
     ):
         if key in metrics:
             counts.append((label, _fmt_i(metrics[key])))
@@ -650,7 +649,7 @@ def log_metrics(metrics, phase):
         try:
             val = float(cerr.detach().cpu().item()) if isinstance(cerr, torch.Tensor) else float(cerr)
             if not (isinstance(val, float) and (math.isnan(val) or np.isnan(val))):
-                logger.info(f"Centroid Error         : {_fmt_f(val)}")
+                logger.info(f"Centroid Localization Error (px)    : {_fmt_f(val)}")
         except Exception:
             pass
     if "centroid_err_count" in metrics:

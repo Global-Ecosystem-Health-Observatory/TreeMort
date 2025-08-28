@@ -47,7 +47,9 @@ def configure_loss_and_metrics(conf, class_weights=None):
             act_name = getattr(conf, "activation", "sigmoid")  # use sigmoid
             # Instance/centroid thresholds (in pixels)
             max_centroid_dist = getattr(conf, "centroid_max_distance_px", 50)
-            instance_iou_thresh = getattr(conf, "instance_iou_threshold", 0.4)
+
+            # Use a single knob for all binarizations and instance matching
+            instance_iou_thresh = seg_thresh
 
             # Extract masks
             pred_mask = pred[:, 0, :, :]
@@ -178,7 +180,7 @@ def configure_loss_and_metrics(conf, class_weights=None):
             batch_agg = aggregate_epoch_metrics_with_ci(per_image_metrics, confidence=0.95)
             return batch_agg
 
-        logger.info("Configured hybrid loss + sigmoid activation with defaults aligned to eval_pol (instance_iou_threshold=0.4, centroid_max_distance_px=50).")
+        logger.info("Configured hybrid loss + sigmoid activation; using segment_threshold for both binarization and instance IoU; centroid_max_distance_px=50.")
         return criterion, metrics
 
     elif conf.loss == "mse":
