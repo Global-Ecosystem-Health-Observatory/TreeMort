@@ -107,6 +107,7 @@ def build_parser(config_files):
     data_group.add("--nir-rgb-order",   type=int, nargs='+', default=[3, 0, 1, 2], help="Order of NIR, Red, Green, and Blue channels in the input imagery.")
     data_group.add("--normalize-imagewise",   action="store_true", help="normalize imagewise")
     data_group.add("--normalize-channelwise", action="store_true", help="normalize channelwise")
+    data_group.add("--test-only", action="store_true", default=False, help="run evaluation on entire data as test set")
 
     inference_group = parser.add_argument_group('Inference')
     inference_group.add("--min-area", type=float, default=1.0, help="Minimum area (in pixels) for retaining a detected region.")

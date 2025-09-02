@@ -5,3 +5,5 @@ include = base_config.txt
 data-folder = ${TREEMORT_DATA_PATH}/Germany/RGBNIR/10cm
 
 hdf5-file = Germany_RGBNIR_10cm.h5
+
+test-only = True

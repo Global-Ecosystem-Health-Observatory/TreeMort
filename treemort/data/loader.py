@@ -16,11 +16,33 @@ def prepare_datasets(conf):
 
     image_patch_map = load_and_organize_data(hdf5_path)
 
+    random.seed(42)  # makes loader deterministic
+
+    # Special test-only mode: skip splitting, use all as test set, no train/val
+    if getattr(conf, "test_only", False):
+        image_processor = get_image_processor(conf.model, conf.backbone)
+    
+        test_dataset = DeadTreeDataset(
+            hdf5_file=hdf5_path,
+            keys=list(image_patch_map.keys()),
+            crop_size=conf.test_crop_size,
+            transform=None,
+            image_processor=image_processor,
+        )
+    
+        test_loader = DataLoader(
+            test_dataset,
+            batch_size=conf.test_batch_size,
+            sampler=SequentialSampler(test_dataset),
+            shuffle=False,
+            drop_last=False,
+        )
+    
+        return None, None, test_loader
+
     train_keys, val_keys, test_keys = stratify_images_by_region(
         image_patch_map, val_ratio=conf.val_size, test_ratio=conf.test_size
     )
-
-    random.seed(42)  # makes loader deterministic
 
     train_transform = Augmentations()
     val_transform = None
