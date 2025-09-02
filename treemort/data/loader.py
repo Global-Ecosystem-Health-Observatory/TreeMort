@@ -22,9 +22,12 @@ def prepare_datasets(conf):
     if getattr(conf, "test_only", False):
         image_processor = get_image_processor(conf.model, conf.backbone)
     
+        # Flatten all patch-level keys from the image->patches map
+        all_patch_keys = [p for patches in image_patch_map.values() for p in patches]
+
         test_dataset = DeadTreeDataset(
             hdf5_file=hdf5_path,
-            keys=list(image_patch_map.keys()),
+            keys=all_patch_keys,
             crop_size=conf.test_crop_size,
             transform=None,
             image_processor=image_processor,
@@ -38,6 +41,7 @@ def prepare_datasets(conf):
             drop_last=False,
         )
     
+        print(f"[test_only] Using {len(all_patch_keys)} HDF5 patch keys for testing.")
         return None, None, test_loader
 
     train_keys, val_keys, test_keys = stratify_images_by_region(
