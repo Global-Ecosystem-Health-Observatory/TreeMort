@@ -28,18 +28,41 @@ def run(conf, eval_only):
 
     logger.info("Preparing datasets...")
     train_loader, val_loader, test_loader = prepare_datasets(conf)
-    logger.info(f"Datasets prepared: Train({len(train_loader)}), Val({len(val_loader)}), Test({len(test_loader)})")
+
+    # Safely compute lengths when some loaders are None (e.g., test-only mode)
+    train_len = len(train_loader) if train_loader is not None else 0
+    val_len = len(val_loader) if val_loader is not None else 0
+    test_len = len(test_loader) if test_loader is not None else 0
+
+    logger.info(
+        f"Datasets prepared: Train({train_len}), Val({val_len}), Test({test_len})"
+    )
+
+    # If test-only is enabled in config, force eval-only behavior
+    if getattr(conf, "test_only", False) and not eval_only:
+        logger.warning("`test_only` is True but `--eval-only` not set. Forcing evaluation-only mode.")
+        eval_only = True
 
     logger.info("Loading or resuming model...")
-    model, optimizer, schedular, criterion, metrics, callbacks = resume_or_load(conf, id2label, len(train_loader), device)
+    # Use a sensible length for model setup even in test-only mode
+    num_steps_for_setup = train_len if train_len > 0 else test_len
+    model, optimizer, schedular, criterion, metrics, callbacks = resume_or_load(
+        conf, id2label, num_steps_for_setup, device
+    )
     logger.info("Model, optimizer, criterion, metrics, and callbacks are set up.")
 
     if eval_only:
+        if test_loader is None or test_len == 0:
+            raise RuntimeError("Evaluation requested but no test_loader is available (got None or empty).")
         logger.info("Evaluation-only mode started.")
-        evaluator(model, test_loader, len(test_loader), metrics, conf)
+        evaluator(model, test_loader, test_len, metrics, conf)
         logger.info("Evaluation completed.")
 
     else:
+        if train_loader is None or val_loader is None:
+            raise RuntimeError(
+                "Training requested but train/val loaders are None. Set `--eval-only` or disable `test_only` in config."
+            )
         logger.info("Training mode started.")
         trainer(
             model,
