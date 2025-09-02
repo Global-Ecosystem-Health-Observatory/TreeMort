@@ -1,4 +1,5 @@
 import random
+import h5py
 
 from pathlib import Path
 from torch.utils.data import DataLoader, SequentialSampler
@@ -22,12 +23,38 @@ def prepare_datasets(conf):
     if getattr(conf, "test_only", False):
         image_processor = get_image_processor(conf.model, conf.backbone)
     
-        # Flatten all patch-level keys from the image->patches map
-        all_patch_keys = [p for patches in image_patch_map.values() for p in patches]
+        # Flatten and normalize patch-level keys from the image->patches map
+        raw_patch_items = [p for patches in image_patch_map.values() for p in patches]
+
+        normalized_keys = []
+        for item in raw_patch_items:
+            # If item is (key, *extra), unwrap the first element
+            key = item[0] if isinstance(item, (tuple, list)) else item
+            # Coerce to str if necessary
+            if isinstance(key, bytes):
+                key = key.decode("utf-8")
+            elif not isinstance(key, str):
+                key = str(key)
+            normalized_keys.append(key)
+
+        # De-duplicate while preserving order
+        seen = set()
+        dedup_keys = []
+        for k in normalized_keys:
+            if k not in seen:
+                seen.add(k)
+                dedup_keys.append(k)
+
+        # Keep only keys that exist in the HDF5 file to prevent KeyErrors
+        with h5py.File(hdf5_path, "r") as hf:
+            valid_keys = [k for k in dedup_keys if k in hf]
+        missing = len(dedup_keys) - len(valid_keys)
+        if missing > 0:
+            print(f"[test_only][warn] Skipped {missing} keys not present in HDF5.")
 
         test_dataset = DeadTreeDataset(
             hdf5_file=hdf5_path,
-            keys=all_patch_keys,
+            keys=valid_keys,
             crop_size=conf.test_crop_size,
             transform=None,
             image_processor=image_processor,
@@ -41,7 +68,7 @@ def prepare_datasets(conf):
             drop_last=False,
         )
     
-        print(f"[test_only] Using {len(all_patch_keys)} HDF5 patch keys for testing.")
+        print(f"[test_only] Using {len(valid_keys)} HDF5 patch keys for testing.")
         return None, None, test_loader
 
     train_keys, val_keys, test_keys = stratify_images_by_region(
