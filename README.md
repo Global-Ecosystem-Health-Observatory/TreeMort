@@ -1,4 +1,22 @@
 # TreeMort Segmentation
+This repository shares the official implementation of [Dual-Task Learning for Dead Tree Detection and Segmentation with Hybrid Self-Attention U-Nets in Aerial Imagery](https://arxiv.org/abs/2503.21438).
+
+## Citation
+If you use method(s) and the dataset(s) provided in this repository, please cite the following paper:
+
+A. U. Rahman, E. Heinaro, M. Ahishali, and S. Junttila, "Dual-Task Learning for Dead Tree Detection and Segmentation with Hybrid Self-Attention U-Nets in Aerial Imagery," _arXiv preprint arXiv:2503.21438_, 2025.
+
+```
+@misc{rahman2025dualtasklearningdeadtree,
+      title={Dual-Task Learning for Dead Tree Detection and Segmentation with Hybrid Self-Attention U-Nets in Aerial Imagery}, 
+      author={Anis Ur Rahman and Einari Heinaro and Mete Ahishali and Samuli Junttila},
+      year={2025},
+      eprint={2503.21438},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV},
+      url={https://arxiv.org/abs/2503.21438}, 
+}
+```
 
 ## Getting Started (Puhti)
 
