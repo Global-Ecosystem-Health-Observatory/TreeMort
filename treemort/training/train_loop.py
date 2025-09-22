@@ -1,9 +1,10 @@
+from xml.parsers.expat import model
 import torch
 
 from tqdm import tqdm
 from collections import defaultdict
 
-from treemort.training.output_processing import process_model_output
+from treemort.training.output_processing import process_model_output, prepare_pred_and_target
 
 
 def train_one_epoch(model, optimizer, scheduler, criterion, metrics, train_loader, conf, device):
@@ -21,25 +22,18 @@ def train_one_epoch(model, optimizer, scheduler, criterion, metrics, train_loade
         
         optimizer.zero_grad()
 
-        logits = model(images)  # [B,3,H,W]
-        
-        cropped_logits = torch.cat([
-            center_crop(logits[:, 0:1, :, :], (h, w)),  # Mask
-            center_crop(logits[:, 1:2, :, :], (h, w)),  # Centroid
-            center_crop(logits[:, 2:3, :, :], (h, w))   # Hybrid
-        ], dim=1)  # [B,3,h,w]
+        logits = process_model_output(model, images, conf.model)
+        _, _, h, w = labels.shape
+        preds, targets, buffer = prepare_pred_and_target(logits, labels, (h, w))
 
-        cropped_labels = center_crop(labels, (h, w))  # [B,4,h,w]
-        
-        loss = criterion(cropped_logits, cropped_labels)
+        loss = criterion(preds, targets, buffer=buffer)
         loss.backward()
+
         optimizer.step()
-        
         scheduler.step()
 
         with torch.no_grad():
-            pred_probs = torch.sigmoid(cropped_logits)
-            batch_metrics = metrics(pred_probs, cropped_labels)
+            batch_metrics = metrics(preds, targets, buffer=buffer)
 
         train_loss += loss.item()
         for key, value in batch_metrics.items():
@@ -56,11 +50,3 @@ def train_one_epoch(model, optimizer, scheduler, criterion, metrics, train_loade
         train_metrics[key] /= len(train_loader)
 
     return train_loss, dict(train_metrics)
-
-
-def center_crop(tensor, target_size):
-    _, _, h, w = tensor.size()
-    th, tw = target_size
-    i = (h - th) // 2
-    j = (w - tw) // 2
-    return tensor[..., i:i+th, j:j+tw]

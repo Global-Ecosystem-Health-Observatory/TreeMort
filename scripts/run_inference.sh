@@ -1,81 +1,5 @@
 #!/bin/bash
 
-# Parse input flags
-POST_PROCESS=""
-LIST_FILE=""
-CHUNKS=""
-CHUNK_DIR=""
-
-while [[ "$#" -gt 0 ]]; do
-    case "$1" in
-        --post-process)
-            POST_PROCESS="--post-process"
-            shift
-            ;;
-        --list-file)
-            if [[ -n "$2" ]]; then
-                LIST_FILE="$2"
-                shift 2
-            else
-                echo "[ERROR] --list-file requires a filename argument."
-                exit 1
-            fi
-            ;;
-        --chunks)
-            if [[ -n "$2" && "$2" =~ ^[0-9]+$ ]]; then
-                CHUNKS="$2"
-                shift 2
-            else
-                echo "[ERROR] --chunks requires a numeric argument."
-                exit 1
-            fi
-            ;;
-        *)
-            echo "[ERROR] Unknown parameter passed: $1"
-            exit 1
-            ;;
-    esac
-done
-
-# If chunking is requested, split the list file into CHUNKS parts
-if [[ -n "$LIST_FILE" && -n "$CHUNKS" ]]; then
-    echo "[INFO] Splitting $LIST_FILE into $CHUNKS chunks"
-    TOTAL_LINES=$(wc -l < "$LIST_FILE" | tr -d ' ')
-    CHUNK_SIZE=$(( (TOTAL_LINES + CHUNKS - 1) / CHUNKS ))
-    mkdir -p "$TREEMORT_DATA_PATH/tmp"
-    CHUNK_DIR=$(mktemp -d "$TREEMORT_DATA_PATH/tmp/chunk_dir.XXXXXX")
-    SUFFIX_LENGTH=${#CHUNKS}
-    split -d -a "${SUFFIX_LENGTH}" -l "$CHUNK_SIZE" "$LIST_FILE" "$CHUNK_DIR/chunk_"
-    export SUFFIX_LENGTH
-fi
-
-if [[ -n "$POST_PROCESS" ]]; then
-    echo "[INFO] Post-processing is enabled"
-fi
-if [[ -n "$LIST_FILE" ]]; then
-    echo "[INFO] Processing only files listed in: $LIST_FILE"
-fi
-
-# Configure job array for individual image processing if list-file is provided
-if [[ -n "$LIST_FILE" && -n "$CHUNKS" ]]; then
-    ARRAY_DIRECTIVE="#SBATCH --array=1-$CHUNKS"
-elif [[ -n "$LIST_FILE" ]]; then
-    if [[ ! -f "$LIST_FILE" ]]; then
-        echo "[ERROR] List file not found: $LIST_FILE"
-        exit 1
-    fi
-    NUM_FILES=$(wc -l < "$LIST_FILE" | tr -d ' ')
-    if (( NUM_FILES > 1 )); then
-        ARRAY_DIRECTIVE="#SBATCH --array=1-$NUM_FILES"
-        echo "[INFO] Using Slurm array for $NUM_FILES tasks"
-    else
-        echo "[INFO] Only $NUM_FILES image in list; running single-task job"
-        ARRAY_DIRECTIVE=""
-    fi
-else
-    ARRAY_DIRECTIVE=""
-fi
-
 # Set default HPC type to "puhti"
 HPC_TYPE=${HPC_TYPE:-"puhti"}
 
@@ -94,27 +18,22 @@ else
     GPU_DIRECTIVE="#SBATCH --gres=gpu:v100:1"
 fi
 
+# Create SBATCH script
 SBATCH_SCRIPT=$(mktemp)
 
-cat <<EOT > "$SBATCH_SCRIPT"
+# SLURM Job Configuration
+cat <<EOT > $SBATCH_SCRIPT
 #!/bin/bash
 #SBATCH --job-name=treemort-inference
 #SBATCH --account=$PROJECT_NAME
 #SBATCH --output=output/stdout/%A_%a.out
 #SBATCH --error=output/stderr/%A_%a.err
 #SBATCH --ntasks=1
-$ARRAY_DIRECTIVE
-#SBATCH --cpus-per-task=8
+#SBATCH --cpus-per-task=2
 #SBATCH --time=05:00:00
 #SBATCH --partition=$PARTITION_NAME
-#SBATCH --mem=48G
+#SBATCH --mem-per-cpu=24000
 $GPU_DIRECTIVE
-
-export LIST_FILE="$LIST_FILE"
-export POST_PROCESS="$POST_PROCESS"
-export CHUNKS="$CHUNKS"
-export CHUNK_DIR="$CHUNK_DIR"
-export SUFFIX_LENGTH="$SUFFIX_LENGTH"
 
 export TRANSFORMERS_CACHE="$TREEMORT_DATA_PATH/huggingface_cache"
 export HF_HOME="$TREEMORT_DATA_PATH/huggingface_cache"
@@ -159,50 +78,70 @@ elif [ ! -d "$OUTPUT_PATH" ]; then
     mkdir -p "$OUTPUT_PATH" || { echo "[ERROR] Failed to create output directory."; exit 1; }
 fi
 
-# If running as an array task and a list file is provided
-if [[ -n "\$SLURM_ARRAY_TASK_ID" && -n "\$LIST_FILE" ]]; then
-    if [[ -n "\$CHUNKS" ]]; then
-        CHUNK_FILE="\$CHUNK_DIR/chunk_\$(printf "%0${SUFFIX_LENGTH}d" "${SLURM_ARRAY_TASK_ID}")"
-        echo "[INFO] Array task #\${SLURM_ARRAY_TASK_ID} → processing chunk file \$CHUNK_FILE"
-        srun python3 "\$TREEMORT_REPO_PATH/inference/engine.py" \
-            "\$DATA_PATH" \
-            --list-file "\$CHUNK_FILE" \
-            --config "\$CONFIG_PATH" \
-            --outdir "\$OUTPUT_PATH" \
-            \$POST_PROCESS
-        exit \$?
-    else
-        IMAGE_REL_PATH=\$(sed -n "\${SLURM_ARRAY_TASK_ID}p" "\$LIST_FILE")
-        IMAGE_PATH="\$DATA_PATH/\$IMAGE_REL_PATH"
-        echo "[INFO] Array task #\${SLURM_ARRAY_TASK_ID} → \$IMAGE_PATH"
-        srun python3 "\$TREEMORT_REPO_PATH/inference/engine.py" \
-            "\$IMAGE_PATH" \
-            --config "\$CONFIG_PATH" \
-            --outdir "\$OUTPUT_PATH" \
-            \$POST_PROCESS
-        exit \$?
-    fi
+POST_PROCESS=""
+LIST_FILE=""
+
+while [[ "\$#" -gt 0 ]]; do
+    case "\$1" in
+        --post-process)
+            POST_PROCESS="--post-process"
+            shift
+            ;;
+        --list-file)
+            if [[ -n "\$2" ]]; then
+                LIST_FILE="\$2"
+                shift 2
+            else
+                echo "[ERROR] --list-file requires a filename argument."
+                exit 1
+            fi
+            ;;
+        *)
+            echo "[ERROR] Unknown parameter passed: \$1"
+            exit 1
+            ;;
+    esac
+done
+
+if [ -n "$POST_PROCESS" ]; then
+    echo "[INFO] Post-processing is enabled"
+fi
+if [[ -n "$LIST_FILE" ]]; then
+    echo "[INFO] Processing only files listed in: $LIST_FILE"
 fi
 
-# Otherwise (no array OR missing LIST_FILE), run on full $DATA_PATH
+echo "[INFO] Pre-downloading Beit and Maskformer models..."
+rm -rf "$TREEMORT_DATA_PATH/huggingface_cache/microsoft/beit-base-finetuned-ade-640-640"
+python3 -c "from transformers import AutoModel; AutoModel.from_pretrained('microsoft/beit-base-finetuned-ade-640-640', cache_dir='$TREEMORT_DATA_PATH/huggingface_cache')"
+
+rm -rf "$TREEMORT_DATA_PATH/huggingface_cache/facebook/maskformer-swin-base-ade"
+python3 -c "from transformers import AutoModel; AutoModel.from_pretrained('facebook/maskformer-swin-base-ade', cache_dir='$TREEMORT_DATA_PATH/huggingface_cache')"
+
+rm -rf "$TREEMORT_DATA_PATH/huggingface_cache/facebook/detr-resnet-50-panoptic"
+python3 -c "from transformers import AutoModel; AutoModel.from_pretrained('facebook/detr-resnet-50-panoptic', cache_dir='$TREEMORT_DATA_PATH/huggingface_cache')"
+
+echo "[INFO] Starting inference..."
 srun python3 "$TREEMORT_REPO_PATH/inference/engine.py" \
     "$DATA_PATH" \
     --config "$CONFIG_PATH" \
+    --model-config "$MODEL_CONFIG_PATH" \
+    --data-config "$DATA_CONFIG_PATH" \
     --outdir "$OUTPUT_PATH" \
     $POST_PROCESS \
     ${LIST_FILE:+--list-file "$LIST_FILE"}
 
-EXIT_STATUS=\$?
-if [ \$EXIT_STATUS -ne 0 ]; then
-    echo "[ERROR] Job failed with exit status \$EXIT_STATUS"
+EXIT_STATUS=$?
+if [ $EXIT_STATUS -ne 0 ]; then
+    echo "[ERROR] Job failed with exit status $EXIT_STATUS"
 else
     echo "[INFO] Job completed successfully"
 fi
 
-exit \$EXIT_STATUS
+exit $EXIT_STATUS
 EOT
 
 echo "Generated SBATCH script:"
 cat $SBATCH_SCRIPT
 
-sbatch $SBATCH_SCRIPT
+# Submit SLURM Job
+sbatch $SBATCH_SCRIPT "$@"

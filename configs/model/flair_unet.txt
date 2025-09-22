@@ -1,0 +1,7 @@
+# settings for TreeMort-1T-UNet (self attention unet with flair backbone)
+
+include = base_config.txt
+
+model = flair_unet
+
+resume = True

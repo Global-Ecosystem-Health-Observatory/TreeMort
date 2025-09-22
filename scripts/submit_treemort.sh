@@ -34,26 +34,27 @@ else
 fi
 
 # Set necessary environment variables for inference.
-export CONFIG_PATH="$TREEMORT_REPO_PATH/configs/inference/${DATA_TYPE}.txt"
 export DATA_CONFIG_PATH="$TREEMORT_REPO_PATH/configs/data/${DATA_TYPE}.txt"
 export MODEL_CONFIG_PATH="$TREEMORT_REPO_PATH/configs/model/${MODEL_TYPE}.txt"
 
-export PREDICTIONS_FOLDER="Predictions_${MODEL_TYPE}"
-if [[ "$@" == *"--post-process"* ]]; then
-    PREDICTIONS_FOLDER="${PREDICTIONS_FOLDER}_post_process"
-fi
-
 if [ "$DATA_TYPE" == "finland" ]; then
     export DATA_PATH="$TREEMORT_DATA_PATH/Finland/RGBNIR/25cm"
-    export OUTPUT_PATH="$TREEMORT_DATA_PATH/Finland/$PREDICTIONS_FOLDER"
 elif [ "$DATA_TYPE" == "poland" ]; then
     export DATA_PATH="$TREEMORT_DATA_PATH/Poland/RGBNIR/25cm"
-    export OUTPUT_PATH="$TREEMORT_DATA_PATH/Poland/$PREDICTIONS_FOLDER"
+elif [ "$DATA_TYPE" == "estonia" ]; then
+    export DATA_PATH="$TREEMORT_DATA_PATH/Estonia/RGBNIR/25cm"
+elif [ "$DATA_TYPE" == "germany" ]; then
+    export DATA_PATH="$TREEMORT_DATA_PATH/Germany/RGBNIR/10cm"
 else
     echo "Error: Unsupported DATA_TYPE '$DATA_TYPE'."
     exit 1
 fi
 
-# Forward any optional flags (e.g., --post-process, --list-file) to the inference script.
-# Positional args $1-$3 are HPC_TYPE, MODEL_TYPE, DATA_TYPE; flags start from $4.
-bash "$TREEMORT_REPO_PATH/scripts/run_inference.sh" "${@:4}"
+# Filter and forward only the --post-process flag to the inference script.
+EVAL_ONLY_FLAG="false"
+if [[ "$@" == *"--eval-only"* ]]; then
+    EVAL_ONLY_FLAG="true"
+fi
+
+# Call the treemort script with the eval-only flag.
+bash $TREEMORT_REPO_PATH/scripts/run_treemort.sh $HPC_TYPE $MODEL_CONFIG_PATH --data-config $DATA_CONFIG_PATH --eval-only "$EVAL_ONLY_FLAG"

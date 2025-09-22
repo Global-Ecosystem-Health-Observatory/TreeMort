@@ -35,6 +35,7 @@ def configure_model(conf, id2label):
         "detr": lambda: configure_detr(conf, id2label),
         "beit": lambda: configure_beit(conf, id2label),
         "flair_unet": lambda: configure_flair_unet(conf),
+        "flair_unet_sdt": lambda: configure_flair_unet(conf),
         "hcfnet": lambda: configure_hcfnet(conf),
     }
 

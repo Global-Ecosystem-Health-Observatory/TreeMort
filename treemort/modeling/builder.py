@@ -1,3 +1,4 @@
+import os
 import torch
 
 from treemort.modeling.model_config import configure_model
@@ -15,7 +16,7 @@ def resume_or_load(conf, id2label, n_batches, device):
 
     model, optimizer, schedular, criterion, metrics = build_model(conf, id2label, device, total_steps=conf.epochs * n_batches)
 
-    callbacks = build_callbacks(n_batches, conf.output_dir, optimizer)
+    callbacks = build_callbacks(n_batches, os.path.join(conf.output_dir, conf.model), optimizer)
 
     if conf.resume:
         load_checkpoint_if_available(model, conf)
@@ -26,7 +27,7 @@ def resume_or_load(conf, id2label, n_batches, device):
 
 
 def load_checkpoint_if_available(model, conf):
-    checkpoint_path = get_checkpoint(conf.model_weights, conf.output_dir)
+    checkpoint_path = get_checkpoint(conf.model_weights, os.path.join(conf.output_dir, conf.model))
 
     if checkpoint_path:
         device = next(model.parameters()).device  # Get the device of the model
