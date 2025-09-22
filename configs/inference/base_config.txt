@@ -1,0 +1,7 @@
+# Configurations for inference creation
+
+include = {model_config}
+include = {data_config}
+
+model-config = {model_config}
+data-config = {data_config}

@@ -3,7 +3,7 @@ import torch
 from tqdm import tqdm
 from collections import defaultdict
 
-from treemort.training.output_processing import process_model_output
+from treemort.training.output_processing import process_model_output, prepare_pred_and_target
 
 
 def validate_one_epoch(model, criterion, metrics, val_loader, conf, device):
@@ -17,32 +17,12 @@ def validate_one_epoch(model, criterion, metrics, val_loader, conf, device):
         for batch_idx, (images, labels) in enumerate(val_progress_bar):
             images, labels = images.to(device), labels.to(device)
             
-            buffer_mask = labels[:, 3, :, :].unsqueeze(1)  # [B, 1, H, W]
-            _, _, h, w = buffer_mask.shape
-            
-            logits = model(images)  # Original logits [B, C, H', W']
-            
-            cropped_logits = []
-            for i in range(logits.shape[1]):
-                channel_logits = logits[:, i:i+1, :, :]  # [B, 1, H', W']
-                cropped = center_crop(channel_logits, (h, w))  # [B, 1, h, w]
-                cropped_logits.append(cropped)
-            cropped_logits = torch.cat(cropped_logits, dim=1)  # [B, C, h, w]
-            
-            target_mask = labels[:, 0, :, :].unsqueeze(1)  # [B, 1, h, w]
-            target_centroid = labels[:, 1, :, :].unsqueeze(1)  # [B, 1, h, w]
-            target_hybrid = labels[:, 2, :, :].unsqueeze(1)  # [B, 1, h, w]
-            targets = torch.cat([
-                target_mask,        # Channel 0
-                target_centroid,    # Channel 1
-                target_hybrid,      # Channel 2
-                buffer_mask         # Channel 3
-            ], dim=1)  # [B, 4, h, w]
+            logits = process_model_output(model, images, conf.model)
+            _, _, h, w = labels.shape
+            preds, targets, buffer = prepare_pred_and_target(logits, labels, (h, w))
 
-            loss = criterion(cropped_logits, targets)
-            
-            pred_probs = torch.sigmoid(cropped_logits)
-            batch_metrics = metrics(pred_probs, targets)
+            loss = criterion(preds, targets, buffer=buffer)
+            batch_metrics = metrics(preds, targets, buffer=buffer)
 
             val_loss += loss.item()
             for key, value in batch_metrics.items():

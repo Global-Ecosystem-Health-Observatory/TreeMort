@@ -25,3 +25,12 @@ def configure_logger(name="default_logger", verbosity="info"):
 
 def get_logger(name="default_logger"):
     return logging.getLogger(name)
+
+
+def initialize_logger(verbosity: str) -> None:
+    configure_logger(verbosity=verbosity)
+
+
+def log_and_raise(logger, exception: Exception):
+    logger.error(str(exception))
+    raise exception

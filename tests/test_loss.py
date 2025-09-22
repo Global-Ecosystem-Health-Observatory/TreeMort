@@ -1,13 +1,8 @@
 import torch
 import pytest
-from treemort.utils.loss import (
-    dice_loss,
-    focal_loss,
-    hybrid_loss,
-    mse_loss,
-    iou_score,
-    f_score,
-)
+
+from treemort.utils.loss import dice_loss, hybrid_loss, mse_loss, focal_loss_fn
+from treemort.utils.metrics import iou_score, f_score
 
 
 @pytest.fixture
@@ -26,7 +21,8 @@ def test_dice_loss(sample_data):
 
 def test_focal_loss(sample_data):
     pred, target = sample_data
-    loss = focal_loss(pred, target, alpha=0.8, gamma=2)
+    weights = torch.ones_like(target)
+    loss = focal_loss_fn(pred, target, alpha=0.8, gamma=2, weights=weights, buffer_mask=None, smooth=1e-8)
     assert isinstance(loss, torch.Tensor)
     assert loss.item() > 0
 

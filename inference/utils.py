@@ -49,30 +49,24 @@ def validate_path(logger, path: str, is_dir: bool = False) -> bool:
 
 
 def load_model(
-    config_path: str,
-    best_model: str,
+    conf,
     id2label: dict = {0: "alive", 1: "dead"},
     device: torch.device = torch.device("cpu"),
 ) -> torch.nn.Module:
     logger = get_logger()
 
-    validate_path(logger, config_path)
-    validate_path(logger, best_model)
+    best_model_path = os.path.join(conf.output_dir, conf.model, conf.best_model)
+    validate_path(logger, best_model_path)
 
-    conf = setup(config_path)
     model, *_ = build_model(conf, id2label, device)
     model = model.to(device).eval()
 
     try:
-        model.load_state_dict(
-            torch.load(best_model, map_location=device, weights_only=True)
-        )
+        model.load_state_dict(torch.load(best_model_path, map_location=device, weights_only=True))
     except Exception as e:
         log_and_raise(logger, RuntimeError(f"Failed to load model weights: {e}"))
 
-    logger.debug(
-        f"Model loaded successfully: {os.path.join(os.path.basename(os.path.dirname(best_model)), os.path.basename(best_model))} (Config: {os.path.basename(config_path)})"
-    )
+    logger.debug(f"Model loaded successfully: {best_model_path}")
     return model
 
 
@@ -105,9 +99,7 @@ def load_and_preprocess_image(
                 -target_resolution,
                 transform.f,
             )
-            resampled = np.empty(
-                (image.shape[0], new_height, new_width), dtype=image.dtype
-            )
+            resampled = np.empty((image.shape[0], new_height, new_width), dtype=image.dtype)
             for i in range(image.shape[0]):
                 reproject(
                     source=image[i],
@@ -127,17 +119,13 @@ def load_and_preprocess_image(
     nir_rgb_order = nir_rgb_order or list(range(image.shape[0]))
 
     image = image.astype(np.float32) / max_pixel_value
-    image = (
-        image[nir_rgb_order] if nir_rgb_order != list(range(image.shape[0])) else image
-    )
+    image = image[nir_rgb_order] if nir_rgb_order != list(range(image.shape[0])) else image
     image_tensor = torch.tensor(image, dtype=torch.float32)
 
     if image_tensor.ndim != 3:
         log_and_raise(
             logger,
-            ValueError(
-                f"Invalid tensor shape: {image_tensor.shape}. Expected 3D tensor (C, H, W)."
-            ),
+            ValueError(f"Invalid tensor shape: {image_tensor.shape}. Expected 3D tensor (C, H, W)."),
         )
 
     return image_tensor, transform, crs
@@ -154,21 +142,15 @@ def _get_max_pixel_value(bit_depth) -> float:
     log_and_raise(logger, ValueError(f"Unsupported data type: {bit_depth}"))
 
 
-def _validate_image_channels(
-    image: np.ndarray, nir_rgb_order: Optional[List[int]]
-) -> None:
+def _validate_image_channels(image: np.ndarray, nir_rgb_order: Optional[List[int]]) -> None:
     logger = get_logger()
 
     if image.ndim < 3:
-        log_and_raise(
-            logger, ValueError("Image must have at least 3 dimensions (C, H, W).")
-        )
+        log_and_raise(logger, ValueError("Image must have at least 3 dimensions (C, H, W)."))
     if nir_rgb_order and max(nir_rgb_order) >= image.shape[0]:
         log_and_raise(
             logger,
-            ValueError(
-                f"nir_rgb_order indices exceed available channels: {nir_rgb_order}"
-            ),
+            ValueError(f"nir_rgb_order indices exceed available channels: {nir_rgb_order}"),
         )
 
 
@@ -179,16 +161,14 @@ def sliding_window_inference(
     stride: int = 128,
     batch_size: int = 1,
     threshold: float = 0.5,
-    output_channels: int = 1,
+    output_channels: int = 3,
 ) -> torch.Tensor:
     _validate_inference_params(window_size, stride, threshold)
 
     device = next(model.parameters()).device
     padded_image = _pad_image(image, window_size)
 
-    prediction_map, count_map = _initialize_maps(
-        padded_image.shape[1:], output_channels, device
-    )
+    prediction_map, count_map = _initialize_maps(padded_image.shape[1:], device=device)
     patches, coords = _generate_patches(padded_image, window_size, stride)
 
     for batch in _batch_patches(patches, coords, batch_size):
@@ -209,20 +189,18 @@ def _validate_inference_params(window_size: int, stride: int, threshold: float) 
     logger = get_logger()
 
     if window_size <= 0 or stride <= 0:
-        log_and_raise(
-            logger, ValueError("window_size and stride must be positive integers.")
-        )
+        log_and_raise(logger, ValueError("window_size and stride must be positive integers."))
     if not (0 <= threshold <= 1):
         log_and_raise(logger, ValueError("threshold must be between 0 and 1."))
 
 
 def _initialize_maps(
-    image_shape: Tuple[int, int], output_channels: int, device: torch.device
+    image_shape: Tuple[int, int],
+    output_channels: int = 3,
+    device: torch.device = torch.device("cpu"),
 ) -> Tuple[torch.Tensor, torch.Tensor]:
     h, w = image_shape
-    prediction_map = torch.zeros(
-        (output_channels, h, w), dtype=torch.float32, device=device
-    )
+    prediction_map = torch.zeros((output_channels, h, w), dtype=torch.float32, device=device)
     count_map = torch.zeros((h, w), dtype=torch.float32, device=device)
     return prediction_map, count_map
 
@@ -304,9 +282,7 @@ def process_batch(
     return prediction_map, count_map
 
 
-def _validate_batch_inputs(
-    patches: list[torch.Tensor], coords: list[tuple[int, int]], threshold: float
-) -> None:
+def _validate_batch_inputs(patches: list[torch.Tensor], coords: list[tuple[int, int]], threshold: float) -> None:
     logger = get_logger()
 
     if not patches or not coords:
@@ -315,22 +291,42 @@ def _validate_batch_inputs(
         log_and_raise(logger, ValueError("Threshold must be between 0 and 1."))
 
 
-def _infer_patches(
-    patches: list[torch.Tensor], model: torch.nn.Module, device: torch.device
-) -> torch.Tensor:
+def _infer_patches(patches: list[torch.Tensor], model: torch.nn.Module, device: torch.device) -> torch.Tensor:
+    logger = get_logger()
+
     batch_tensor = torch.stack(patches).to(device)
 
     with torch.no_grad():
         outputs = model(batch_tensor)
 
-        seg_predictions = torch.sigmoid(outputs[:, 0:1, ...])
-        centroid_predictions = outputs[:, 1:2, ...]
-        # hybrid_predictions = torch.tanh(outputs[:, 2:3, ...])
-        hybrid_predictions = outputs[:, 2:3, ...]
+        # Normalize to 4D: (B, C, H, W)
+        if outputs.ndim == 3:  # (B, H, W) -> (B, 1, H, W)
+            outputs = outputs.unsqueeze(1)
+        elif outputs.ndim != 4:
+            raise RuntimeError(f"Unexpected model output shape: {tuple(outputs.shape)}")
 
-        predictions = torch.cat(
-            [seg_predictions, centroid_predictions, hybrid_predictions], dim=1
-        )
+        outputs = outputs.to(dtype=torch.float32)
+
+        # Pad or truncate to exactly 3 channels: [seg, centroid, hybrid]
+        C = outputs.shape[1]
+        if C < 3:
+            pad = torch.zeros(
+                (outputs.shape[0], 3 - C, outputs.shape[2], outputs.shape[3]),
+                device=outputs.device,
+                dtype=outputs.dtype,
+            )
+            outputs = torch.cat([outputs, pad], dim=1)
+        elif C > 3:
+            outputs = outputs[:, :3, ...]
+
+        # Apply activations: sigmoid on segmentation head only
+        seg_predictions = torch.sigmoid(outputs[:, 0:1, ...])
+        centroid_predictions = outputs[:, 1:2, ...]  # raw/logit (or zeros if padded)
+        hybrid_predictions = outputs[:, 2:3, ...]  # raw/logit (or zeros if padded)
+
+        predictions = torch.cat([seg_predictions, centroid_predictions, hybrid_predictions], dim=1)
+
+        logger.debug(f"Predictions shape: {tuple(predictions.shape)}")
 
     return predictions
 
@@ -347,18 +343,14 @@ def _update_maps(
 ) -> None:
     binary_mask = (binary_confidence >= threshold).float()
 
-    prediction_map[
-        :, y : y + binary_confidence.shape[0], x : x + binary_confidence.shape[1]
-    ] += torch.stack([binary_confidence, centroid_confidence, hybrid_confidence])
+    prediction_map[:, y : y + binary_confidence.shape[0], x : x + binary_confidence.shape[1]] += torch.stack(
+        [binary_confidence, centroid_confidence, hybrid_confidence]
+    )
 
-    count_map[
-        y : y + binary_confidence.shape[0], x : x + binary_confidence.shape[1]
-    ] += binary_mask
+    count_map[y : y + binary_confidence.shape[0], x : x + binary_confidence.shape[1]] += binary_mask
 
 
-def threshold_prediction_map(
-    prediction_map: np.ndarray, threshold: float = 0.5
-) -> np.ndarray:
+def threshold_prediction_map(prediction_map: np.ndarray, threshold: float = 0.5) -> np.ndarray:
     binary_mask = prediction_map >= threshold
     return binary_mask
 
@@ -367,16 +359,12 @@ def _pad_image(image: torch.Tensor, window_size: int) -> torch.Tensor:
     logger = get_logger()
 
     if image.ndim != 3:
-        log_and_raise(
-            logger, ValueError("Image must be a 3D tensor with shape (C, H, W).")
-        )
+        log_and_raise(logger, ValueError("Image must be a 3D tensor with shape (C, H, W)."))
 
     c, h, w = image.shape
     pad_h = (window_size - h % window_size) % window_size
     pad_w = (window_size - w % window_size) % window_size
-    padded_image = torch.nn.functional.pad(
-        image, (0, pad_w, 0, pad_h), mode="constant", value=0
-    )
+    padded_image = torch.nn.functional.pad(image, (0, pad_w, 0, pad_h), mode="constant", value=0)
 
     logger.debug(f"Padded image from shape {(h, w)} to {(h + pad_h, w + pad_w)}.")
     return padded_image
@@ -388,29 +376,50 @@ def _apply_transform(contour: np.ndarray, transform: Affine) -> np.ndarray:
 
 
 def compute_watershed(segment_map, centroid_map, hybrid_map, conf):
+
+    logger = get_logger()
+
     binary_seg = (segment_map > conf.segment_threshold).astype(np.uint8)
-    binary_seg = remove_small_objects(
-        binary_seg.astype(bool), min_size=conf.min_area_pixels
-    ).astype(np.uint8)
+    binary_seg = remove_small_objects(binary_seg.astype(bool), min_size=conf.min_area_pixels).astype(np.uint8)
 
-    binary_hybrid = (hybrid_map < conf.hybrid_threshold).astype(np.uint8)
-    binary_seg[binary_hybrid == 0] = 0
+    if conf.output_channels == 1:
+        smoothed_segment_map = gaussian(binary_seg, sigma=conf.blur_sigma)
 
-    centroid_map_smoothed = gaussian(centroid_map, sigma=conf.blur_sigma)
+        mask_grown = binary_dilation(binary_seg, disk(conf.dilation_radius))
 
-    local_max_coords = peak_local_max(
-        centroid_map_smoothed,
-        min_distance=conf.min_distance,
-        threshold_abs=conf.centroid_threshold,
-    )
+        local_max = peak_local_max(
+            smoothed_segment_map, min_distance=conf.min_distance, exclude_border=False, labels=mask_grown
+        )
 
-    markers = np.zeros_like(centroid_map, dtype=np.int32)
-    for i, (row, col) in enumerate(local_max_coords, 1):
-        markers[row, col] = i
+        markers = np.zeros(segment_map.shape, dtype=np.int32)
+        for i, (y, x) in enumerate(local_max, 1):
+            markers[y, x] = i  # Ensure marker values are unique and nonzero
 
-    markers = ndi.label(markers)[0]
+        labels_ws = watershed(-smoothed_segment_map, markers, mask=mask_grown)
 
-    labels_ws = watershed(-centroid_map_smoothed, markers, mask=binary_seg)
+    elif conf.output_channels == 3:
+
+        binary_hybrid = (hybrid_map < conf.hybrid_threshold).astype(np.uint8)
+        binary_seg[binary_hybrid == 0] = 0
+
+        centroid_map_smoothed = gaussian(centroid_map, sigma=conf.blur_sigma)
+
+        local_max_coords = peak_local_max(
+            centroid_map_smoothed,
+            min_distance=conf.min_distance,
+            threshold_abs=conf.centroid_threshold,
+        )
+
+        markers = np.zeros_like(centroid_map, dtype=np.int32)
+        for i, (row, col) in enumerate(local_max_coords, 1):
+            markers[row, col] = i
+
+        markers = ndi.label(markers)[0]
+
+        labels_ws = watershed(-centroid_map_smoothed, markers, mask=binary_seg)
+
+    else:
+        log_and_raise(logger, ValueError(f"Unsupported number of output channels: {conf.output_channels}"))
 
     new_labels = _postprocess_labels(
         labels_ws,
@@ -437,9 +446,7 @@ def _postprocess_labels(labels_ws, min_region_size=50, dilation_radius=1):
             boundary_labels = labels_ws[dilated & (labels_ws != lbl)]
 
             if boundary_labels.size > 0:
-                unique_neighbors, neighbor_counts = np.unique(
-                    boundary_labels, return_counts=True
-                )
+                unique_neighbors, neighbor_counts = np.unique(boundary_labels, return_counts=True)
                 valid_neighbors = unique_neighbors[unique_neighbors != 0]
                 valid_counts = neighbor_counts[unique_neighbors != 0]
 
@@ -462,9 +469,7 @@ def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
         extended_max_col = min(labels_ws.shape[1], region.bbox[3] + conf.erosion_radius)
 
         # Crop labels_ws to the extended bounding box
-        cropped_labels = labels_ws[
-            extended_min_row:extended_max_row, extended_min_col:extended_max_col
-        ]
+        cropped_labels = labels_ws[extended_min_row:extended_max_row, extended_min_col:extended_max_col]
 
         # Create mask within the cropped area
         mask = cropped_labels == region.label
@@ -480,10 +485,7 @@ def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
 
         # Adjust contour points to original image coordinates
         pts = np.array(
-            [
-                [pt[1] + extended_min_col, pt[0] + extended_min_row]
-                for pt in eroded_contour
-            ],
+            [[pt[1] + extended_min_col, pt[0] + extended_min_row] for pt in eroded_contour],
             dtype=np.float32,
         )
         if len(pts) < 5:
@@ -507,16 +509,8 @@ def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
 
         # Generate ellipse points
         t = np.linspace(0, 2 * np.pi, num_points)
-        ellipse_x = (
-            center[0]
-            + a * np.cos(t) * np.cos(orientation)
-            - b * np.sin(t) * np.sin(orientation)
-        )
-        ellipse_y = (
-            center[1]
-            + a * np.cos(t) * np.sin(orientation)
-            + b * np.sin(t) * np.cos(orientation)
-        )
+        ellipse_x = center[0] + a * np.cos(t) * np.cos(orientation) - b * np.sin(t) * np.sin(orientation)
+        ellipse_y = center[1] + a * np.cos(t) * np.sin(orientation) + b * np.sin(t) * np.cos(orientation)
         ellipse_coords = list(zip(ellipse_x.tolist(), ellipse_y.tolist()))
 
         # Ensure the polygon is closed
@@ -536,18 +530,10 @@ def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
         if ellipse_poly.is_valid and not ellipse_poly.is_empty:
             convex_hull = ellipse_poly.convex_hull
             area = ellipse_poly.area
-            aspect_ratio = (
-                convex_hull.length / (4 * np.sqrt(area)) if area > 0 else float("inf")
-            )
+            aspect_ratio = convex_hull.length / (4 * np.sqrt(area)) if area > 0 else float("inf")
             solidity = area / convex_hull.area if convex_hull.area > 0 else 0
-            if (
-                area >= conf.min_area
-                and aspect_ratio <= conf.max_aspect_ratio
-                and solidity >= conf.min_solidity
-            ):
-                ellipse_center_geo = list(
-                    _apply_transform(np.array([center]), transform)[0]
-                )
+            if area >= conf.min_area and aspect_ratio <= conf.max_aspect_ratio and solidity >= conf.min_solidity:
+                ellipse_center_geo = list(_apply_transform(np.array([center]), transform)[0])
                 feature = {
                     "type": "Feature",
                     "properties": {
@@ -579,16 +565,12 @@ def extract_contours(binary_mask: np.ndarray, transform: Affine) -> List[Dict]:
     binary_mask = (binary_mask > 0).astype(np.uint8)
 
     if binary_mask.ndim != 2 or not np.issubdtype(binary_mask.dtype, np.integer):
-        log_and_raise(
-            logger, ValueError("binary_mask must be a 2D binary integer array.")
-        )
+        log_and_raise(logger, ValueError("binary_mask must be a 2D binary integer array."))
 
-    contours, _ = cv2.findContours(
-        binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
-    )
+    contours, _ = cv2.findContours(binary_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
     reshaped_contours = [contour.reshape(-1, 2) for contour in contours]
-    print(f"Extracted {len(reshaped_contours)} contours from the binary mask.")
+    logger.debug(f"Extracted {len(reshaped_contours)} contours from the binary mask.")
 
     features = []
     skipped_contours = 0
@@ -596,9 +578,7 @@ def extract_contours(binary_mask: np.ndarray, transform: Affine) -> List[Dict]:
         if len(contour) >= 3:
             transformed_contour = _apply_transform(contour, transform)
             if not np.array_equal(transformed_contour[0], transformed_contour[-1]):
-                transformed_contour = np.vstack(
-                    [transformed_contour, transformed_contour[0]]
-                )
+                transformed_contour = np.vstack([transformed_contour, transformed_contour[0]])
 
             polygon = Polygon(transformed_contour)
 
@@ -621,15 +601,11 @@ def extract_contours(binary_mask: np.ndarray, transform: Affine) -> List[Dict]:
         else:
             skipped_contours += 1
 
-    logger.debug(
-        f"Processed {len(features)} features, skipped {skipped_contours} contours."
-    )
+    logger.debug(f"Processed {len(features)} features, skipped {skipped_contours} contours.")
     return features
 
 
-def extract_contours_from_labels(
-    label_map: np.ndarray, transform: Affine
-) -> List[Dict]:
+def extract_contours_from_labels(label_map: np.ndarray, transform: Affine) -> List[Dict]:
     logger = get_logger()
 
     if isinstance(label_map, torch.Tensor):
@@ -640,9 +616,7 @@ def extract_contours_from_labels(
         logger.debug("Label map has 3 dimensions; selecting the first channel.")
         label_map = label_map[0]
     elif label_map.ndim > 3:
-        logger.debug(
-            "Label map has more than 3 dimensions; selecting the first image and channel."
-        )
+        logger.debug("Label map has more than 3 dimensions; selecting the first image and channel.")
         label_map = label_map[0, 0]
 
     if label_map.ndim != 2 or not np.issubdtype(label_map.dtype, np.integer):
@@ -672,9 +646,7 @@ def extract_contours_from_labels(
 
             # Ensure the contour is closed
             if not np.array_equal(transformed_contour[0], transformed_contour[-1]):
-                transformed_contour = np.vstack(
-                    [transformed_contour, transformed_contour[0]]
-                )
+                transformed_contour = np.vstack([transformed_contour, transformed_contour[0]])
 
             polygon = Polygon(transformed_contour)
 
@@ -712,9 +684,7 @@ def save_geojson(features, filename, crs, transform, name="FittedEllipses"):
             epsg_code = crs.to_epsg()
             geojson_crs = {"type": "name", "properties": {"name": f"EPSG:{epsg_code}"}}
         else:
-            logger.warning(
-                "Warning: CRS is not in EPSG format; setting CRS to null in GeoJSON."
-            )
+            logger.warning("Warning: CRS is not in EPSG format; setting CRS to null in GeoJSON.")
 
     geojson = {
         "type": "FeatureCollection",
@@ -737,9 +707,7 @@ Functions for Abulation study:
 def segment_filtering_only(segment_map: np.ndarray, conf) -> np.ndarray:
     binary_mask = (segment_map > conf.segment_threshold).astype(np.uint8)
 
-    binary_mask = remove_small_objects(
-        binary_mask.astype(bool), min_size=conf.min_area_pixels
-    )
+    binary_mask = remove_small_objects(binary_mask.astype(bool), min_size=conf.min_area_pixels)
     binary_mask = binary_mask.astype(np.uint8)
 
     return binary_mask
@@ -756,9 +724,7 @@ def watershed_segmentation_only(
 ) -> np.ndarray:
     binary_seg = (segment_map > conf.segment_threshold).astype(np.uint8)
 
-    binary_seg = remove_small_objects(
-        binary_seg.astype(bool), min_size=conf.min_area_pixels
-    ).astype(np.uint8)
+    binary_seg = remove_small_objects(binary_seg.astype(bool), min_size=conf.min_area_pixels).astype(np.uint8)
 
     binary_hybrid = (hybrid_map < conf.hybrid_threshold).astype(np.uint8)
     binary_seg[binary_hybrid == 0] = 0
