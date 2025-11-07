@@ -26,8 +26,15 @@ source $TREEMORT_VENV_PATH/bin/activate || { echo "Error: Failed to activate vir
 echo "Upgrading pip."
 python -m pip install --upgrade pip setuptools wheel build || { echo "Error: Failed to upgrade pip."; exit 1; }
 
+echo "Installing dependencies."
+python -m pip install --only-binary=:all: --no-cache-dir -r $TREEMORT_REPO_PATH/requirements.txt || {
+  echo "Error: Failed to install dependencies."; exit 1;
+}
+
 echo "Installing package from: $TREEMORT_REPO_PATH"
-python -m pip install -e $TREEMORT_REPO_PATH || { echo "Error: Failed to install the package."; exit 1; }
+python -m pip install --only-binary=:all: --no-cache-dir -e $TREEMORT_REPO_PATH || {
+  echo "Error: Failed to install the TreeMort package."; exit 1;
+}
 
 echo "Verifying TreeMort installation."
 python -c "import treemort; print('TreeMort imported successfully.')" || { echo "Error: Failed to import TreeMort."; exit 1; }

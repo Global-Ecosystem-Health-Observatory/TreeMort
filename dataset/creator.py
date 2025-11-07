@@ -277,6 +277,6 @@ Usage: ./submit_creator.sh <hpc_type> <data config file>
 
 Examples:
 
-sh ./scripts/submit_creator.sh lumi finland
+sh ${TREEMORT_REPO_PATH}/scripts/submit_creator.sh lumi finland
 
 '''
