@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Exit if any command fails
-set -e
+set -euo pipefail
 
 # Usage:
 # export TREEMORT_VENV_PATH="/path/to/venv"
@@ -26,17 +26,32 @@ source $TREEMORT_VENV_PATH/bin/activate || { echo "Error: Failed to activate vir
 echo "Upgrading pip."
 python -m pip install --upgrade pip setuptools wheel build || { echo "Error: Failed to upgrade pip."; exit 1; }
 
+pushd "$TREEMORT_REPO_PATH" >/dev/null
+
 echo "Installing dependencies."
-python -m pip install --only-binary=:all: --no-cache-dir -r $TREEMORT_REPO_PATH/requirements.txt || {
+python -m pip install --only-binary=:all: --no-cache-dir -r requirements.txt || {
   echo "Error: Failed to install dependencies."; exit 1;
 }
 
 echo "Installing package from: $TREEMORT_REPO_PATH"
-python -m pip install --only-binary=:all: --no-cache-dir -e $TREEMORT_REPO_PATH || {
+python -m pip install --only-binary=:all: --no-cache-dir -e . || {
   echo "Error: Failed to install the TreeMort package."; exit 1;
 }
 
+popd >/dev/null
+
 echo "Verifying TreeMort installation."
-python -c "import treemort; print('TreeMort imported successfully.')" || { echo "Error: Failed to import TreeMort."; exit 1; }
+python - <<'PY' || { echo "Error: Failed to import TreeMort."; exit 1; }
+import importlib, sys
+for name in ("treemort", "tree_mort", "TreeMort"):
+    try:
+        m = importlib.import_module(name)
+        print(f"Imported '{name}' from {getattr(m, '__file__', None)}")
+        break
+    except Exception as e:
+        last = e
+else:
+    raise SystemExit(f"Could not import treemort/tree_mort/TreeMort: {last}")
+PY
 
 echo "Script completed successfully."
