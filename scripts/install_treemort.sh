@@ -18,13 +18,13 @@ echo "Loading module: $MODULE_NAME"
 module load $MODULE_NAME
 
 echo "Creating virtual environment at: $TREEMORT_VENV_PATH"
-python3 -m venv --system-site-packages $TREEMORT_VENV_PATH || { echo "Error: Failed to create virtual environment."; exit 1; }
+python3 -m venv $TREEMORT_VENV_PATH || { echo "Error: Failed to create virtual environment."; exit 1; }
 
 echo "Activating virtual environment."
 source $TREEMORT_VENV_PATH/bin/activate || { echo "Error: Failed to activate virtual environment."; exit 1; }
 
 echo "Upgrading pip."
-python -m pip install --upgrade pip || { echo "Error: Failed to upgrade pip."; exit 1; }
+python -m pip install --upgrade pip setuptools wheel build || { echo "Error: Failed to upgrade pip."; exit 1; }
 
 echo "Installing package from: $TREEMORT_REPO_PATH"
 python -m pip install -e $TREEMORT_REPO_PATH || { echo "Error: Failed to install the package."; exit 1; }
