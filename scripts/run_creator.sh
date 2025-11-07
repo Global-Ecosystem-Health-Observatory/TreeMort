@@ -5,7 +5,7 @@ HPC_TYPE=${HPC_TYPE:-"puhti"}
 
 # Set HPC-specific variables
 if [ "$HPC_TYPE" == "lumi" ]; then
-    PROJECT_NAME="project_462000684"
+    PROJECT_NAME="project_462001070"
     PARTITION_NAME="small"
     MODULE_NAME="pytorch/2.5"
     MODULE_USE_CMD="module use /appl/local/csc/modulefiles/"
