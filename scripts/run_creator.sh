@@ -50,7 +50,7 @@ if [ -z "$DATA_CONFIG_PATH" ] || [ ! -f "$DATA_CONFIG_PATH" ]; then
 fi
 
 echo "[INFO] Starting creator..."
-srun python3 "${TREEMORT_REPO_PATH}/dataset/creator.py" "$DATA_CONFIG_PATH" --num-workers \$SLURM_CPUS_PER_TASK
+srun python3 -m treemort.dataset.creator "$DATA_CONFIG_PATH" --num-workers \$SLURM_CPUS_PER_TASK
 
 EXIT_STATUS=\$?
 if [ \$EXIT_STATUS -ne 0 ]; then
