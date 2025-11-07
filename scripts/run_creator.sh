@@ -49,8 +49,11 @@ if [ -z "$DATA_CONFIG_PATH" ] || [ ! -f "$DATA_CONFIG_PATH" ]; then
     exit 1
 fi
 
+# Ensure the repo root is on PYTHONPATH so we can run non-installed packages like `dataset`
+export PYTHONPATH="$TREEMORT_REPO_PATH:${PYTHONPATH:-}"
+
 echo "[INFO] Starting creator..."
-srun python3 -m treemort.dataset.creator "$DATA_CONFIG_PATH" --num-workers \$SLURM_CPUS_PER_TASK
+srun python3 -m dataset.creator "$DATA_CONFIG_PATH" --num-workers \$SLURM_CPUS_PER_TASK
 
 EXIT_STATUS=\$?
 if [ \$EXIT_STATUS -ne 0 ]; then
