@@ -19,15 +19,15 @@ export HPC_TYPE="$1"
 export MODEL_TYPE="$2"
 export DATA_TYPE="$3"
 
-export TREEMORT_REPO_PATH="/users/rahmanan/TreeMort"
+export TREEMORT_REPO_PATH="/users/aurahman/TreeMort"
 
 # Set global environment variables based on HPC type.
 if [ "$HPC_TYPE" == "puhti" ]; then
-    export TREEMORT_VENV_PATH="/projappl/project_2004205/rahmanan/venv"
-    export TREEMORT_DATA_PATH="/scratch/project_2008436/rahmanan/dead_trees"
+    export TREEMORT_VENV_PATH="/projappl/project_2004205/aurahman/venv"
+    export TREEMORT_DATA_PATH="/scratch/project_2008436/aurahman/dead_trees"
 elif [ "$HPC_TYPE" == "lumi" ]; then
-    export TREEMORT_VENV_PATH="/projappl/project_462001070/rahmanan/venv"
-    export TREEMORT_DATA_PATH="/scratch/project_462001070/rahmanan/dead_trees"
+    export TREEMORT_VENV_PATH="/projappl/project_462001070/aurahman/venv"
+    export TREEMORT_DATA_PATH="/scratch/project_462001070/aurahman/dead_trees"
 else
     echo "Error: Unsupported HPC_TYPE '$HPC_TYPE'."
     exit 1
