@@ -26,8 +26,8 @@ if [ "$HPC_TYPE" == "puhti" ]; then
     export TREEMORT_VENV_PATH="/projappl/project_2004205/rahmanan/venv"
     export TREEMORT_DATA_PATH="/scratch/project_2008436/rahmanan/dead_trees"
 elif [ "$HPC_TYPE" == "lumi" ]; then
-    export TREEMORT_VENV_PATH="/projappl/project_462000684/rahmanan/venv"
-    export TREEMORT_DATA_PATH="/scratch/project_462000684/rahmanan/dead_trees"
+    export TREEMORT_VENV_PATH="/projappl/project_462001070/rahmanan/venv"
+    export TREEMORT_DATA_PATH="/scratch/project_462001070/rahmanan/dead_trees"
 else
     echo "Error: Unsupported HPC_TYPE '$HPC_TYPE'."
     exit 1
@@ -45,6 +45,8 @@ elif [ "$DATA_TYPE" == "estonia" ]; then
     export DATA_PATH="$TREEMORT_DATA_PATH/Estonia/RGBNIR/25cm"
 elif [ "$DATA_TYPE" == "germany" ]; then
     export DATA_PATH="$TREEMORT_DATA_PATH/Germany/RGBNIR/10cm"
+elif [ "$DATA_TYPE" == "switzerland" ]; then
+    export DATA_PATH="$TREEMORT_DATA_PATH/Switzerland/RGB/10cm"
 else
     echo "Error: Unsupported DATA_TYPE '$DATA_TYPE'."
     exit 1

@@ -25,7 +25,7 @@ done
 
 # Set HPC-specific variables
 if [ "$HPC_TYPE" == "lumi" ]; then
-    PROJECT_NAME="project_462000684"
+    PROJECT_NAME="project_462001070"
     PARTITION_NAME="small-g"
     TEST_PARTITION_NAME="dev-g"
     MODULE_NAME="pytorch/2.5"
