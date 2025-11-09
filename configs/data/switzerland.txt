@@ -1,0 +1,9 @@
+# Configurations for dataset creation for Switzerland
+
+include = base_config.txt
+
+data-folder = ${TREEMORT_DATA_PATH}/Switzerland/RGB/10cm
+
+hdf5-file = Switzerland_RGB_10cm.h5
+
+nir-rgb-order = [0, 1, 2]
