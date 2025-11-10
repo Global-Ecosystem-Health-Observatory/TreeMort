@@ -6,4 +6,5 @@ model = flair_unet_sdt
 
 resume = True
 
+input-channels = 3
 output-channels = 3
