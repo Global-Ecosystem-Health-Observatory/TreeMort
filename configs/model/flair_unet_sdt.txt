@@ -8,3 +8,6 @@ resume = True
 
 input-channels = 3
 output-channels = 3
+
+freeze_epochs = 3
+keep_first_encoder_blocks = 1
