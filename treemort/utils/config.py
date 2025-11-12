@@ -95,7 +95,6 @@ def build_parser(config_files):
     train_group.add("--test-crop-size", type=int, required=True, help="crop size for testing")
     train_group.add("--val-size", type=float, default=0.2, help="split for validation set")
     train_group.add("--test-size", type=float, default=0.1, help="split for test set")
-    train_group.add("--resume", action="store_true", help="resume training using stored model weights")
 
     data_group = parser.add_argument_group('Data')
     data_group.add("--data-folder",     type=str, required=True, help="directory with aerial image and label data")
@@ -121,6 +120,17 @@ def build_parser(config_files):
     
     output_group = parser.add_argument_group('Output')
     output_group.add("--output-dir", type=str, default="./output", help="directory to save output files")
+
+    tracking_group = parser.add_argument_group('Tracking')
+    tracking_group.add("--wandb", action="store_true", help="Enable Weights & Biases logging")
+    tracking_group.add("--wandb-entity", type=str, default=None, help="W&B entity/org name")
+    tracking_group.add("--wandb-project", type=str, default="treemort", help="W&B project name")
+    tracking_group.add("--wandb-run-id", type=str, default=None, help="Optional W&B run ID for resuming")
+    tracking_group.add("--dataset-artifact", type=str, default=None, help="Dataset artifact reference to load data from")
+    tracking_group.add("--init-model-artifact", type=str, default=None, help="Model artifact reference to initialize weights from")
+    tracking_group.add("--freeze-epochs", type=int, default=0, help="Number of epochs to keep selected encoder blocks frozen")
+    tracking_group.add("--keep-first-encoder-blocks", type=int, default=0, help="How many initial encoder blocks stay frozen when freeze is enabled")
+    tracking_group.add("--promote-threshold", type=float, default=0.0, help="Validation metric threshold to mark a run as promotion candidate")
 
     return parser
 

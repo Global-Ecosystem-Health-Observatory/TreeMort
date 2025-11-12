@@ -8,7 +8,7 @@ from treemort.utils.metrics import log_epoch_metrics
 logger = get_logger(__name__)
 
 
-def evaluator(model, dataloader, num_samples, metrics, conf):
+def evaluator(model, dataloader, num_samples, metrics, conf, wandb_run=None):
     try:
         logger.info("Starting evaluation...")
         model.eval()
@@ -38,7 +38,16 @@ def evaluator(model, dataloader, num_samples, metrics, conf):
                 batch_metrics = metrics(logits, targets)
                 all_batch_metrics.append(batch_metrics)
 
-        log_epoch_metrics(all_batch_metrics, phase="Test", confidence=0.95)
+        summary = log_epoch_metrics(all_batch_metrics, phase="Test", confidence=0.95)
+
+        if wandb_run is not None and getattr(conf, "wandb", False):
+            payload = {f"test/{k}": float(v) for k, v in summary.items() if isinstance(v, (int, float))}
+            payload["phase"] = "test"
+            payload["dataset_artifact"] = getattr(conf, "dataset_artifact", None)
+            try:
+                wandb_run.log(payload)
+            except Exception as exc:
+                logger.warning(f"Failed to log evaluation metrics to W&B: {exc}")
 
         return model
 

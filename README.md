@@ -135,11 +135,9 @@ Model training uses configuration files located in `configs/model/` to control t
   include = base_config.txt
 
   model = flair_unet
-
-  resume = True
   ```
 
-  This file inherits all settings from `base_config.txt`, specifies the model architecture as `flair_unet`, and sets `resume = True` to continue training from the latest checkpoint if available.
+  This file inherits all settings from `base_config.txt` and simply pins the architecture to `flair_unet`.
 
 Users can create their own model configuration files to experiment with different architectures or hyperparameters by inheriting from `base_config.txt` and overriding specific parameters as needed.
 
@@ -148,6 +146,21 @@ Users can create their own model configuration files to experiment with differen
   ```bash
   python3 -m treemort.main configs/model/flair_unet_sdt.txt --data-config configs/data/finland.txt
   ```
+
+### Weights & Biases Tracking
+- Enable experiment tracking with `--wandb` and supply optional metadata flags:
+  ```bash
+  python3 -m treemort.main configs/model/flair_unet_sdt.txt \
+      --data-config configs/data/finland.txt \
+      --wandb --wandb-entity <org> --wandb-project treemort \
+      --dataset-artifact dataset-FIN-25cm-4ch:v3 \
+      --init-model-artifact model-unet-FIN-4ch-25cm:production \
+      --freeze-epochs 3 --keep-first-encoder-blocks 1 \
+      --promote-threshold 0.70
+  ```
+- Artifact aliases are applied automatically: periodic checkpoints update `latest`, validation winners update `best`, and any `best` surpassing `--promote-threshold` is also tagged as `candidate`. You can later promote an artifact to `staging` or `production` using the W&B UI.
+- When `--dataset-artifact` is set, the referenced artifact is downloaded into `output/<model>/dataset_artifacts/` and used in place of local datasets. The loader accepts absolute HDF5 paths, so artifacts can bundle immutable data snapshots.
+- To resume a run, pass `--wandb-run-id <existing_id>`; to transfer knowledge across countries, point `--init-model-artifact` to a different country's `production` artifact.
 
 ### Evaluation
 - Evaluate the trained model:

@@ -11,6 +11,7 @@ def build_callbacks(n_batches, output_dir, optimizer, best_model="best.weights.p
         filepath=os.path.join(checkpoint_dir, "cp-{epoch:04d}.weights.pth"),
         save_freq=5 * n_batches,
         verbose=1,
+        alias="latest",
     )
 
     best_checkpoint_cb = ModelCheckpoint(
@@ -19,6 +20,7 @@ def build_callbacks(n_batches, output_dir, optimizer, best_model="best.weights.p
         mode="min",
         save_best_only=True,
         verbose=1,
+        alias="best",
     )
 
     # reduce_lr_cb = ReduceLROnPlateau(

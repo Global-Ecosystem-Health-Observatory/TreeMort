@@ -1,6 +1,7 @@
 import os
 import torch
 import argparse
+from pathlib import Path
 
 from treemort.data.loader import prepare_datasets
 from treemort.modeling.builder import resume_or_load
@@ -8,13 +9,32 @@ from treemort.training.trainer import trainer
 from treemort.evaluation.evaluator import evaluator
 from treemort.utils.config import setup
 from treemort.utils.logger import get_logger, configure_logger
+from treemort.utils.wandb_utils import (
+    finish_wandb_run,
+    init_wandb_run,
+    use_dataset_artifact,
+)
 
 logger = get_logger(__name__)
 
 
-def run(conf, eval_only):
-    assert os.path.exists(conf.data_folder), f"[ERROR] Data folder {conf.data_folder} does not exist."
+def _maybe_use_dataset_artifact(conf, wandb_run):
+    if not getattr(conf, "dataset_artifact", None):
+        return {}
 
+    artifact_download_root = Path(conf.output_dir) / conf.model / "dataset_artifacts"
+    artifact_download_root.mkdir(parents=True, exist_ok=True)
+    metadata = use_dataset_artifact(wandb_run, conf.dataset_artifact, str(artifact_download_root))
+
+    if metadata.get("dataset_artifact_dir"):
+        conf.data_folder = metadata["dataset_artifact_dir"]
+    if metadata.get("dataset_hdf5_file"):
+        conf.hdf5_file = metadata["dataset_hdf5_file"]
+
+    return metadata
+
+
+def run(conf, eval_only, wandb_run=None):
     if not os.path.exists(conf.output_dir):
         os.makedirs(conf.output_dir)
         logger.info(f"Created output directory: {conf.output_dir}")
@@ -25,6 +45,13 @@ def run(conf, eval_only):
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info(f"Using device: {device}")
+
+    dataset_meta = {}
+    if getattr(conf, "wandb", False) and getattr(conf, "dataset_artifact", None):
+        dataset_meta = _maybe_use_dataset_artifact(conf, wandb_run)
+
+    if not os.path.exists(conf.data_folder):
+        raise FileNotFoundError(f"Data folder {conf.data_folder} does not exist even after artifact resolution.")
 
     logger.info("Preparing datasets...")
     train_loader, val_loader, test_loader = prepare_datasets(conf)
@@ -47,7 +74,7 @@ def run(conf, eval_only):
     # Use a sensible length for model setup even in test-only mode
     num_steps_for_setup = train_len if train_len > 0 else test_len
     model, optimizer, schedular, criterion, metrics, callbacks = resume_or_load(
-        conf, id2label, num_steps_for_setup, device
+        conf, id2label, num_steps_for_setup, device, wandb_run=wandb_run
     )
     logger.info("Model, optimizer, criterion, metrics, and callbacks are set up.")
 
@@ -55,7 +82,7 @@ def run(conf, eval_only):
         if test_loader is None or test_len == 0:
             raise RuntimeError("Evaluation requested but no test_loader is available (got None or empty).")
         logger.info("Evaluation-only mode started.")
-        evaluator(model, test_loader, test_len, metrics, conf)
+        evaluator(model, test_loader, test_len, metrics, conf, wandb_run=wandb_run)
         logger.info("Evaluation completed.")
 
     else:
@@ -74,6 +101,8 @@ def run(conf, eval_only):
             val_loader=val_loader,
             conf=conf,
             callbacks=callbacks,
+            wandb_run=wandb_run,
+            dataset_meta=dataset_meta,
         )
         logger.info("Training completed.")
 
@@ -90,8 +119,14 @@ if __name__ == "__main__":
     _ = configure_logger(verbosity=args.verbosity)
     
     conf = setup(args.config, data_config=args.data_config)
+    config_paths = [args.config, args.data_config]
+    wandb_run = init_wandb_run(conf, config_paths=config_paths)
+    setattr(conf, "wandb_run", wandb_run)
 
-    run(conf, args.eval_only)
+    try:
+        run(conf, args.eval_only, wandb_run=wandb_run)
+    finally:
+        finish_wandb_run(wandb_run)
 
 
 '''

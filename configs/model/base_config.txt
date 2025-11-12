@@ -35,3 +35,13 @@ activation = sigmoid
 
 val-size = 0.2
 test-size = 0.1
+
+wandb = True
+wandb-entity = aniskhan25
+wandb-project = treemort
+wandb-run-id =
+dataset-artifact =
+init-model-artifact =
+freeze-epochs = 0
+keep-first-encoder-blocks = 0
+promote-threshold = 0.0

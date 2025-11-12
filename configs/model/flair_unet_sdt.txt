@@ -4,6 +4,7 @@ include = base_config.txt
 
 model = flair_unet_sdt
 
-resume = True
-
 output-channels = 3
+
+freeze-epochs = 0
+keep-first-encoder-blocks = 0

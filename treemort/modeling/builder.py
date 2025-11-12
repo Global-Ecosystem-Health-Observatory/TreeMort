@@ -1,40 +1,38 @@
 import os
-import torch
 
 from treemort.modeling.model_config import configure_model
 from treemort.modeling.callback_builder import build_callbacks
 from treemort.modeling.optimizer_loss_config import configure_optimizer, configure_loss_and_metrics
 
 from treemort.utils.logger import get_logger
-from treemort.utils.checkpoints import get_checkpoint
+from treemort.utils.wandb_utils import init_weights_from_registry
+from treemort.utils.callbacks import EncoderFreezeCallback
 
 logger = get_logger(__name__)
 
 
-def resume_or_load(conf, id2label, n_batches, device):
+def resume_or_load(conf, id2label, n_batches, device, wandb_run=None):
     logger.info("Building model...")
 
     model, optimizer, schedular, criterion, metrics = build_model(conf, id2label, device, total_steps=conf.epochs * n_batches)
 
     callbacks = build_callbacks(n_batches, os.path.join(conf.output_dir, conf.model), optimizer)
 
-    if conf.resume:
-        load_checkpoint_if_available(model, conf)
+    if getattr(conf, "freeze_epochs", 0) > 0 and getattr(conf, "keep_first_encoder_blocks", 0) > 0:
+        callbacks.append(
+            EncoderFreezeCallback(
+                model,
+                freeze_epochs=conf.freeze_epochs,
+                keep_blocks=conf.keep_first_encoder_blocks,
+            )
+        )
+
+    if getattr(conf, "init_model_artifact", None):
+        init_weights_from_registry(model, conf.init_model_artifact, device, run=wandb_run)
     else:
         logger.info("Training model from scratch.")
 
     return model, optimizer, schedular, criterion, metrics, callbacks
-
-
-def load_checkpoint_if_available(model, conf):
-    checkpoint_path = get_checkpoint(conf.model_weights, os.path.join(conf.output_dir, conf.model))
-
-    if checkpoint_path:
-        device = next(model.parameters()).device  # Get the device of the model
-        model.load_state_dict(torch.load(checkpoint_path, map_location=device, weights_only=True))
-        logger.info(f"Loaded weights from {checkpoint_path}.")
-    else:
-        logger.info("No checkpoint found. Training from scratch.")
 
 
 def build_model(conf, id2label, device, total_steps=1):

@@ -3,5 +3,3 @@
 include = base_config.txt
 
 model = flair_unet
-
-resume = True

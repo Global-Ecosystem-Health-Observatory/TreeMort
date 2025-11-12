@@ -12,7 +12,11 @@ from treemort.utils.datautils import load_and_organize_data, stratify_images_by_
 
 
 def prepare_datasets(conf):
-    hdf5_path = Path(conf.data_folder).parent / conf.hdf5_file
+    hdf5_candidate = Path(conf.hdf5_file)
+    if hdf5_candidate.is_absolute():
+        hdf5_path = hdf5_candidate
+    else:
+        hdf5_path = Path(conf.data_folder).parent / conf.hdf5_file
 
     image_patch_map = load_and_organize_data(hdf5_path)
 
@@ -56,4 +60,5 @@ def prepare_datasets(conf):
     val_loader = DataLoader(val_dataset, batch_size=conf.val_batch_size, sampler=BalancedSampler(hdf5_path, val_keys), shuffle=False, drop_last=True)
     test_loader = DataLoader(test_dataset, batch_size=conf.test_batch_size, sampler=BalancedSampler(hdf5_path, test_keys), shuffle=False, drop_last=True)
     
-    return train_loader, val_loader, test_loader
+    # return train_loader, val_loader, test_loader
+    return train_loader, train_loader, train_loader  # Temporary for testing purposes

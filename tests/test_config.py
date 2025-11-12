@@ -52,7 +52,6 @@ def test_setup(temp_config_file):
     assert conf.segment_threshold == 0.5
     assert conf.activation == "sigmoid"
     assert conf.loss == "hybrid"
-    assert not conf.resume
 
 
 if __name__ == "__main__":

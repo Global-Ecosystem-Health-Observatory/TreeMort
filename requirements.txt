@@ -13,3 +13,4 @@ scikit-learn>=1.5.2
 configargparse>=1.7
 opencv-python-headless>=4.10.0.84
 segmentation-models-pytorch>=0.3.3
+wandb>=0.17.0
