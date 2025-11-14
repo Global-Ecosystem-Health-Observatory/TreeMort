@@ -2,12 +2,8 @@ import h5py
 import random
 
 import numpy as np
-import pandas as pd
-import geopandas as gpd
-
 from collections import defaultdict
 from sklearn.cluster import DBSCAN
-from shapely.geometry import Point
 
 
 def load_and_organize_data(hdf5_file_path):
@@ -76,73 +72,123 @@ def stratify_images_by_patch_count(image_patch_map, val_ratio, test_ratio):
     return train_keys, val_keys, test_keys
 
 
-def stratify_images_by_region(image_patch_map, val_ratio=0.2, test_ratio=0.1, lat_bin_size=2.0, lon_bin_size=2.0, eps = 0.5):
-    rows = []
+def stratify_images_by_region(
+    image_patch_map,
+    val_ratio=0.2,
+    test_ratio=0.1,
+    lat_bin_size=2.0,
+    lon_bin_size=2.0,
+    eps=0.5,
+):
+    """
+    Memory-efficient spatial stratification that mimics the previous GeoPandas-based logic.
 
-    for filename, patches in image_patch_map.items():
+    We aggregate patches into coarse lat/lon bins first, then run DBSCAN on the bin centroids.
+    This keeps the clustering workload bounded by the number of bins instead of the number of
+    individual patches (which can be in the hundreds of thousands).
+    """
+    bin_map = {}
+    missing_coords_keys = []
+
+    def _safe_float(value):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    for patches in image_patch_map.values():
         for key, dead_tree_count, latitude, longitude, _, _ in patches:
-            rows.append({
-                "Key": key,
-                "Filename": filename,
-                "DeadTreeCount": dead_tree_count,
-                "Latitude": latitude,
-                "Longitude": longitude
-            })
+            lat = _safe_float(latitude)
+            lon = _safe_float(longitude)
+            if lat is None or lon is None:
+                missing_coords_keys.append((key, dead_tree_count))
+                continue
 
-    df = pd.DataFrame(rows)
+            lat_bin = int(lat // lat_bin_size)
+            lon_bin = int(lon // lon_bin_size)
+            bin_key = (lat_bin, lon_bin)
 
-    df["Latitude"] = pd.to_numeric(df["Latitude"], errors="coerce")
-    df["Longitude"] = pd.to_numeric(df["Longitude"], errors="coerce")
+            if bin_key not in bin_map:
+                bin_map[bin_key] = {
+                    "keys": [],
+                    "dead_trees": 0.0,
+                    "lat_sum": 0.0,
+                    "lon_sum": 0.0,
+                    "count": 0,
+                }
 
-    df = df.dropna(subset=["Latitude", "Longitude"])
+            entry = bin_map[bin_key]
+            entry["keys"].append(key)
+            entry["dead_trees"] += float(dead_tree_count)
+            entry["lat_sum"] += lat
+            entry["lon_sum"] += lon
+            entry["count"] += 1
 
-    df["geometry"] = [Point(lon, lat) for lon, lat in zip(df["Longitude"], df["Latitude"])]
-    gdf = gpd.GeoDataFrame(df, geometry="geometry", crs="EPSG:4326")
+    if not bin_map:
+        # No usable coordinates; fall back to simple stratification.
+        return stratify_images_by_patch_count(image_patch_map, val_ratio, test_ratio)
 
-    gdf["LatBin"] = (gdf.geometry.y // lat_bin_size).astype(int)
-    gdf["LonBin"] = (gdf.geometry.x // lon_bin_size).astype(int)
-    gdf["Region"] = gdf["LatBin"].astype(str) + "_" + gdf["LonBin"].astype(str)
+    coords = []
+    bin_entries = []
 
-    bin_aggregates = (
-        gdf.groupby("Region")["DeadTreeCount"]
-        .sum()
-        .reset_index()
-        .rename(columns={"DeadTreeCount": "TotalDeadTrees"})
-    )
-    gdf = gdf.merge(bin_aggregates, on="Region", how="left")
+    for entry in bin_map.values():
+        mean_lat = entry["lat_sum"] / max(entry["count"], 1)
+        mean_lon = entry["lon_sum"] / max(entry["count"], 1)
+        coords.append([mean_lon, mean_lat])
+        bin_entries.append(entry)
 
-    coords = np.array([(geom.x, geom.y) for geom in gdf.geometry])
+    coords = np.asarray(coords, dtype=float)
+    if len(coords) == 0:
+        return stratify_images_by_patch_count(image_patch_map, val_ratio, test_ratio)
+
     dbscan = DBSCAN(eps=eps, min_samples=1).fit(coords)
-    gdf["Cluster"] = dbscan.labels_
+    labels = dbscan.labels_
 
-    cluster_aggregates = (
-        gdf.groupby("Cluster")["TotalDeadTrees"]
-        .sum()
-        .reset_index()
-        .rename(columns={"TotalDeadTrees": "ClusterDeadTrees"})
+    cluster_bins = defaultdict(list)
+    cluster_dead_counts = defaultdict(float)
+
+    for label, entry in zip(labels, bin_entries):
+        cluster_bins[label].append(entry)
+        cluster_dead_counts[label] += entry["dead_trees"]
+
+    cluster_order = sorted(
+        cluster_bins.keys(),
+        key=lambda c: cluster_dead_counts[c],
+        reverse=True,
     )
-    cluster_aggregates = cluster_aggregates.sort_values("ClusterDeadTrees", ascending=False)
 
-    total_dead_trees = cluster_aggregates["ClusterDeadTrees"].sum()
+    total_dead_trees = sum(cluster_dead_counts.values())
+    if total_dead_trees <= 0:
+        # Degenerate case: no dead-tree counts; fall back to uniform patch split.
+        return stratify_images_by_patch_count(image_patch_map, val_ratio, test_ratio)
+
     desired_ratios = np.array([1 - val_ratio - test_ratio, val_ratio, test_ratio])
     target_counts = (desired_ratios * total_dead_trees).round()
 
     train_keys, val_keys, test_keys = [], [], []
-    train_count, val_count, test_count = 0, 0, 0
+    train_count = val_count = test_count = 0.0
 
-    for _, row in cluster_aggregates.iterrows():
-        cluster = row["Cluster"]
-        cluster_dead_trees = row["ClusterDeadTrees"]
-        cluster_keys = gdf[gdf["Cluster"] == cluster]["Key"].tolist()
+    for cluster in cluster_order:
+        cluster_keys = []
+        for entry in cluster_bins[cluster]:
+            cluster_keys.extend(entry["keys"])
+
+        cluster_dead = cluster_dead_counts[cluster]
 
         if train_count < target_counts[0]:
             train_keys.extend(cluster_keys)
-            train_count += cluster_dead_trees
+            train_count += cluster_dead
         elif val_count < target_counts[1]:
             val_keys.extend(cluster_keys)
-            val_count += cluster_dead_trees
+            val_count += cluster_dead
         elif test_count < target_counts[2]:
             test_keys.extend(cluster_keys)
-            test_count += cluster_dead_trees
+            test_count += cluster_dead
+        else:
+            train_keys.extend(cluster_keys)
+
+    # Append any keys that lacked coordinates to the training split as a fallback.
+    if missing_coords_keys:
+        train_keys.extend(key for key, _ in missing_coords_keys)
 
     return train_keys, val_keys, test_keys
