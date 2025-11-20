@@ -119,9 +119,9 @@ def get_image_and_polygons(
     nir_rgb_order: list[int],
     normalize_channelwise: bool,
     normalize_imagewise: bool,
-) -> tuple[np.ndarray, list[np.ndarray]]:
+) -> tuple[np.ndarray, list[np.ndarray], np.ndarray]:
 
-    img_arr, bounds, resolution = load_geotiff(
+    img_arr, bounds, resolution, raw_arr = load_geotiff(
         image_filepath,
         nir_rgb_order,
         normalize_channelwise,
@@ -142,7 +142,7 @@ def get_image_and_polygons(
 
         adjusted_polygons.append(np.int32(np.array(adjusted_polygon).reshape((-1, 1, 2))))
 
-    return img_arr, adjusted_polygons
+    return img_arr, adjusted_polygons, raw_arr
 
 
 def geo_to_img_coords(
@@ -166,7 +166,7 @@ def load_geotiff(
     nir_rgb_order: list[int],
     normalize_channelwise: bool = False,
     normalize_imagewise: bool = False,
-) -> tuple[np.ndarray, tuple[float], tuple[float]]:
+) -> tuple[np.ndarray, tuple[float], tuple[float], np.ndarray]:
            
     with rasterio.open(filename) as img:
         img_arr = np.moveaxis(img.read(), 0, -1).astype(np.float32)
@@ -178,17 +178,19 @@ def load_geotiff(
         else:
             img_arr[img_arr < -3e38] = 0
 
+        raw_arr = img_arr.copy()
+
         if normalize_channelwise:
-            img_arr = normalize_channelwise_to_uint8(img_arr)
+            img_arr = normalize_channelwise_to_uint8(img_arr.copy())
         elif normalize_imagewise:
-            img_arr = normalize_imagewise_to_uint8(img_arr)
+            img_arr = normalize_imagewise_to_uint8(img_arr.copy())
         else:
             img_arr = np.uint8(np.clip(img_arr, 0, 255))
 
         bounds = tuple(img.bounds)
         resolution = img.res
 
-    return img_arr, bounds, resolution
+    return img_arr, bounds, resolution, raw_arr
 
 
 def load_geojson_labels(geojson_path: str) -> list[list[list[float]]]:

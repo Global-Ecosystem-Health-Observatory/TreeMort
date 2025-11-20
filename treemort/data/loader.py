@@ -24,7 +24,18 @@ def prepare_datasets(conf):
 
     random.seed(None) # makes loader non-deterministic
 
-    train_transform = Augmentations()
+    aug_kwargs = {
+        "brightness": getattr(conf, "augment_brightness_jitter", 0.0),
+        "contrast": getattr(conf, "augment_contrast_jitter", 0.0),
+        "gamma_range": tuple(getattr(conf, "augment_gamma_range", [1.0, 1.0])),
+        "hue": getattr(conf, "augment_hue_jitter", 0.0),
+        "saturation": getattr(conf, "augment_saturation_jitter", 0.0),
+        "noise_range": tuple(getattr(conf, "augment_noise_range", [1.0, 1.0])),
+        "scale_range": tuple(getattr(conf, "augment_scale_range", [1.0, 1.0])),
+        "scale_prob": getattr(conf, "augment_scale_prob", 0.0),
+        "blur_prob": getattr(conf, "augment_blur_prob", 0.0),
+    }
+    train_transform = Augmentations(**aug_kwargs)
     val_transform = None
     test_transform = None
 

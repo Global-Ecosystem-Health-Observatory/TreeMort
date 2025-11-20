@@ -17,10 +17,16 @@ def resume_or_load(conf, id2label, n_batches, device):
 
     model, optimizer, schedular, criterion, metrics = build_model(conf, id2label, device, total_steps=conf.epochs * n_batches)
 
-    callbacks = build_callbacks(n_batches, os.path.join(conf.output_dir, conf.model), optimizer)
+    run_dir = getattr(conf, 'run_dir', os.path.join(conf.output_dir, conf.model))
+    callbacks = build_callbacks(
+        n_batches,
+        run_dir,
+        optimizer,
+        best_model=getattr(conf, 'best_model', 'best.weights.pth')
+    )
 
     if conf.resume:
-        load_checkpoint_if_available(model, conf)
+        load_checkpoint_if_available(model, conf, run_dir)
     else:
         logger.info("Training model from scratch.")
 
@@ -74,43 +80,61 @@ def _freeze_encoder_blocks(model, keep_first_n=1):
     of the backbone while keeping the very first Conv2d trainable if exact
     structure is unknown.
     """
-    # Try common attributes first
-    try:
-        enc = getattr(model, 'encoder', None)
-        blocks = None
-        if enc is not None:
-            if hasattr(enc, 'blocks'):
-                blocks = list(enc.blocks)
-            elif hasattr(enc, 'stages'):
-                blocks = list(enc.stages)
-            elif hasattr(enc, 'layer1') and hasattr(enc, 'layer2'):
-                # ResNet-like
-                blocks = [b for b in [getattr(enc, 'layer1', None), getattr(enc, 'layer2', None), getattr(enc, 'layer3', None), getattr(enc, 'layer4', None)] if b is not None]
-        if blocks:
-            for i, blk in enumerate(blocks):
-                if i < keep_first_n:
-                    continue
-                for p in blk.parameters():
-                    p.requires_grad = False
-            logger.info(f"Froze encoder blocks {keep_first_n}..{len(blocks)-1} (kept first {keep_first_n} trainable).")
-            return True
-    except Exception as e:
-        logger.warning(f"Encoder-specific freezing failed with: {e}. Falling back to generic freeze.")
+    enc = getattr(model, 'encoder', None)
 
-    # Fallback: freeze everything except parameters belonging to the very first Conv2d encountered
-    first_conv_seen = False
-    for name, module in model.named_modules():
-        if isinstance(module, nn.Conv2d) and not first_conv_seen:
-            first_conv_seen = True
+    if enc is None and hasattr(model, 'feature_extractor'):
+        fe = getattr(model, 'feature_extractor')
+        base = getattr(fe, 'model', None)
+        if base is not None:
+            seg_model = getattr(base, 'seg_model', None)
+            if seg_model is not None:
+                enc = getattr(seg_model, 'encoder', None)
+
+    if enc is None:
+        logger.warning("Freeze requested but encoder structure not found; skipping encoder freezing.")
+        return False
+
+    blocks = None
+    if hasattr(enc, 'blocks'):
+        blocks = list(enc.blocks)
+    elif hasattr(enc, 'stages'):
+        blocks = list(enc.stages)
+    elif hasattr(enc, 'layer1') and hasattr(enc, 'layer2'):
+        blocks = [
+            b
+            for b in [
+                getattr(enc, 'layer1', None),
+                getattr(enc, 'layer2', None),
+                getattr(enc, 'layer3', None),
+                getattr(enc, 'layer4', None)
+            ]
+            if b is not None
+        ]
+
+    if not blocks:
+        logger.warning("Encoder blocks not detected; skipping freeze.")
+        return False
+
+    for i, blk in enumerate(blocks):
+        if i < keep_first_n:
             continue
-        for p in getattr(module, 'parameters', lambda: [])():
+        for p in blk.parameters():
             p.requires_grad = False
-    logger.info("Applied fallback freezing: kept first Conv2d trainable, froze the rest.")
+
+    logger.info(f"Froze encoder blocks {keep_first_n}..{len(blocks)-1} (kept first {keep_first_n} trainable).")
     return True
 
 
-def load_checkpoint_if_available(model, conf):
-    checkpoint_path = get_checkpoint(conf.model_weights, os.path.join(conf.output_dir, conf.model))
+def load_checkpoint_if_available(model, conf, run_dir):
+    checkpoint_path = getattr(conf, 'resume_from', None)
+    if checkpoint_path:
+        checkpoint_path = os.path.expandvars(checkpoint_path)
+    if not checkpoint_path:
+        checkpoint_path = get_checkpoint(
+            conf.model_weights,
+            run_dir,
+            getattr(conf, 'best_model', 'best.weights.pth')
+        )
 
     if checkpoint_path:
         device = next(model.parameters()).device

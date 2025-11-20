@@ -7,3 +7,13 @@ data-folder = ${TREEMORT_DATA_PATH}/Switzerland/RGB/10cm
 hdf5-file = Switzerland_RGB_10cm.h5
 
 nir-rgb-order = [0, 1, 2]
+
+augment-brightness-jitter = 0.4
+augment-contrast-jitter = 0.35
+augment-gamma-range = [0.65, 1.35]
+augment-hue-jitter = 0.06
+augment-saturation-jitter = 0.3
+augment-noise-range = [0.75, 1.25]
+augment-scale-range = [0.5, 1.0]
+augment-scale-prob = 0.35
+augment-blur-prob = 0.35

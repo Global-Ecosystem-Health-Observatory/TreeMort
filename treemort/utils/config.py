@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import configargparse
 
 from treemort.utils.logger import get_logger, log_and_raise
@@ -74,6 +75,7 @@ def build_parser(config_files):
 
     model_group = parser.add_argument_group('Model')
     model_group.add("--model", type=str, required=True, help="neural network model name for training")
+    model_group.add("--run-id", type=str, default="", help="Unique identifier for the training run; used to isolate checkpoints.")
     model_group.add("--backbone", type=str, default=None, help="model backbone")
     model_group.add("--model-weights", type=str, default="latest", help="weights file for training continuation")
     model_group.add("--best-model", type=str, default='best.weights.pth', help="Path to the file containing the best model weights.")
@@ -98,6 +100,7 @@ def build_parser(config_files):
     train_group.add("--resume", action="store_true", help="resume training using stored model weights")
     train_group.add("--freeze-epochs", type=int, default=0, help="Number of epochs to keep encoder blocks frozen during transfer learning (default: 0 disables freezing).")
     train_group.add("--keep-first-encoder-blocks", type=int, default=1, help="Number of initial encoder blocks to keep trainable during freeze phase.")
+    train_group.add("--resume-from", type=str, default=None, help="Optional checkpoint path to initialize weights from before training.")
 
     data_group = parser.add_argument_group('Data')
     data_group.add("--data-folder",     type=str, required=True, help="directory with aerial image and label data")
@@ -110,6 +113,15 @@ def build_parser(config_files):
     data_group.add("--normalize-imagewise",   action="store_true", help="normalize imagewise")
     data_group.add("--normalize-channelwise", action="store_true", help="normalize channelwise")
     data_group.add("--test-only", action="store_true", default=False, help="run evaluation on entire data as test set")
+    data_group.add("--augment-brightness-jitter", type=float, default=0.0, help="Max fractional brightness jitter (0 disables).")
+    data_group.add("--augment-contrast-jitter", type=float, default=0.0, help="Max fractional contrast jitter (0 disables).")
+    data_group.add("--augment-gamma-range", type=float, nargs=2, default=[1.0, 1.0], help="Gamma range [min max] for power-law augmentation.")
+    data_group.add("--augment-hue-jitter", type=float, default=0.0, help="Hue jitter magnitude applied to RGB channels.")
+    data_group.add("--augment-saturation-jitter", type=float, default=0.0, help="Fractional saturation jitter applied to RGB channels.")
+    data_group.add("--augment-noise-range", type=float, nargs=2, default=[1.0, 1.0], help="Multiplicative noise range [min max].")
+    data_group.add("--augment-scale-range", type=float, nargs=2, default=[1.0, 1.0], help="Scale jitter range [min max] for downsampling/upsampling.")
+    data_group.add("--augment-scale-prob", type=float, default=0.0, help="Probability of applying scale jitter.")
+    data_group.add("--augment-blur-prob", type=float, default=0.0, help="Probability of applying Gaussian blur.")
 
     inference_group = parser.add_argument_group('Inference')
     inference_group.add("--min-area", type=float, default=1.0, help="Minimum area (in pixels) for retaining a detected region.")
@@ -127,7 +139,7 @@ def build_parser(config_files):
     return parser
 
 
-def setup(config_file_path, model_config=None, data_config=None):
+def setup(config_file_path, model_config=None, data_config=None, cli_args=None):
     logger = get_logger()
 
     validate_path(config_file_path)
@@ -138,10 +150,30 @@ def setup(config_file_path, model_config=None, data_config=None):
     config_files = include_files + [config_file_path]
 
     parser = build_parser(config_files)
-    conf, _ = parser.parse_known_args()
+
+    # If cli_args is None, use real sys.argv; otherwise use the provided list
+    if cli_args is None:
+        conf, _ = parser.parse_known_args()
+    else:
+        conf, _ = parser.parse_known_args(args=cli_args)
 
     conf.data_folder = expand_path(conf.data_folder)
     conf.output_dir = expand_path(conf.output_dir)
+    if getattr(conf, "resume_from", None):
+        conf.resume_from = expand_path(conf.resume_from)
+
+    run_id = (getattr(conf, "run_id", "") or "").strip()
+    if not run_id:
+        hdf5_name = getattr(conf, "hdf5_file", None)
+        if hdf5_name:
+            run_id = Path(hdf5_name).stem
+        else:
+            run_id = "default"
+    conf.run_id = run_id.replace(" ", "_")
+    base_run_dir = os.path.join(conf.output_dir, conf.model)
+    if conf.run_id:
+        base_run_dir = os.path.join(base_run_dir, conf.run_id)
+    conf.run_dir = base_run_dir
 
     conf.min_area_pixels = conf.min_area / 0.0625
 

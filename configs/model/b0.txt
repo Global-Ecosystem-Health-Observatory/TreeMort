@@ -4,6 +4,8 @@ include = base_config.txt
 
 model = flair_unet_sdt
 
+run-id = finland_rgb_b0
+
 resume = False
 
 input-channels = 3

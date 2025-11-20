@@ -21,6 +21,10 @@ def run(conf, eval_only):
     else:
         logger.info(f"Output directory already exists: {conf.output_dir}")
 
+    run_dir = getattr(conf, "run_dir", os.path.join(conf.output_dir, conf.model))
+    os.makedirs(run_dir, exist_ok=True)
+    logger.info(f"Run directory: {run_dir}")
+
     id2label = {0: "alive", 1: "dead"}
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
