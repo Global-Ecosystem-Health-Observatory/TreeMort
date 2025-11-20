@@ -59,7 +59,7 @@ cat <<EOT > $SBATCH_SCRIPT
 #SBATCH --account=$PROJECT_NAME
 #SBATCH --output=output/stdout/%A_%a
 #SBATCH --ntasks=1 --cpus-per-task=4
-#SBATCH --mem-per-cpu=32G
+#SBATCH --mem=160G
 #SBATCH --time=$TIME_LIMIT
 #SBATCH --partition=$PARTITION_NAME
 $GPU_DIRECTIVE
