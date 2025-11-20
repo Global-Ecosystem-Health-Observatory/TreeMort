@@ -16,3 +16,5 @@ augment-noise-range = [0.85, 1.15]
 augment-scale-range = [0.7, 1.0]
 augment-scale-prob = 0.25
 augment-blur-prob = 0.25
+
+num-workers = 4

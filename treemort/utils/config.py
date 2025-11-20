@@ -122,6 +122,7 @@ def build_parser(config_files):
     data_group.add("--augment-scale-range", type=float, nargs=2, default=[1.0, 1.0], help="Scale jitter range [min max] for downsampling/upsampling.")
     data_group.add("--augment-scale-prob", type=float, default=0.0, help="Probability of applying scale jitter.")
     data_group.add("--augment-blur-prob", type=float, default=0.0, help="Probability of applying Gaussian blur.")
+    data_group.add("--num-workers", type=int, default=4, help="Number of DataLoader workers to use.")
 
     inference_group = parser.add_argument_group('Inference')
     inference_group.add("--min-area", type=float, default=1.0, help="Minimum area (in pixels) for retaining a detected region.")

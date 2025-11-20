@@ -63,8 +63,34 @@ def prepare_datasets(conf):
         image_processor=image_processor,
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=conf.train_batch_size, sampler=BalancedSampler(hdf5_path, train_keys), drop_last=True)
-    val_loader = DataLoader(val_dataset, batch_size=conf.val_batch_size, sampler=BalancedSampler(hdf5_path, val_keys), shuffle=False, drop_last=True)
-    test_loader = DataLoader(test_dataset, batch_size=conf.test_batch_size, sampler=BalancedSampler(hdf5_path, test_keys), shuffle=False, drop_last=True)
+    loader_kwargs = dict(
+        num_workers=getattr(conf, "num_workers", 4),
+        pin_memory=True,
+        prefetch_factor=2
+    )
+
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=conf.train_batch_size,
+        sampler=BalancedSampler(hdf5_path, train_keys),
+        drop_last=True,
+        **loader_kwargs
+    )
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=conf.val_batch_size,
+        sampler=BalancedSampler(hdf5_path, val_keys),
+        shuffle=False,
+        drop_last=True,
+        **loader_kwargs
+    )
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=conf.test_batch_size,
+        sampler=BalancedSampler(hdf5_path, test_keys),
+        shuffle=False,
+        drop_last=True,
+        **loader_kwargs
+    )
     
     return train_loader, val_loader, test_loader
