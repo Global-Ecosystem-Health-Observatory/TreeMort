@@ -1,6 +1,7 @@
 import random
 
 from pathlib import Path
+import torch
 from torch.utils.data import DataLoader
 
 from treemort.data.dataset import DeadTreeDataset
@@ -63,11 +64,20 @@ def prepare_datasets(conf):
         image_processor=image_processor,
     )
 
+    num_workers = getattr(conf, "num_workers", 4)
+
+    has_accelerator = torch.cuda.is_available()
+    if not has_accelerator and hasattr(torch.backends, "mps"):
+        has_accelerator = torch.backends.mps.is_available()
+    if not has_accelerator and hasattr(torch.version, "hip"):
+        has_accelerator = torch.version.hip is not None
+
     loader_kwargs = dict(
-        num_workers=getattr(conf, "num_workers", 4),
-        pin_memory=True,
-        prefetch_factor=2
+        num_workers=num_workers,
+        pin_memory=has_accelerator,
     )
+    if num_workers > 0:
+        loader_kwargs["prefetch_factor"] = 2
 
     train_loader = DataLoader(
         train_dataset,
