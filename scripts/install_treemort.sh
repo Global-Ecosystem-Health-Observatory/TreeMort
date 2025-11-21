@@ -16,8 +16,11 @@ TREEMORT_REPO_PATH="${TREEMORT_REPO_PATH:-/users/rahmanan/TreeMort}"
 declare -a MODULE_STACK
 TORCH_INSTALL_CMD=""
 
+MODULE_USE_CMD=""
+
 case "$HPC_TYPE" in
   lumi)
+    MODULE_USE_CMD="module use /appl/local/csc/modulefiles/"
     MODULE_STACK=("LUMI/23.09" "partition/G" "rocm" "pytorch/2.7")
     TORCH_INSTALL_CMD="python -m pip install --upgrade torch torchvision torchaudio --index-url https://download.pytorch.org/whl/rocm5.7"
     ;;
@@ -29,6 +32,11 @@ case "$HPC_TYPE" in
     MODULE_STACK=("pytorch/2.5")
     ;;
 esac
+
+if [ -n "$MODULE_USE_CMD" ]; then
+  echo "Running: $MODULE_USE_CMD"
+  eval "$MODULE_USE_CMD"
+fi
 
 for mod in "${MODULE_STACK[@]}"; do
   echo "Loading module: $mod"
