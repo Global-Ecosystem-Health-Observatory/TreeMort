@@ -59,10 +59,22 @@ fi
 
 pushd "$TREEMORT_REPO_PATH" >/dev/null
 
+REQ_FILE="requirements.txt"
+TMP_REQ=""
+if [ -n "$TORCH_INSTALL_CMD" ]; then
+  TMP_REQ=$(mktemp)
+  grep -vE '^(torch|torchvision|torchaudio)' requirements.txt > "$TMP_REQ"
+  REQ_FILE="$TMP_REQ"
+fi
+
 echo "Installing dependencies."
-python -m pip install --only-binary=:all: --no-cache-dir -r requirements.txt || {
+python -m pip install --only-binary=:all: --no-cache-dir -r "$REQ_FILE" || {
   echo "Error: Failed to install dependencies."; exit 1;
 }
+
+if [ -n "$TMP_REQ" ]; then
+  rm -f "$TMP_REQ"
+fi
 
 echo "Installing package from: $TREEMORT_REPO_PATH"
 python -m pip install --only-binary=:all: --no-cache-dir -e . || {
