@@ -75,6 +75,14 @@ else
     echo "[ERROR] Virtual environment not found at $TREEMORT_VENV_PATH"
     exit 1
 fi
+
+if [ -d "$TREEMORT_REPO_PATH" ]; then
+    echo "[INFO] Changing directory to $TREEMORT_REPO_PATH"
+    cd "$TREEMORT_REPO_PATH" || exit 1
+else
+    echo "[ERROR] Repository path not found at $TREEMORT_REPO_PATH"
+    exit 1
+fi
 EOT
 
 # Build the command string with optional flags
