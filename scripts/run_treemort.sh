@@ -29,7 +29,7 @@ if [ "$HPC_TYPE" == "lumi" ]; then
     PARTITION_NAME="small-g"
     TEST_PARTITION_NAME="dev-g"
     MODULE_NAME="pytorch/2.7"
-    MODULE_USE_CMD="module load LUMI/23.09 partition/G rocm"
+    MODULE_USE_CMD="module use /appl/local/csc/modulefiles/"
     GPU_DIRECTIVE="#SBATCH --gpus-per-node=1"
 else
     PROJECT_NAME="project_2004205"
