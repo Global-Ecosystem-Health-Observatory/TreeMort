@@ -83,6 +83,12 @@ else
     echo "[ERROR] Repository path not found at $TREEMORT_REPO_PATH"
     exit 1
 fi
+
+# Keep MIOpen cache under a repo-local .cache directory
+export MIOPEN_USER_DB_PATH="$TREEMORT_REPO_PATH/.cache/miopen"
+mkdir -p "$MIOPEN_USER_DB_PATH"
+
+echo "MIOpen cache path: $MIOPEN_USER_DB_PATH"
 EOT
 
 # Build the command string with optional flags
