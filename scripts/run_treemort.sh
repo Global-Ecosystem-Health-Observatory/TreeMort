@@ -76,6 +76,11 @@ else
     exit 1
 fi
 
+if [ -z "$TREEMORT_REPO_PATH" ]; then
+    echo "[ERROR] TREEMORT_REPO_PATH is not set."
+    exit 1
+fi
+
 if [ -d "$TREEMORT_REPO_PATH" ]; then
     echo "[INFO] Changing directory to $TREEMORT_REPO_PATH"
     cd "$TREEMORT_REPO_PATH" || exit 1
