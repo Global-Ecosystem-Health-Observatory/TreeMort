@@ -163,8 +163,8 @@ def stratify_images_by_region(
         return stratify_images_by_patch_count(image_patch_map, val_ratio, test_ratio)
 
     desired_ratios = np.array([1 - val_ratio - test_ratio, val_ratio, test_ratio])
-    cumulative = np.zeros(3, dtype=float)
     target_counts = desired_ratios * total_dead_trees
+    cumulative = np.zeros(3, dtype=float)
 
     train_keys, val_keys, test_keys = [], [], []
     splits = [train_keys, val_keys, test_keys]
@@ -176,12 +176,13 @@ def stratify_images_by_region(
 
         cluster_dead = cluster_dead_counts[cluster]
 
-        if cumulative.sum() == 0:
-            target_idx = 0
-        else:
-            actual_ratios = cumulative / cumulative.sum()
-            deficits = desired_ratios - actual_ratios
-            target_idx = int(np.argmax(deficits))
+        ratios = np.divide(
+            cumulative,
+            target_counts,
+            out=np.full_like(cumulative, np.inf),
+            where=target_counts > 0,
+        )
+        target_idx = int(np.argmin(ratios))
 
         splits[target_idx].extend(cluster_keys)
         cumulative[target_idx] += cluster_dead
