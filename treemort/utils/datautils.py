@@ -163,10 +163,10 @@ def stratify_images_by_region(
         return stratify_images_by_patch_count(image_patch_map, val_ratio, test_ratio)
 
     desired_ratios = np.array([1 - val_ratio - test_ratio, val_ratio, test_ratio])
-    target_counts = (desired_ratios * total_dead_trees).round()
+    target_counts = desired_ratios * total_dead_trees
 
     train_keys, val_keys, test_keys = [], [], []
-    train_count = val_count = test_count = 0.0
+    counts = np.zeros(3, dtype=float)
 
     for cluster in cluster_order:
         cluster_keys = []
@@ -175,20 +175,25 @@ def stratify_images_by_region(
 
         cluster_dead = cluster_dead_counts[cluster]
 
-        if train_count < target_counts[0]:
-            train_keys.extend(cluster_keys)
-            train_count += cluster_dead
-        elif val_count < target_counts[1]:
-            val_keys.extend(cluster_keys)
-            val_count += cluster_dead
-        elif test_count < target_counts[2]:
-            test_keys.extend(cluster_keys)
-            test_count += cluster_dead
+        deficits = target_counts - counts
+        deficits[deficits < 0] = 0
+        if deficits.sum() == 0:
+            target_idx = 0
         else:
-            train_keys.extend(cluster_keys)
+            target_idx = int(np.argmax(deficits))
 
-    # Append any keys that lacked coordinates to the training split as a fallback.
+        if target_idx == 0:
+            train_keys.extend(cluster_keys)
+        elif target_idx == 1:
+            val_keys.extend(cluster_keys)
+        else:
+            test_keys.extend(cluster_keys)
+        counts[target_idx] += cluster_dead
+
+    # Append missing-coordinate keys to whichever split is shortest
     if missing_coords_keys:
-        train_keys.extend(key for key, _ in missing_coords_keys)
+        splits = [train_keys, val_keys, test_keys]
+        target_idx = int(np.argmin([len(k) for k in splits]))
+        splits[target_idx].extend(key for key, _ in missing_coords_keys)
 
     return train_keys, val_keys, test_keys
