@@ -41,13 +41,8 @@ class DeadTreeDataset(Dataset):
     def _preprocess_image_and_label(self, image, label):
         image = torch.from_numpy(image).permute(2, 0, 1)  # [C, H, W]
         label = torch.from_numpy(label).permute(2, 0, 1)  # [C, H, W]
-        
+
         image = image / 255.0
-        if self._channel_mean is not None and self._channel_std is not None:
-            c = min(image.shape[0], self._channel_mean.shape[0])
-            mean = self._channel_mean[:c].view(-1, 1, 1)
-            std = self._channel_std[:c].view(-1, 1, 1)
-            image[:c] = (image[:c] - mean) / std
 
         image, label = self._center_crop_or_pad(image, label, self.crop_size)
 
