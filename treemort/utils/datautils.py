@@ -164,6 +164,9 @@ def stratify_images_by_region(
 
     desired_ratios = np.array([1 - val_ratio - test_ratio, val_ratio, test_ratio])
     target_counts = desired_ratios * total_dead_trees
+    min_cluster_fraction = 0.02
+    min_clusters_per_split = max(1, int(len(cluster_order) * min_cluster_fraction))
+    cluster_counts = np.zeros(3, dtype=int)
 
     train_keys, val_keys, test_keys = [], [], []
     counts = np.zeros(3, dtype=float)
@@ -177,8 +180,15 @@ def stratify_images_by_region(
 
         deficits = target_counts - counts
         deficits[deficits < 0] = 0
-        if deficits.sum() == 0:
-            target_idx = 0
+
+        need_min_cluster = np.array([
+            cluster_counts[i] < min_clusters_per_split for i in range(3)
+        ])
+
+        if need_min_cluster.any():
+            target_idx = int(np.argmax(need_min_cluster.astype(int) * (deficits + 1e-6)))
+        elif deficits.sum() == 0:
+            target_idx = int(np.argmin(cumulative_counts := [len(train_keys), len(val_keys), len(test_keys)]))
         else:
             target_idx = int(np.argmax(deficits))
 
@@ -189,6 +199,7 @@ def stratify_images_by_region(
         else:
             test_keys.extend(cluster_keys)
         counts[target_idx] += cluster_dead
+        cluster_counts[target_idx] += 1
 
     # Append missing-coordinate keys to whichever split is shortest
     if missing_coords_keys:
