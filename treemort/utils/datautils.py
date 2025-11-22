@@ -58,7 +58,8 @@ def bin_images_by_patch_count(image_patch_map, val_ratio, test_ratio, seed=42):
 def extract_keys_from_images(image_patch_map, images):
     keys = []
     for img in images:
-        keys.extend([entry[0] for entry in image_patch_map[img]])
+        for entry in image_patch_map[img]:
+            keys.append(entry[0])
     return keys
 
 
