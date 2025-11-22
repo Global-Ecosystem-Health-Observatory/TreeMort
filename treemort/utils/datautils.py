@@ -193,4 +193,8 @@ def stratify_images_by_region(
         target_idx = int(np.argmin([len(k) for k in splits]))
         splits[target_idx].extend(key for key, _ in missing_coords_keys)
 
+    total_keys = len(train_keys) + len(val_keys) + len(test_keys)
+    if total_keys == 0 or len(test_keys) < max(1, 0.05 * total_keys) or len(val_keys) < max(1, 0.1 * total_keys):
+        return stratify_images_by_patch_count(image_patch_map, val_ratio, test_ratio)
+
     return train_keys, val_keys, test_keys
