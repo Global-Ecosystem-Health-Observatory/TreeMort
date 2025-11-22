@@ -163,13 +163,11 @@ def stratify_images_by_region(
         return stratify_images_by_patch_count(image_patch_map, val_ratio, test_ratio)
 
     desired_ratios = np.array([1 - val_ratio - test_ratio, val_ratio, test_ratio])
+    cumulative = np.zeros(3, dtype=float)
     target_counts = desired_ratios * total_dead_trees
-    min_cluster_fraction = 0.02
-    min_clusters_per_split = max(1, int(len(cluster_order) * min_cluster_fraction))
-    cluster_counts = np.zeros(3, dtype=int)
 
     train_keys, val_keys, test_keys = [], [], []
-    counts = np.zeros(3, dtype=float)
+    splits = [train_keys, val_keys, test_keys]
 
     for cluster in cluster_order:
         cluster_keys = []
@@ -178,28 +176,15 @@ def stratify_images_by_region(
 
         cluster_dead = cluster_dead_counts[cluster]
 
-        deficits = target_counts - counts
-        deficits[deficits < 0] = 0
-
-        need_min_cluster = np.array([
-            cluster_counts[i] < min_clusters_per_split for i in range(3)
-        ])
-
-        if need_min_cluster.any():
-            target_idx = int(np.argmax(need_min_cluster.astype(int) * (deficits + 1e-6)))
-        elif deficits.sum() == 0:
-            target_idx = int(np.argmin(cumulative_counts := [len(train_keys), len(val_keys), len(test_keys)]))
+        if cumulative.sum() == 0:
+            target_idx = 0
         else:
+            actual_ratios = cumulative / cumulative.sum()
+            deficits = desired_ratios - actual_ratios
             target_idx = int(np.argmax(deficits))
 
-        if target_idx == 0:
-            train_keys.extend(cluster_keys)
-        elif target_idx == 1:
-            val_keys.extend(cluster_keys)
-        else:
-            test_keys.extend(cluster_keys)
-        counts[target_idx] += cluster_dead
-        cluster_counts[target_idx] += 1
+        splits[target_idx].extend(cluster_keys)
+        cumulative[target_idx] += cluster_dead
 
     # Append missing-coordinate keys to whichever split is shortest
     if missing_coords_keys:
