@@ -47,6 +47,10 @@ def run(conf, eval_only):
         logger.warning("`test_only` is True but `--eval-only` not set. Forcing evaluation-only mode.")
         eval_only = True
 
+    if eval_only and not getattr(conf, "resume", False):
+        logger.info("Evaluation requested; forcing resume to load saved weights.")
+        conf.resume = True
+
     logger.info("Loading or resuming model...")
     # Use a sensible length for model setup even in test-only mode
     num_steps_for_setup = train_len if train_len > 0 else test_len
