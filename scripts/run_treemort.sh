@@ -89,17 +89,10 @@ export MIOPEN_USER_DB_PATH="${TREEMORT_REPO_PATH:-.}/.cache/miopen"
 mkdir -p "$MIOPEN_USER_DB_PATH"
 
 echo "MIOpen cache path: $MIOPEN_USER_DB_PATH"
-
-# Ensure output directory lives inside repo unless overridden
-if [ -z "$TREEMORT_OUTPUT_DIR" ]; then
-    TREEMORT_OUTPUT_DIR="$TREEMORT_REPO_PATH/output"
-fi
-mkdir -p "$TREEMORT_OUTPUT_DIR"
-echo "[INFO] Using output dir: $TREEMORT_OUTPUT_DIR"
 EOT
 
 # Build the command string with optional flags
-CMD="srun python3 -m treemort.main \"$CONFIG_FILE\" --output-dir \"$TREEMORT_OUTPUT_DIR\""
+CMD="srun python3 -m treemort.main \"$CONFIG_FILE\""
 if [ -n "$DATA_CONFIG" ]; then
     CMD="$CMD --data-config \"$DATA_CONFIG\""
 fi
