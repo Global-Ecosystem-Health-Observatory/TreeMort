@@ -76,21 +76,16 @@ else
     exit 1
 fi
 
-if [ -z "$TREEMORT_REPO_PATH" ]; then
-    echo "[ERROR] TREEMORT_REPO_PATH is not set."
-    exit 1
-fi
-
-if [ -d "$TREEMORT_REPO_PATH" ]; then
+if [ -n "$TREEMORT_REPO_PATH" ] && [ -d "$TREEMORT_REPO_PATH" ]; then
     echo "[INFO] Changing directory to $TREEMORT_REPO_PATH"
     cd "$TREEMORT_REPO_PATH" || exit 1
 else
-    echo "[ERROR] Repository path not found at $TREEMORT_REPO_PATH"
+    echo "[ERROR] Repository path not found or TREEMORT_REPO_PATH not set."
     exit 1
 fi
 
 # Keep MIOpen cache under a repo-local .cache directory
-export MIOPEN_USER_DB_PATH="$TREEMORT_REPO_PATH/.cache/miopen"
+export MIOPEN_USER_DB_PATH="${TREEMORT_REPO_PATH:-.}/.cache/miopen"
 mkdir -p "$MIOPEN_USER_DB_PATH"
 
 echo "MIOpen cache path: $MIOPEN_USER_DB_PATH"
