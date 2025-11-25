@@ -9,10 +9,10 @@ from treemort.modeling.optimizer_loss_config import configure_optimizer, configu
 from treemort.utils.logger import get_logger
 from treemort.utils.checkpoints import get_checkpoint
 
-logger = get_logger(__name__)
-
 
 def resume_or_load(conf, id2label, n_batches, device):
+    logger = get_logger()
+    
     logger.info("Building model...")
 
     model, optimizer, schedular, criterion, metrics = build_model(conf, id2label, device, total_steps=conf.epochs * n_batches)
@@ -80,6 +80,8 @@ def _freeze_encoder_blocks(model, keep_first_n=1):
     of the backbone while keeping the very first Conv2d trainable if exact
     structure is unknown.
     """
+    logger = get_logger()
+
     enc = getattr(model, 'encoder', None)
 
     if enc is None and hasattr(model, 'feature_extractor'):
@@ -126,6 +128,8 @@ def _freeze_encoder_blocks(model, keep_first_n=1):
 
 
 def load_checkpoint_if_available(model, conf, run_dir):
+    logger = get_logger()
+
     checkpoint_path = getattr(conf, 'resume_from', None)
     if checkpoint_path:
         checkpoint_path = os.path.expandvars(checkpoint_path)
@@ -172,6 +176,8 @@ def load_checkpoint_if_available(model, conf, run_dir):
 
 
 def build_model(conf, id2label, device, total_steps=1):
+    logger = get_logger()
+    
     model = configure_model(conf, id2label)
     model.to(device)
     logger.info(f"Model successfully moved to {device}.")

@@ -21,10 +21,10 @@ from treemort.modeling.network.custom_models import (
 from treemort.modeling.network.hcfnet.HCFnet import HCFnet
 from treemort.utils.logger import get_logger
 
-logger = get_logger(__name__)
-
 
 def configure_model(conf, id2label):
+    logger = get_logger()
+    
     model_choices = {
         "unet": lambda: configure_unet(conf),
         "sa_unet": lambda: configure_sa_unet(conf),

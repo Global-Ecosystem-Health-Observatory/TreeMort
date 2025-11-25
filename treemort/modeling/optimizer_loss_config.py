@@ -17,10 +17,10 @@ from treemort.utils.metrics import (
     aggregate_epoch_metrics_with_ci,
 )
 
-logger = get_logger(__name__)
-
 
 def configure_optimizer(model, learning_rate, total_steps):
+    logger = get_logger()
+
     optimizer = AdamW(model.parameters(), lr=learning_rate, weight_decay=1e-4)
 
     scheduler = OneCycleLR(optimizer, max_lr=learning_rate, total_steps=total_steps, pct_start=0.3)
@@ -32,6 +32,8 @@ def configure_optimizer(model, learning_rate, total_steps):
 
 
 def configure_loss_and_metrics(conf, class_weights=None):
+    logger = get_logger()
+    
     if conf.loss == "hybrid":
         tree_mortality_loss = TreeMortalityLoss()
 
