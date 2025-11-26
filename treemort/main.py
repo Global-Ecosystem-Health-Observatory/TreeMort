@@ -50,6 +50,9 @@ def run(conf, eval_only):
     if eval_only and not getattr(conf, "resume", False):
         logger.info("Evaluation requested; forcing resume to load saved weights.")
         conf.resume = True
+    if eval_only and getattr(conf, "resume_from", None):
+        logger.info("Eval-only run: ignoring 'resume_from' override to use run_dir checkpoint.")
+        conf.resume_from = None
 
     logger.info("Loading or resuming model...")
     # Use a sensible length for model setup even in test-only mode
