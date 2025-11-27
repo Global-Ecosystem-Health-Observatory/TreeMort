@@ -10,13 +10,14 @@ from treemort.data.image_processing import apply_image_processor
 
 
 class DeadTreeDataset(Dataset):
-    def __init__(self, hdf5_file, keys, crop_size=256, transform=None, image_processor=None, add_synthetic_rgbi=False):
+    def __init__(self, hdf5_file, keys, crop_size=256, transform=None, image_processor=None, add_synthetic_rgbi=False, downsample_factor=None):
         self.hdf5_file = hdf5_file
         self.keys = keys
         self.crop_size = crop_size
         self.transform = transform
         self.image_processor = image_processor
         self.add_synthetic_rgbi = add_synthetic_rgbi
+        self.downsample_factor = downsample_factor if downsample_factor and downsample_factor > 0 else None
         self._channel_mean = None
         self._channel_std = None
         self._load_normalization_stats()
@@ -51,6 +52,11 @@ class DeadTreeDataset(Dataset):
         image = image / 255.0
 
         image, label = self._center_crop_or_pad(image, label, self.crop_size)
+
+        if self.downsample_factor and self.downsample_factor < 1.0:
+            scale = float(self.downsample_factor)
+            image = F.interpolate(image.unsqueeze(0), scale_factor=scale, mode='bilinear', align_corners=False)
+            image = F.interpolate(image, size=(self.crop_size, self.crop_size), mode='bilinear', align_corners=False).squeeze(0)
 
         if self.image_processor:
             image, label = apply_image_processor(image, label, self.image_processor)

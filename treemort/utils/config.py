@@ -87,6 +87,7 @@ def build_parser(config_files):
     model_group.add("--hybrid-threshold", type=float, default=-0.5, help="Threshold for filtering contours based on the hybrid map.")
     model_group.add("--class-weights", type=float, nargs="+", default=[0.5, 0.5], help="class weights for imbalanced classes")
     model_group.add("--add-synthetic-rgbi", action="store_true", help="Append a synthetic NIR-like channel derived from RGB inputs.")
+    model_group.add("--downsample-factor", type=float, default=None, help="If set (<1), downsample imagery by this scale before feeding the network.")
 
     train_group = parser.add_argument_group('Training')
     train_group.add("--epochs", type=int, required=True, help="number of epochs for training")
