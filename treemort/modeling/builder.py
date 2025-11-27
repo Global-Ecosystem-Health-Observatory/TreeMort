@@ -46,8 +46,8 @@ def _match_first_conv_channels(ckpt_state, model_state, rgb_indices=(1, 2, 3)):
     def sig(v):
         return (int(v.shape[0]), int(v.shape[2]), int(v.shape[3]), int(v.shape[1]))
 
-    ckpt_candidates = {k: sig(ckpt_state[k]) for k in ckpt_conv_keys if ckpt_state[k].shape[1] == 4}
-    model_candidates = {k: sig(model_state[k]) for k in model_conv_keys if model_state[k].shape[1] == 3}
+    ckpt_candidates = {k: sig(ckpt_state[k]) for k in ckpt_conv_keys}
+    model_candidates = {k: sig(model_state[k]) for k in model_conv_keys}
 
     # Try to find a matching pair by out_ch and kernel size (ignore in_ch)
     for ck_k, (out_c, kH, kW, in_c_ck) in ckpt_candidates.items():
@@ -57,8 +57,8 @@ def _match_first_conv_channels(ckpt_state, model_state, rgb_indices=(1, 2, 3)):
                 if w.shape[1] == in_c_md:
                     ckpt_state[md_k] = w
                 elif w.shape[1] > in_c_md:
-                    rgb_idx = torch.tensor(list(rgb_indices[:in_c_md]), dtype=torch.long, device=w.device)
-                    ckpt_state[md_k] = w.index_select(dim=1, index=rgb_idx)
+                    idx = torch.tensor(list(rgb_indices)[:in_c_md], dtype=torch.long, device=w.device)
+                    ckpt_state[md_k] = w.index_select(dim=1, index=idx)
                 else:
                     pad_ch = in_c_md - w.shape[1]
                     mean_channel = w.mean(dim=1, keepdim=True)
