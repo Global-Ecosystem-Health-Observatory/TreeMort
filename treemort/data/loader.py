@@ -42,12 +42,15 @@ def prepare_datasets(conf):
 
     image_processor = get_image_processor(conf.model, conf.backbone)
 
+    add_rgbi = getattr(conf, "add_synthetic_rgbi", False)
+
     train_dataset = DeadTreeDataset(
         hdf5_file=hdf5_path,
         keys=train_keys,
         crop_size=conf.train_crop_size,
         transform=train_transform,
         image_processor=image_processor,
+        add_synthetic_rgbi=add_rgbi,
     )
     val_dataset = DeadTreeDataset(
         hdf5_file=hdf5_path,
@@ -55,6 +58,7 @@ def prepare_datasets(conf):
         crop_size=conf.val_crop_size,
         transform=val_transform,
         image_processor=image_processor,
+        add_synthetic_rgbi=add_rgbi,
     )
     test_dataset = DeadTreeDataset(
         hdf5_file=hdf5_path,
@@ -62,6 +66,7 @@ def prepare_datasets(conf):
         crop_size=conf.test_crop_size,
         transform=test_transform,
         image_processor=image_processor,
+        add_synthetic_rgbi=add_rgbi,
     )
 
     num_workers = getattr(conf, "num_workers", 4)
