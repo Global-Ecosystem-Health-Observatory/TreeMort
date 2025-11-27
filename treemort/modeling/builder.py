@@ -33,13 +33,10 @@ def resume_or_load(conf, id2label, n_batches, device):
     return model, optimizer, schedular, criterion, metrics, callbacks
 
 
-def _slice_first_conv_weights(ckpt_state, model_state, rgb_indices=(1, 2, 3)):
+def _match_first_conv_channels(ckpt_state, model_state, rgb_indices=(1, 2, 3)):
     """
-    Adapt a 4-channel first-conv (assumed order [NIR,R,G,B]) from the checkpoint
-    to the model's 3-channel first-conv by selecting RGB slices.
-    Finds a pair of conv weight tensors where ckpt has in_ch==4 and model has in_ch==3
-    with the same out_ch and kernel size, then slices.
-    Returns a possibly modified checkpoint state and a boolean indicating if surgery occurred.
+    Match checkpoint first-conv weights to target in/out channels by slicing or padding.
+    Handles both 4->3 (drop NIR) and 3->4 (synthetic extra channel) cases.
     """
     # Gather candidate conv weight keys (format: <module>.weight)
     ckpt_conv_keys = [k for k, v in ckpt_state.items() if k.endswith('weight') and hasattr(v, 'shape') and len(v.shape) == 4]
@@ -56,16 +53,17 @@ def _slice_first_conv_weights(ckpt_state, model_state, rgb_indices=(1, 2, 3)):
     for ck_k, (out_c, kH, kW, in_c_ck) in ckpt_candidates.items():
         for md_k, (out_c_md, kH_md, kW_md, in_c_md) in model_candidates.items():
             if out_c == out_c_md and kH == kH_md and kW == kW_md:
-                # Perform slicing
-                w4 = ckpt_state[ck_k]
-                if w4.shape[1] != 4:
-                    continue
-                # Select RGB slices from [NIR,R,G,B] → indices [1,2,3]
-                rgb_idx = torch.tensor(list(rgb_indices), dtype=torch.long, device=w4.device)
-                w3 = w4.index_select(dim=1, index=rgb_idx)
-                # Load into the model's expected key by overwriting checkpoint entry for that key
-                ckpt_state[md_k] = w3
-                # Remove the old 4ch key if names differ to avoid strict loading errors
+                w = ckpt_state[ck_k]
+                if w.shape[1] == in_c_md:
+                    ckpt_state[md_k] = w
+                elif w.shape[1] > in_c_md:
+                    rgb_idx = torch.tensor(list(rgb_indices[:in_c_md]), dtype=torch.long, device=w.device)
+                    ckpt_state[md_k] = w.index_select(dim=1, index=rgb_idx)
+                else:
+                    pad_ch = in_c_md - w.shape[1]
+                    mean_channel = w.mean(dim=1, keepdim=True)
+                    extra = mean_channel.repeat(1, pad_ch, 1, 1)
+                    ckpt_state[md_k] = torch.cat([w, extra], dim=1)
                 if md_k != ck_k and ck_k in ckpt_state:
                     del ckpt_state[ck_k]
                 return ckpt_state, True
@@ -149,7 +147,7 @@ def load_checkpoint_if_available(model, conf, run_dir):
         # Attempt 4→3 first-conv surgery if needed
         model_state = model.state_dict()
         try:
-            state, did_surgery = _slice_first_conv_weights(state, model_state, rgb_indices=(1, 2, 3))
+            state, did_surgery = _match_first_conv_channels(state, model_state, rgb_indices=(1, 2, 3))
             if did_surgery:
                 logger.info("Adapted first conv from 4→3 channels by selecting RGB slices (dropped NIR).")
         except Exception as e:
