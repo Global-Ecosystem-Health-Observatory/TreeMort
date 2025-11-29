@@ -1,0 +1,19 @@
+# Transfer run on Swiss data (immediate unfreeze vs progressive)
+
+include = base_config.txt
+
+model = flair_unet_sdt
+
+run-id = switzerland_rgb_t1_immediate
+
+resume = True
+
+input-channels = 3
+output-channels = 3
+
+# Immediate unfreeze
+freeze-epochs = 0
+keep-first-encoder-blocks = 0
+
+# Initialize from the Finland RGB checkpoint
+resume-from = ${TREEMORT_REPO_PATH}/output/flair_unet_sdt/finland_rgb_b0/best.weights.pth
