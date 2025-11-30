@@ -1,0 +1,15 @@
+# Scratch Finland RGBNIR baseline (4-channel)
+
+include = base_config.txt
+
+model = flair_unet_sdt
+
+run-id = finland_rgbn_b2
+
+resume = False
+
+input-channels = 4
+output-channels = 3
+
+freeze-epochs = 0
+keep-first-encoder-blocks = 0
