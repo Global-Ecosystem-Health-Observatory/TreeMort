@@ -44,6 +44,7 @@ def prepare_datasets(conf):
 
     add_rgbi = getattr(conf, "add_synthetic_rgbi", False)
     downsample_factor = getattr(conf, "downsample_factor", None)
+    channel_indices = getattr(conf, "channel_indices", None)
 
     train_dataset = DeadTreeDataset(
         hdf5_file=hdf5_path,
@@ -53,6 +54,7 @@ def prepare_datasets(conf):
         image_processor=image_processor,
         add_synthetic_rgbi=add_rgbi,
         downsample_factor=downsample_factor,
+        channel_indices=channel_indices,
     )
     val_dataset = DeadTreeDataset(
         hdf5_file=hdf5_path,
@@ -62,6 +64,7 @@ def prepare_datasets(conf):
         image_processor=image_processor,
         add_synthetic_rgbi=add_rgbi,
         downsample_factor=downsample_factor,
+        channel_indices=channel_indices,
     )
     test_dataset = DeadTreeDataset(
         hdf5_file=hdf5_path,
@@ -71,6 +74,7 @@ def prepare_datasets(conf):
         image_processor=image_processor,
         add_synthetic_rgbi=add_rgbi,
         downsample_factor=downsample_factor,
+        channel_indices=channel_indices,
     )
 
     num_workers = getattr(conf, "num_workers", 4)

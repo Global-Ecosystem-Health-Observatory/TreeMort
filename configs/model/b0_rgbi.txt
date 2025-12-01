@@ -4,12 +4,15 @@ include = base_config.txt
 
 model = flair_unet_sdt
 
-run-id = finland_rgbn_b2
+run-id = finland_rgbi_b0
 
 resume = False
 
 input-channels = 4
 output-channels = 3
+
+# Train on all 4 channels from the Finland HDF5
+channel-indices = [0, 1, 2, 3]
 
 freeze-epochs = 0
 keep-first-encoder-blocks = 0

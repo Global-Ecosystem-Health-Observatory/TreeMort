@@ -10,7 +10,7 @@ from treemort.data.image_processing import apply_image_processor
 
 
 class DeadTreeDataset(Dataset):
-    def __init__(self, hdf5_file, keys, crop_size=256, transform=None, image_processor=None, add_synthetic_rgbi=False, downsample_factor=None):
+    def __init__(self, hdf5_file, keys, crop_size=256, transform=None, image_processor=None, add_synthetic_rgbi=False, downsample_factor=None, channel_indices=None):
         self.hdf5_file = hdf5_file
         self.keys = keys
         self.crop_size = crop_size
@@ -18,6 +18,7 @@ class DeadTreeDataset(Dataset):
         self.image_processor = image_processor
         self.add_synthetic_rgbi = add_synthetic_rgbi
         self.downsample_factor = downsample_factor if downsample_factor and downsample_factor > 0 else None
+        self.channel_indices = channel_indices
         self._channel_mean = None
         self._channel_std = None
         self._load_normalization_stats()
@@ -29,6 +30,8 @@ class DeadTreeDataset(Dataset):
             group = hf[key]
             
             image = group['image'][()].astype(np.float32)
+            if self.channel_indices is not None:
+                image = image[..., self.channel_indices]
             if self.add_synthetic_rgbi:
                 rgb = image[..., :3]
                 synthetic = (0.3 * rgb[..., 0] + 0.59 * rgb[..., 1] + 0.11 * rgb[..., 2]).astype(np.float32)

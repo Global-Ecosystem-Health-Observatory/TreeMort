@@ -11,5 +11,8 @@ resume = False
 input-channels = 3
 output-channels = 3
 
+# Use 4-channel Finland HDF5 but train on RGB only
+channel-indices = [1, 2, 3]
+
 freeze-epochs = 0
 keep-first-encoder-blocks = 0
