@@ -67,14 +67,14 @@ unset PYTHONPATH
 # Ensure the repo root is on PYTHONPATH so we can run non-installed packages like `dataset`
 export PYTHONPATH="$TREEMORT_REPO_PATH"
 
-if [ -z "$VENV_PY" ] || [ ! -x "$VENV_PY" ]; then
-    echo "[ERROR] VENV_PY is not set or not executable: '$VENV_PY'"
+if [ -z "\$VENV_PY" ] || [ ! -x "\$VENV_PY" ]; then
+    echo "[ERROR] VENV_PY is not set or not executable: '\$VENV_PY'"
     exit 1
 fi
 
-echo "[INFO] Using python: $VENV_PY"
+echo "[INFO] Using python: \$VENV_PY"
 echo "[INFO] Starting creator..."
-srun "$VENV_PY" -m dataset.creator "$DATA_CONFIG_PATH" --num-workers \$SLURM_CPUS_PER_TASK
+srun "\$VENV_PY" -m dataset.creator "\$DATA_CONFIG_PATH" --num-workers \$SLURM_CPUS_PER_TASK
 
 EXIT_STATUS=\$?
 if [ \$EXIT_STATUS -ne 0 ]; then
