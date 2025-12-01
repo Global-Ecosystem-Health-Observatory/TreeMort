@@ -11,7 +11,7 @@ if [ -z "$2" ]; then
 fi
 
 if [ -z "$3" ]; then
-    echo "Error: DATA_TYPE argument is required (e.g., 'finland' or 'poland')."
+    echo "Error: DATA_TYPE argument is required (e.g., 'finland' or 'poland' or 'switzerland')."
     exit 1
 fi
 
@@ -19,15 +19,15 @@ export HPC_TYPE="$1"
 export MODEL_TYPE="$2"
 export DATA_TYPE="$3"
 
-export TREEMORT_REPO_PATH="/users/rahmanan/TreeMort"
+export TREEMORT_REPO_PATH="/users/aurahman/TreeMort"
 
 # Set global environment variables based on HPC type.
 if [ "$HPC_TYPE" == "puhti" ]; then
     export TREEMORT_VENV_PATH="/projappl/project_2004205/rahmanan/venv"
     export TREEMORT_DATA_PATH="/scratch/project_2008436/rahmanan/dead_trees"
 elif [ "$HPC_TYPE" == "lumi" ]; then
-    export TREEMORT_VENV_PATH="/projappl/project_462000684/rahmanan/venv"
-    export TREEMORT_DATA_PATH="/scratch/project_462000684/rahmanan/dead_trees"
+    export TREEMORT_VENV_PATH="/projappl/project_462001070/aurahman/venv"
+    export TREEMORT_DATA_PATH="/scratch/project_462001070/aurahman/dead_trees"
 else
     echo "Error: Unsupported HPC_TYPE '$HPC_TYPE'."
     exit 1
@@ -49,6 +49,9 @@ if [ "$DATA_TYPE" == "finland" ]; then
 elif [ "$DATA_TYPE" == "poland" ]; then
     export DATA_PATH="$TREEMORT_DATA_PATH/Poland/RGBNIR/25cm"
     export OUTPUT_PATH="$TREEMORT_DATA_PATH/Poland/$PREDICTIONS_FOLDER"
+elif [ "$DATA_TYPE" == "switzerland" ]; then
+    export DATA_PATH="$TREEMORT_DATA_PATH/Switzerland/RGB/10cm"
+    export OUTPUT_PATH="$TREEMORT_DATA_PATH/Switzerland/$PREDICTIONS_FOLDER"
 else
     echo "Error: Unsupported DATA_TYPE '$DATA_TYPE'."
     exit 1
