@@ -49,12 +49,7 @@ fi
 if [ -d "\$TREEMORT_VENV_PATH" ]; then
     echo "[INFO] Activating virtual environment at \$TREEMORT_VENV_PATH"
     source "\$TREEMORT_VENV_PATH/bin/activate"
-    # Prefer the python from the activated venv to avoid empty/inconsistent paths
-    VENV_PY="\$(command -v python)"
-    # Fallback to explicit path if lookup fails
-    if [ -z "\$VENV_PY" ] || [ ! -x "\$VENV_PY" ]; then
-        VENV_PY="\$TREEMORT_VENV_PATH/bin/python"
-    fi
+    VENV_PY="\$TREEMORT_VENV_PATH/bin/python3"
 else
     echo "[ERROR] Virtual environment not found at \$TREEMORT_VENV_PATH"
     exit 1
