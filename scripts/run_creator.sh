@@ -19,6 +19,12 @@ fi
 # Create SBATCH script
 SBATCH_SCRIPT=$(mktemp)
 
+# Require venv path up front
+if [ -z "${TREEMORT_VENV_PATH:-}" ]; then
+    echo "[ERROR] TREEMORT_VENV_PATH is not set. Export it before running this script."
+    exit 1
+fi
+
 # SLURM Job Configuration
 cat <<EOT > $SBATCH_SCRIPT
 #!/bin/bash
@@ -36,12 +42,16 @@ $MODULE_USE_CMD
 echo "Loading module: $MODULE_NAME"
 module load $MODULE_NAME
 
-if [ -d "$TREEMORT_VENV_PATH" ]; then
-    echo "[INFO] Activating virtual environment at $TREEMORT_VENV_PATH"
-    source "$TREEMORT_VENV_PATH/bin/activate"
-    VENV_PY="$TREEMORT_VENV_PATH/bin/python"
+if [ -z "\${TREEMORT_VENV_PATH:-}" ]; then
+    echo "[ERROR] TREEMORT_VENV_PATH is not set inside the job environment."
+    exit 1
+fi
+if [ -d "\$TREEMORT_VENV_PATH" ]; then
+    echo "[INFO] Activating virtual environment at \$TREEMORT_VENV_PATH"
+    source "\$TREEMORT_VENV_PATH/bin/activate"
+    VENV_PY="\$TREEMORT_VENV_PATH/bin/python"
 else
-    echo "[ERROR] Virtual environment not found at $TREEMORT_VENV_PATH"
+    echo "[ERROR] Virtual environment not found at \$TREEMORT_VENV_PATH"
     exit 1
 fi
 
