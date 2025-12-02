@@ -59,4 +59,4 @@ fi
 
 # Forward any optional flags (e.g., --post-process, --list-file) to the inference script.
 # Positional args $1-$3 are HPC_TYPE, MODEL_TYPE, DATA_TYPE; flags start from $4.
-bash "$TREEMORT_REPO_PATH/scripts/run_inference.sh" "$@" 
+bash "$TREEMORT_REPO_PATH/scripts/run_inference.sh" "${@:4}"
