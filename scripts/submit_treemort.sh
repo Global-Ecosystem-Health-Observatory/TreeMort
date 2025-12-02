@@ -31,12 +31,18 @@ if [ "$HPC_TYPE" == "puhti" ]; then
     if [ -z "${TREEMORT_DATA_PATH:-}" ]; then
         export TREEMORT_DATA_PATH="/scratch/project_2008436/aurahman/dead_trees"
     fi
+    if [ -z "${TREEMORT_OUTPUT_DIR:-}" ]; then
+        export TREEMORT_OUTPUT_DIR="/scratch/project_2008436/aurahman/output"
+    fi
 elif [ "$HPC_TYPE" == "lumi" ]; then
     if [ -z "${TREEMORT_VENV_PATH:-}" ]; then
         export TREEMORT_VENV_PATH="/projappl/project_462001070/aurahman/venv"
     fi
     if [ -z "${TREEMORT_DATA_PATH:-}" ]; then
         export TREEMORT_DATA_PATH="/scratch/project_462001070/aurahman/dead_trees"
+    fi
+    if [ -z "${TREEMORT_OUTPUT_DIR:-}" ]; then
+        export TREEMORT_OUTPUT_DIR="/scratch/project_462001070/aurahman/output"
     fi
 else
     echo "Error: Unsupported HPC_TYPE '$HPC_TYPE'."

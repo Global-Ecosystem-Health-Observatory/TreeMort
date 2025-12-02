@@ -162,7 +162,10 @@ def setup(config_file_path, model_config=None, data_config=None, cli_args=None):
         conf, _ = parser.parse_known_args(args=cli_args)
 
     conf.data_folder = expand_path(conf.data_folder)
-    conf.output_dir = os.path.abspath(expand_path(conf.output_dir))
+    out_dir = expand_path(conf.output_dir)
+    if not out_dir:
+        out_dir = "./output"
+    conf.output_dir = os.path.abspath(out_dir)
     resume_path = getattr(conf, "resume_from", None)
     if resume_path:
         conf.resume_from = os.path.abspath(expand_path(resume_path))
