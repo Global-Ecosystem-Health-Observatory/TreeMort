@@ -44,7 +44,7 @@ module load $MODULE_NAME
 if [ -d "$TREEMORT_VENV_PATH" ]; then
     echo "[INFO] Activating virtual environment at $TREEMORT_VENV_PATH"
     source "$TREEMORT_VENV_PATH/bin/activate"
-    VENV_PY="\$TREEMORT_VENV_PATH/bin/python3"
+    VENV_PY="$TREEMORT_VENV_PATH/bin/python3"
 else
     echo "[ERROR] Virtual environment not found at $TREEMORT_VENV_PATH"
     exit 1
@@ -83,8 +83,8 @@ export PYTHONNOUSERSITE=1
 unset PYTHONPATH
 export PYTHONPATH="$TREEMORT_REPO_PATH"
 
-if [ -z "\$VENV_PY" ] || [ ! -x "\$VENV_PY" ]; then
-    echo "[ERROR] VENV_PY is not set or not executable: '\$VENV_PY'"
+if [ -z "$VENV_PY" ] || [ ! -x "$VENV_PY" ]; then
+    echo "[ERROR] VENV_PY is not set or not executable: '$VENV_PY'"
     exit 1
 fi
 
