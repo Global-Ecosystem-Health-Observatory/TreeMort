@@ -44,7 +44,7 @@ module load $MODULE_NAME
 if [ -d "$TREEMORT_VENV_PATH" ]; then
     echo "[INFO] Activating virtual environment at $TREEMORT_VENV_PATH"
     source "$TREEMORT_VENV_PATH/bin/activate"
-    VENV_PY="$TREEMORT_VENV_PATH/bin/python3"
+    VENV_PY="\$TREEMORT_VENV_PATH/bin/python3"
 else
     echo "[ERROR] Virtual environment not found at $TREEMORT_VENV_PATH"
     exit 1
@@ -91,15 +91,15 @@ fi
 POST_PROCESS=""
 LIST_FILE=""
 
-while [[ $# -gt 0 ]]; do
-    case "$1" in
+while [[ "\$#" -gt 0 ]]; do
+    case "\$1" in
         --post-process)
             POST_PROCESS="--post-process"
             shift
             ;;
         --list-file)
-            if [[ -n "$2" ]]; then
-                LIST_FILE="$2"
+            if [[ -n "\$2" ]]; then
+                LIST_FILE="\$2"
                 shift 2
             else
                 echo "[ERROR] --list-file requires a filename argument."
@@ -107,7 +107,8 @@ while [[ $# -gt 0 ]]; do
             fi
             ;;
         *)
-            break
+            echo "[ERROR] Unknown parameter passed: \$1"
+            exit 1
             ;;
     esac
 done
