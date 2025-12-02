@@ -83,8 +83,8 @@ export PYTHONNOUSERSITE=1
 unset PYTHONPATH
 export PYTHONPATH="$TREEMORT_REPO_PATH"
 
-if [ -z "$VENV_PY" ] || [ ! -x "$VENV_PY" ]; then
-    echo "[ERROR] VENV_PY is not set or not executable: '$VENV_PY'"
+if [ -z "\$VENV_PY" ] || [ ! -x "\$VENV_PY" ]; then
+    echo "[ERROR] VENV_PY is not set or not executable: '\$VENV_PY'"
     exit 1
 fi
 
