@@ -470,5 +470,7 @@ scp rahmanan@lumi.csc.fi:/scratch/project_462000684/rahmanan/Predictions_DRYTREE
 
 scp -O -r aurahman@lumi.csc.fi:/scratch/project_462001070/aurahman/dead_trees/Switzerland/Predictions_t1_post_process ~/Downloads
 
+scp aurahman@lumi.csc.fi:/scratch/project_462001070/aurahman/dead_trees/Switzerland/Predictions_t1_post_process/swissimage-dop10_2022_2690-1227_0.geojson ~/Downloads
+
 
 """

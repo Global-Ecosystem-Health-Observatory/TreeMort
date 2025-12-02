@@ -113,11 +113,11 @@ while [[ "\$#" -gt 0 ]]; do
     esac
 done
 
-if [ -n "$POST_PROCESS" ]; then
+if [ -n "\$POST_PROCESS" ]; then
     echo "[INFO] Post-processing is enabled"
 fi
-if [[ -n "$LIST_FILE" ]]; then
-    echo "[INFO] Processing only files listed in: $LIST_FILE"
+if [[ -n "\$LIST_FILE" ]]; then
+    echo "[INFO] Processing only files listed in: \$LIST_FILE"
 fi
 
 echo "[INFO] Pre-downloading Beit and Maskformer models..."
@@ -137,8 +137,8 @@ srun "\$VENV_PY" "$TREEMORT_REPO_PATH/inference/engine.py" \
     --model-config "$MODEL_CONFIG_PATH" \
     --data-config "$DATA_CONFIG_PATH" \
     --outdir "$OUTPUT_PATH" \
-    $POST_PROCESS \
-    ${LIST_FILE:+--list-file "$LIST_FILE"}
+    \$POST_PROCESS \
+    \${LIST_FILE:+--list-file "\$LIST_FILE"}
 
 EXIT_STATUS=$?
 if [ "$EXIT_STATUS" -ne 0 ]; then
