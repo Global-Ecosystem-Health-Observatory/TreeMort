@@ -163,8 +163,10 @@ def setup(config_file_path, model_config=None, data_config=None, cli_args=None):
 
     conf.data_folder = expand_path(conf.data_folder)
     out_dir = expand_path(conf.output_dir)
-    if not out_dir:
-        out_dir = "./output"
+    # Fallback if the env var was not resolved or empty
+    if (not out_dir) or ("$" in out_dir):
+        env_out = os.environ.get("TREEMORT_OUTPUT_DIR", "")
+        out_dir = env_out or "./output"
     conf.output_dir = os.path.abspath(out_dir)
     resume_path = getattr(conf, "resume_from", None)
     if resume_path:

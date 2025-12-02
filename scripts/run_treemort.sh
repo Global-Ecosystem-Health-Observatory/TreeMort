@@ -90,6 +90,10 @@ export MIOPEN_USER_DB_PATH="${TREEMORT_REPO_PATH:-.}/.cache/miopen"
 mkdir -p "$MIOPEN_USER_DB_PATH"
 
 echo "MIOpen cache path: $MIOPEN_USER_DB_PATH"
+
+# Ensure output dir env is available to the job and create it if set
+export TREEMORT_OUTPUT_DIR="\${TREEMORT_OUTPUT_DIR:-./output}"
+mkdir -p "\$TREEMORT_OUTPUT_DIR"
 EOT
 
 # Build the command string with optional flags
