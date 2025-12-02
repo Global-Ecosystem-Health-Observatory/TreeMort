@@ -45,7 +45,7 @@ module load $MODULE_NAME
 if [ -d "$TREEMORT_VENV_PATH" ]; then
     echo "[INFO] Activating virtual environment at $TREEMORT_VENV_PATH"
     source "$TREEMORT_VENV_PATH/bin/activate"
-    VENV_PY="$TREEMORT_VENV_PATH/bin/python3"
+    VENV_PY="\$TREEMORT_VENV_PATH/bin/python3"
 else
     echo "[ERROR] Virtual environment not found at $TREEMORT_VENV_PATH"
     exit 1
@@ -84,8 +84,8 @@ export PYTHONNOUSERSITE=1
 unset PYTHONPATH
 export PYTHONPATH="$TREEMORT_REPO_PATH"
 
-if [ -z "$VENV_PY" ] || [ ! -x "$VENV_PY" ]; then
-    echo "[ERROR] VENV_PY is not set or not executable: '$VENV_PY'"
+if [ -z "\$VENV_PY" ] || [ ! -x "\$VENV_PY" ]; then
+    echo "[ERROR] VENV_PY is not set or not executable: '\$VENV_PY'"
     exit 1
 fi
 
@@ -132,7 +132,7 @@ rm -rf "$TREEMORT_DATA_PATH/huggingface_cache/facebook/detr-resnet-50-panoptic"
 "$VENV_PY" -c "from transformers import AutoModel; AutoModel.from_pretrained('facebook/detr-resnet-50-panoptic', cache_dir='$TREEMORT_DATA_PATH/huggingface_cache')"
 
 echo "[INFO] Starting inference..."
-srun "$VENV_PY" "$TREEMORT_REPO_PATH/inference/engine.py" \
+srun "\$VENV_PY" "$TREEMORT_REPO_PATH/inference/engine.py" \
     "$DATA_PATH" \
     --config "$CONFIG_PATH" \
     --model-config "$MODEL_CONFIG_PATH" \
