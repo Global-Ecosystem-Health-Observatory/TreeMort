@@ -468,4 +468,7 @@ sh $TREEMORT_REPO_PATH/scripts/submit_inference.sh lumi flair_unet_sdt all --pos
 scp rahmanan@lumi.csc.fi:/scratch/project_462000684/rahmanan/DRYTREE_Orthoimagery_Finland/K3423G_2023_RGBNIR.geojson.tif ~/Downloads
 scp rahmanan@lumi.csc.fi:/scratch/project_462000684/rahmanan/Predictions_DRYTREE_Orthoimagery_Finland/K3423G_2023_RGBNIR.geojson ~/Downloads
 
+scp -O -r aurahman@lumi.csc.fi:/scratch/project_462001070/aurahman/dead_trees/Switzerland/Predictions_t1_post_process ~/Downloads
+
+
 """

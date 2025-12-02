@@ -91,15 +91,15 @@ fi
 POST_PROCESS=""
 LIST_FILE=""
 
-while [[ "\$#" -gt 0 ]]; do
-    case "\$1" in
+while [[ $# -gt 0 ]]; do
+    case "$1" in
         --post-process)
             POST_PROCESS="--post-process"
             shift
             ;;
         --list-file)
-            if [[ -n "\$2" ]]; then
-                LIST_FILE="\$2"
+            if [[ -n "$2" ]]; then
+                LIST_FILE="$2"
                 shift 2
             else
                 echo "[ERROR] --list-file requires a filename argument."
@@ -107,8 +107,7 @@ while [[ "\$#" -gt 0 ]]; do
             fi
             ;;
         *)
-            echo "[ERROR] Unknown parameter passed: \$1"
-            exit 1
+            break
             ;;
     esac
 done
