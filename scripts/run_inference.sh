@@ -141,7 +141,7 @@ srun "\$VENV_PY" "$TREEMORT_REPO_PATH/inference/engine.py" \
     ${LIST_FILE:+--list-file "$LIST_FILE"}
 
 EXIT_STATUS=$?
-if [ $EXIT_STATUS -ne 0 ]; then
+if [ "$EXIT_STATUS" -ne 0 ]; then
     echo "[ERROR] Job failed with exit status $EXIT_STATUS"
 else
     echo "[INFO] Job completed successfully"
