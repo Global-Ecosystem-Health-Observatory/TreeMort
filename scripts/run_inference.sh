@@ -113,11 +113,11 @@ while [[ "\$#" -gt 0 ]]; do
     esac
 done
 
-if [ -n "$POST_PROCESS" ]; then
+if [ -n "\$POST_PROCESS" ]; then
     echo "[INFO] Post-processing is enabled"
 fi
-if [[ -n "$LIST_FILE" ]]; then
-    echo "[INFO] Processing only files listed in: $LIST_FILE"
+if [[ -n "\$LIST_FILE" ]]; then
+    echo "[INFO] Processing only files listed in: \$LIST_FILE"
 fi
 
 echo "[INFO] Pre-downloading Beit and Maskformer models..."
@@ -131,16 +131,14 @@ rm -rf "$TREEMORT_DATA_PATH/huggingface_cache/facebook/detr-resnet-50-panoptic"
 "$VENV_PY" -c "from transformers import AutoModel; AutoModel.from_pretrained('facebook/detr-resnet-50-panoptic', cache_dir='$TREEMORT_DATA_PATH/huggingface_cache')"
 
 echo "[INFO] Starting inference..."
-CMD=(srun "$VENV_PY" "$TREEMORT_REPO_PATH/inference/engine.py"
-    "$DATA_PATH"
-    --config "$CONFIG_PATH"
-    --model-config "$MODEL_CONFIG_PATH"
-    --data-config "$DATA_CONFIG_PATH"
-    --outdir "$OUTPUT_PATH")
-[ -n "$POST_PROCESS" ] && CMD+=("$POST_PROCESS")
-[ -n "$LIST_FILE" ] && CMD+=(--list-file "$LIST_FILE")
-printf "[INFO] Command: %q " "${CMD[@]}"; echo
-"${CMD[@]}"
+srun "\$VENV_PY" "$TREEMORT_REPO_PATH/inference/engine.py" \
+    "$DATA_PATH" \
+    --config "$CONFIG_PATH" \
+    --model-config "$MODEL_CONFIG_PATH" \
+    --data-config "$DATA_CONFIG_PATH" \
+    --outdir "$OUTPUT_PATH" \
+    \$POST_PROCESS \
+    \${LIST_FILE:+--list-file "\$LIST_FILE"}
 
 EXIT_STATUS=$?
 if [ "$EXIT_STATUS" -ne 0 ]; then
