@@ -22,7 +22,8 @@ case "$HPC_TYPE" in
   lumi)
     MODULE_USE_CMD="module use /appl/local/csc/modulefiles/"
     MODULE_STACK=("LUMI/23.09" "partition/G" "rocm" "pytorch/2.7")
-    TORCH_INSTALL_CMD="python -m pip install --upgrade torch torchvision torchaudio --index-url https://download.pytorch.org/whl/rocm5.7"
+    # Pin to the ROCm wheels that were verified on LUMI; do not install CUDA wheels.
+    TORCH_INSTALL_CMD="python -m pip install torch==2.2.2+rocm5.7 torchvision==0.17.2+rocm5.7 torchaudio==2.2.2+rocm5.7 --index-url https://download.pytorch.org/whl/rocm5.7"
     ;;
   puhti)
     MODULE_STACK=("pytorch/2.5")
