@@ -45,6 +45,7 @@ module load $MODULE_NAME
 if [ -d "$TREEMORT_VENV_PATH" ]; then
     echo "[INFO] Activating virtual environment at $TREEMORT_VENV_PATH"
     source "$TREEMORT_VENV_PATH/bin/activate"
+    VENV_PY="$TREEMORT_VENV_PATH/bin/python3"
 else
     echo "[ERROR] Virtual environment not found at $TREEMORT_VENV_PATH"
     exit 1
@@ -76,6 +77,16 @@ if [ -z "$OUTPUT_PATH" ]; then
 elif [ ! -d "$OUTPUT_PATH" ]; then
     echo "[WARNING] Output directory not found at $OUTPUT_PATH. Creating it now..."
     mkdir -p "$OUTPUT_PATH" || { echo "[ERROR] Failed to create output directory."; exit 1; }
+fi
+
+# Force venv and repo on path
+export PYTHONNOUSERSITE=1
+unset PYTHONPATH
+export PYTHONPATH="$TREEMORT_REPO_PATH"
+
+if [ -z "$VENV_PY" ] || [ ! -x "$VENV_PY" ]; then
+    echo "[ERROR] VENV_PY is not set or not executable: '$VENV_PY'"
+    exit 1
 fi
 
 POST_PROCESS=""
@@ -112,16 +123,16 @@ fi
 
 echo "[INFO] Pre-downloading Beit and Maskformer models..."
 rm -rf "$TREEMORT_DATA_PATH/huggingface_cache/microsoft/beit-base-finetuned-ade-640-640"
-python3 -c "from transformers import AutoModel; AutoModel.from_pretrained('microsoft/beit-base-finetuned-ade-640-640', cache_dir='$TREEMORT_DATA_PATH/huggingface_cache')"
+"$VENV_PY" -c "from transformers import AutoModel; AutoModel.from_pretrained('microsoft/beit-base-finetuned-ade-640-640', cache_dir='$TREEMORT_DATA_PATH/huggingface_cache')"
 
 rm -rf "$TREEMORT_DATA_PATH/huggingface_cache/facebook/maskformer-swin-base-ade"
-python3 -c "from transformers import AutoModel; AutoModel.from_pretrained('facebook/maskformer-swin-base-ade', cache_dir='$TREEMORT_DATA_PATH/huggingface_cache')"
+"$VENV_PY" -c "from transformers import AutoModel; AutoModel.from_pretrained('facebook/maskformer-swin-base-ade', cache_dir='$TREEMORT_DATA_PATH/huggingface_cache')"
 
 rm -rf "$TREEMORT_DATA_PATH/huggingface_cache/facebook/detr-resnet-50-panoptic"
-python3 -c "from transformers import AutoModel; AutoModel.from_pretrained('facebook/detr-resnet-50-panoptic', cache_dir='$TREEMORT_DATA_PATH/huggingface_cache')"
+"$VENV_PY" -c "from transformers import AutoModel; AutoModel.from_pretrained('facebook/detr-resnet-50-panoptic', cache_dir='$TREEMORT_DATA_PATH/huggingface_cache')"
 
 echo "[INFO] Starting inference..."
-srun python3 "$TREEMORT_REPO_PATH/inference/engine.py" \
+srun "$VENV_PY" "$TREEMORT_REPO_PATH/inference/engine.py" \
     "$DATA_PATH" \
     --config "$CONFIG_PATH" \
     --model-config "$MODEL_CONFIG_PATH" \
