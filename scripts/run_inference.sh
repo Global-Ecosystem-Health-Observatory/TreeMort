@@ -35,7 +35,6 @@ cat <<EOT > $SBATCH_SCRIPT
 #SBATCH --mem-per-cpu=24000
 $GPU_DIRECTIVE
 
-export TRANSFORMERS_CACHE="$TREEMORT_DATA_PATH/huggingface_cache"
 export HF_HOME="$TREEMORT_DATA_PATH/huggingface_cache"
 
 $MODULE_USE_CMD
