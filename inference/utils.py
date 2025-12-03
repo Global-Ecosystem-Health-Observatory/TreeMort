@@ -10,7 +10,7 @@ import numpy as np
 from scipy import ndimage as ndi
 from affine import Affine
 from typing import Optional, List, Tuple, Generator, Dict
-from shapely.geometry import Polygon
+from shapely.geometry import Polygon, MultiPolygon
 
 from skimage.filters import gaussian
 from skimage.feature import peak_local_max
@@ -34,6 +34,49 @@ def initialize_logger(verbosity: str) -> None:
 def log_and_raise(logger, exception: Exception):
     logger.error(str(exception))
     raise exception
+
+
+def _safe_polygon(coords) -> Optional[Polygon]:
+    """
+    Build a polygon defensively:
+    - ensure at least 3 points
+    - close the ring
+    - buffer(0) to fix minor invalidities
+    - if MultiPolygon, keep the largest
+    Returns None on failure.
+    """
+    try:
+        coords_arr = np.asarray(coords)
+    except Exception:
+        return None
+
+    if coords_arr.shape[0] < 3:
+        return None
+
+    # Close ring if needed
+    if not np.array_equal(coords_arr[0], coords_arr[-1]):
+        coords_arr = np.vstack([coords_arr, coords_arr[0]])
+
+    try:
+        poly = Polygon(coords_arr)
+    except Exception:
+        return None
+
+    if not poly.is_valid:
+        try:
+            poly = poly.buffer(0)
+        except Exception:
+            return None
+
+    if poly.is_empty:
+        return None
+
+    if isinstance(poly, MultiPolygon):
+        if len(poly.geoms) == 0:
+            return None
+        poly = max(poly.geoms, key=lambda g: g.area)
+
+    return poly
 
 
 def expand_path(path):
@@ -526,8 +569,8 @@ def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
             transformed_ellipse = np.vstack([transformed_ellipse, transformed_ellipse[0]])
 
         # Create and validate polygon
-        ellipse_poly = Polygon(transformed_ellipse.tolist())
-        if ellipse_poly.is_valid and not ellipse_poly.is_empty:
+        ellipse_poly = _safe_polygon(transformed_ellipse)
+        if ellipse_poly and ellipse_poly.is_valid and not ellipse_poly.is_empty:
             convex_hull = ellipse_poly.convex_hull
             area = ellipse_poly.area
             aspect_ratio = convex_hull.length / (4 * np.sqrt(area)) if area > 0 else float("inf")
@@ -580,18 +623,15 @@ def extract_contours(binary_mask: np.ndarray, transform: Affine) -> List[Dict]:
             if not np.array_equal(transformed_contour[0], transformed_contour[-1]):
                 transformed_contour = np.vstack([transformed_contour, transformed_contour[0]])
 
-            polygon = Polygon(transformed_contour)
+            polygon = _safe_polygon(transformed_contour)
 
-            if not polygon.is_valid:
-                polygon = polygon.buffer(0)
-
-            if polygon.is_valid and not polygon.is_empty:
+            if polygon:
                 features.append(
                     {
                         "type": "Feature",
                         "geometry": {
                             "type": "Polygon",
-                            "coordinates": [transformed_contour.tolist()],
+                            "coordinates": [np.asarray(polygon.exterior.coords)[:, :2].tolist()],
                         },
                         "properties": {},
                     }
@@ -648,18 +688,15 @@ def extract_contours_from_labels(label_map: np.ndarray, transform: Affine) -> Li
             if not np.array_equal(transformed_contour[0], transformed_contour[-1]):
                 transformed_contour = np.vstack([transformed_contour, transformed_contour[0]])
 
-            polygon = Polygon(transformed_contour)
+            polygon = _safe_polygon(transformed_contour)
 
-            if not polygon.is_valid:
-                polygon = polygon.buffer(0)
-
-            if polygon.is_valid and not polygon.is_empty:
+            if polygon:
                 features.append(
                     {
                         "type": "Feature",
                         "geometry": {
                             "type": "Polygon",
-                            "coordinates": [transformed_contour.tolist()],
+                            "coordinates": [np.asarray(polygon.exterior.coords)[:, :2].tolist()],
                         },
                         "properties": {"label": int(label)},
                     }

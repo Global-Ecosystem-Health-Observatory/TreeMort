@@ -9,7 +9,7 @@ if [ "$HPC_TYPE" == "lumi" ]; then
     PARTITION_NAME="small-g"
     MODULE_NAME="pytorch/2.7"
     MODULE_USE_CMD="module use /appl/local/csc/modulefiles/"
-    GPU_DIRECTIVE="#SBATCH --gpus-per-node=1"
+GPU_DIRECTIVE="#SBATCH --gpus-per-node=1"
 else
     PROJECT_NAME="project_2004205"
     PARTITION_NAME="gpu"
@@ -17,6 +17,30 @@ else
     MODULE_USE_CMD=""
     GPU_DIRECTIVE="#SBATCH --gres=gpu:v100:1"
 fi
+
+# Parse optional flags passed to this wrapper
+POST_PROCESS=""
+LIST_FILE=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --post-process)
+            POST_PROCESS="--post-process"
+            shift
+            ;;
+        --list-file)
+            if [[ -n "$2" ]]; then
+                LIST_FILE="$2"
+                shift 2
+            else
+                echo "[ERROR] --list-file requires a filename argument."
+                exit 1
+            fi
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
 
 # Create SBATCH script
 SBATCH_SCRIPT=$(mktemp)
@@ -44,7 +68,7 @@ module load $MODULE_NAME
 if [ -d "$TREEMORT_VENV_PATH" ]; then
     echo "[INFO] Activating virtual environment at $TREEMORT_VENV_PATH"
     source "$TREEMORT_VENV_PATH/bin/activate"
-    VENV_PY="\$TREEMORT_VENV_PATH/bin/python3"
+    VENV_PY="$TREEMORT_VENV_PATH/bin/python3"
 else
     echo "[ERROR] Virtual environment not found at $TREEMORT_VENV_PATH"
     exit 1
@@ -83,41 +107,16 @@ export PYTHONNOUSERSITE=1
 unset PYTHONPATH
 export PYTHONPATH="$TREEMORT_REPO_PATH"
 
-if [ -z "\$VENV_PY" ] || [ ! -x "\$VENV_PY" ]; then
-    echo "[ERROR] VENV_PY is not set or not executable: '\$VENV_PY'"
+if [ -z "$VENV_PY" ] || [ ! -x "$VENV_PY" ]; then
+    echo "[ERROR] VENV_PY is not set or not executable: '$VENV_PY'"
     exit 1
 fi
 
-POST_PROCESS=""
-LIST_FILE=""
-
-while [[ "\$#" -gt 0 ]]; do
-    case "\$1" in
-        --post-process)
-            POST_PROCESS="--post-process"
-            shift
-            ;;
-        --list-file)
-            if [[ -n "\$2" ]]; then
-                LIST_FILE="\$2"
-                shift 2
-            else
-                echo "[ERROR] --list-file requires a filename argument."
-                exit 1
-            fi
-            ;;
-        *)
-            echo "[ERROR] Unknown parameter passed: \$1"
-            exit 1
-            ;;
-    esac
-done
-
-if [ -n "\$POST_PROCESS" ]; then
+if [ -n "$POST_PROCESS" ]; then
     echo "[INFO] Post-processing is enabled"
 fi
-if [[ -n "\$LIST_FILE" ]]; then
-    echo "[INFO] Processing only files listed in: \$LIST_FILE"
+if [[ -n "$LIST_FILE" ]]; then
+    echo "[INFO] Processing only files listed in: $LIST_FILE"
 fi
 
 echo "[INFO] Pre-downloading Beit and Maskformer models..."
@@ -131,14 +130,16 @@ rm -rf "$TREEMORT_DATA_PATH/huggingface_cache/facebook/detr-resnet-50-panoptic"
 "$VENV_PY" -c "from transformers import AutoModel; AutoModel.from_pretrained('facebook/detr-resnet-50-panoptic', cache_dir='$TREEMORT_DATA_PATH/huggingface_cache')"
 
 echo "[INFO] Starting inference..."
-srun "\$VENV_PY" "$TREEMORT_REPO_PATH/inference/engine.py" \
-    "$DATA_PATH" \
-    --config "$CONFIG_PATH" \
-    --model-config "$MODEL_CONFIG_PATH" \
-    --data-config "$DATA_CONFIG_PATH" \
-    --outdir "$OUTPUT_PATH" \
-    \$POST_PROCESS \
-    \${LIST_FILE:+--list-file "\$LIST_FILE"}
+CMD=(srun "$VENV_PY" "$TREEMORT_REPO_PATH/inference/engine.py"
+    "$DATA_PATH"
+    --config "$CONFIG_PATH"
+    --model-config "$MODEL_CONFIG_PATH"
+    --data-config "$DATA_CONFIG_PATH"
+    --outdir "$OUTPUT_PATH")
+[ -n "$POST_PROCESS" ] && CMD+=("$POST_PROCESS")
+[ -n "$LIST_FILE" ] && CMD+=(--list-file "$LIST_FILE")
+printf "[INFO] Command: %q " "${CMD[@]}"; echo
+"${CMD[@]}"
 
 EXIT_STATUS=$?
 if [ "$EXIT_STATUS" -ne 0 ]; then
