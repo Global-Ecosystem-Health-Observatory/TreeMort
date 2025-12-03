@@ -18,6 +18,15 @@ else
     GPU_DIRECTIVE="#SBATCH --gres=gpu:v100:1"
 fi
 
+# Ensure TREEMORT_VENV_PATH is set (fallback to defaults if missing)
+if [ -z "${TREEMORT_VENV_PATH:-}" ]; then
+    if [ "$HPC_TYPE" == "lumi" ]; then
+        TREEMORT_VENV_PATH="/projappl/project_462001070/aurahman/venv"
+    elif [ "$HPC_TYPE" == "puhti" ]; then
+        TREEMORT_VENV_PATH="/projappl/project_2004205/rahmanan/venv"
+    fi
+fi
+
 # Parse optional flags passed to this wrapper
 POST_PROCESS=""
 LIST_FILE=""
