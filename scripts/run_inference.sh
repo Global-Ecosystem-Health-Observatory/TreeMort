@@ -117,8 +117,8 @@ export PYTHONNOUSERSITE=1
 unset PYTHONPATH
 export PYTHONPATH="$TREEMORT_REPO_PATH"
 
-if [ -z "$VENV_PY" ] || [ ! -x "$VENV_PY" ]; then
-    echo "[ERROR] VENV_PY is not set or not executable: '$VENV_PY'"
+if [ -z "\$VENV_PY" ] || [ ! -x "\$VENV_PY" ]; then
+    echo "[ERROR] VENV_PY is not set or not executable: '\$VENV_PY'"
     exit 1
 fi
 
@@ -131,16 +131,16 @@ fi
 
 echo "[INFO] Pre-downloading Beit and Maskformer models..."
 rm -rf "$TREEMORT_DATA_PATH/huggingface_cache/microsoft/beit-base-finetuned-ade-640-640"
-"$VENV_PY" -c "from transformers import AutoModel; AutoModel.from_pretrained('microsoft/beit-base-finetuned-ade-640-640', cache_dir='$TREEMORT_DATA_PATH/huggingface_cache')"
+"\$VENV_PY" -c "from transformers import AutoModel; AutoModel.from_pretrained('microsoft/beit-base-finetuned-ade-640-640', cache_dir='$TREEMORT_DATA_PATH/huggingface_cache')"
 
 rm -rf "$TREEMORT_DATA_PATH/huggingface_cache/facebook/maskformer-swin-base-ade"
-"$VENV_PY" -c "from transformers import AutoModel; AutoModel.from_pretrained('facebook/maskformer-swin-base-ade', cache_dir='$TREEMORT_DATA_PATH/huggingface_cache')"
+"\$VENV_PY" -c "from transformers import AutoModel; AutoModel.from_pretrained('facebook/maskformer-swin-base-ade', cache_dir='$TREEMORT_DATA_PATH/huggingface_cache')"
 
 rm -rf "$TREEMORT_DATA_PATH/huggingface_cache/facebook/detr-resnet-50-panoptic"
-"$VENV_PY" -c "from transformers import AutoModel; AutoModel.from_pretrained('facebook/detr-resnet-50-panoptic', cache_dir='$TREEMORT_DATA_PATH/huggingface_cache')"
+"\$VENV_PY" -c "from transformers import AutoModel; AutoModel.from_pretrained('facebook/detr-resnet-50-panoptic', cache_dir='$TREEMORT_DATA_PATH/huggingface_cache')"
 
 echo "[INFO] Starting inference..."
-CMD=(srun "$VENV_PY" "$TREEMORT_REPO_PATH/inference/engine.py"
+CMD=(srun "\$VENV_PY" "$TREEMORT_REPO_PATH/inference/engine.py"
     "$DATA_PATH"
     --config "$CONFIG_PATH"
     --model-config "$MODEL_CONFIG_PATH"
@@ -148,8 +148,8 @@ CMD=(srun "$VENV_PY" "$TREEMORT_REPO_PATH/inference/engine.py"
     --outdir "$OUTPUT_PATH")
 [ -n "$POST_PROCESS" ] && CMD+=("$POST_PROCESS")
 [ -n "$LIST_FILE" ] && CMD+=(--list-file "$LIST_FILE")
-printf "[INFO] Command: %q " "${CMD[@]}"; echo
-"${CMD[@]}"
+printf "[INFO] Command: %q " "\${CMD[@]}"; echo
+"\${CMD[@]}"
 
 EXIT_STATUS=$?
 if [ "$EXIT_STATUS" -ne 0 ]; then
