@@ -77,7 +77,12 @@ module load $MODULE_NAME
 if [ -d "$TREEMORT_VENV_PATH" ]; then
     echo "[INFO] Activating virtual environment at $TREEMORT_VENV_PATH"
     source "$TREEMORT_VENV_PATH/bin/activate"
-    VENV_PY="$TREEMORT_VENV_PATH/bin/python3"
+    # Prefer the python from the activated venv; fall back to explicit path
+    VENV_PY="$(command -v python3)"
+    if [ -z "$VENV_PY" ] || [ ! -x "$VENV_PY" ]; then
+        VENV_PY="$TREEMORT_VENV_PATH/bin/python3"
+    fi
+    echo "[INFO] VENV_PY resolved to: $VENV_PY"
 else
     echo "[ERROR] Virtual environment not found at $TREEMORT_VENV_PATH"
     exit 1
