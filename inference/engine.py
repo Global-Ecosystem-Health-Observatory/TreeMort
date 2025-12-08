@@ -160,7 +160,7 @@ def run_inference(
     data_config: str,
     output_dir: str,
     post_process: bool = False,
-    fit_ellipses: bool = True,
+    fit_ellipses: bool = None,
     verbosity: str = "info",
     num_processes: int = 4,
     list_file: str = None,
@@ -174,9 +174,10 @@ def run_inference(
     id2label = {0: "alive", 1: "dead"}
 
     conf = setup(config_file_path, model_config=model_config, data_config=data_config)
-    # Use CLI override if provided, otherwise config value
+    # Use CLI override if provided, otherwise config value (default False)
     if fit_ellipses is None:
-        fit_ellipses = getattr(conf, "fit_ellipses", True)
+        fit_ellipses = bool(getattr(conf, "fit_ellipses", False))
+    logger.info(f"fit_ellipses set to: {fit_ellipses}")
 
     # Select images either from a provided list file or by directory scan
     if list_file:

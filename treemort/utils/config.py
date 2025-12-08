@@ -136,7 +136,8 @@ def build_parser(config_files):
     inference_group.add("--erosion-radius", type=int, default=0, help="Radius of the structuring element for eroding binary masks.")
     inference_group.add("--blur-sigma", type=float, default=1.0, help="Standard deviation for Gaussian blur applied to prediction maps.")
     inference_group.add("--tightness", type=float, default=0.1, help="Tightness parameter for ellipse fitting.")
-    inference_group.add("--fit-ellipses", type=bool, default=True, help="Fit ellipses during inference post-processing.")
+    # Default to False to keep detailed contours unless explicitly enabled
+    inference_group.add("--fit-ellipses", type=bool, default=False, help="Fit ellipses during inference post-processing.")
 
     output_group = parser.add_argument_group('Output')
     output_group.add("--output-dir", type=str, default="./output", help="directory to save output files")
