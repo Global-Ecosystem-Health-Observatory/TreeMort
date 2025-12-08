@@ -122,22 +122,8 @@ if [ -z "\$VENV_PY" ] || [ ! -x "\$VENV_PY" ]; then
     exit 1
 fi
 
-if [ -n "$POST_PROCESS" ]; then
-    echo "[INFO] Post-processing is enabled"
-fi
-if [[ -n "$LIST_FILE" ]]; then
-    echo "[INFO] Processing only files listed in: $LIST_FILE"
-fi
-
-echo "[INFO] Pre-downloading Beit and Maskformer models..."
-rm -rf "$TREEMORT_DATA_PATH/huggingface_cache/microsoft/beit-base-finetuned-ade-640-640"
-"\$VENV_PY" -c "from transformers import AutoModel; AutoModel.from_pretrained('microsoft/beit-base-finetuned-ade-640-640', cache_dir='$TREEMORT_DATA_PATH/huggingface_cache')"
-
-rm -rf "$TREEMORT_DATA_PATH/huggingface_cache/facebook/maskformer-swin-base-ade"
-"\$VENV_PY" -c "from transformers import AutoModel; AutoModel.from_pretrained('facebook/maskformer-swin-base-ade', cache_dir='$TREEMORT_DATA_PATH/huggingface_cache')"
-
-rm -rf "$TREEMORT_DATA_PATH/huggingface_cache/facebook/detr-resnet-50-panoptic"
-"\$VENV_PY" -c "from transformers import AutoModel; AutoModel.from_pretrained('facebook/detr-resnet-50-panoptic', cache_dir='$TREEMORT_DATA_PATH/huggingface_cache')"
+[ -n "$POST_PROCESS" ] && echo "[INFO] Post-processing is enabled"
+[ -n "$LIST_FILE" ] && echo "[INFO] Processing only files listed in: $LIST_FILE"
 
 echo "[INFO] Starting inference..."
 CMD=(srun "\$VENV_PY" "$TREEMORT_REPO_PATH/inference/engine.py"
