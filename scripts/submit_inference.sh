@@ -28,6 +28,7 @@ if [ "$HPC_TYPE" == "puhti" ]; then
 elif [ "$HPC_TYPE" == "lumi" ]; then
     export TREEMORT_VENV_PATH="/projappl/project_462001070/aurahman/venv"
     export TREEMORT_DATA_PATH="/scratch/project_462001070/aurahman/dead_trees"
+    export MIOPEN_USER_DB_PATH="${TREEMORT_REPO_PATH}/.cache/miopen"
 else
     echo "Error: Unsupported HPC_TYPE '$HPC_TYPE'."
     exit 1
