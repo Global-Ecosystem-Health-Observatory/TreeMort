@@ -35,6 +35,7 @@ def process_image(
     geojson_path: str,
     conf: object,
     post_process: bool,
+    fit_ellipses: bool,
 ) -> None:
     logger = get_logger()
     logger.debug(f"Processing image: {os.path.basename(image_path)}")
@@ -69,11 +70,18 @@ def process_image(
             labels_ws = compute_watershed(segment_map_np, centroid_map_np, hybrid_map_np, conf)
             logger.info(f"Watershed segmentation took {time.time() - start_time:.2f} seconds.")
             start_time = time.time()
-            features = list(extract_ellipses(labels_ws, transform, conf))
-            logger.info(f"Ellipse extraction took {time.time() - start_time:.2f} seconds.")
-            start_time = time.time()
-            save_geojson(features, geojson_path, crs, transform, name="FittedEllipses")
-            logger.info(f"GeoJSON saved in {time.time() - start_time:.2f} seconds.")
+            if fit_ellipses:
+                features = list(extract_ellipses(labels_ws, transform, conf))
+                logger.info(f"Ellipse extraction took {time.time() - start_time:.2f} seconds.")
+                start_time = time.time()
+                save_geojson(features, geojson_path, crs, transform, name="FittedEllipses")
+                logger.info(f"GeoJSON saved in {time.time() - start_time:.2f} seconds.")
+            else:
+                features = extract_contours_from_labels(labels_ws, transform)
+                logger.info(f"Contour extraction took {time.time() - start_time:.2f} seconds.")
+                start_time = time.time()
+                save_geojson(features, geojson_path, crs, transform, name="WatershedContours")
+                logger.info(f"GeoJSON saved in {time.time() - start_time:.2f} seconds.")
 
             # # Filtering-only variant
             # start_time = time.time()
@@ -125,6 +133,7 @@ def process_single_image(
     output_dir: str,
     id2label: dict,
     post_process: bool = False,
+    fit_ellipses: bool = True,
 ) -> None:
     logger = get_logger()
     try:
@@ -136,7 +145,7 @@ def process_single_image(
         geojson_path = os.path.join(output_dir, f"{os.path.splitext(os.path.basename(image_path))[0]}.geojson")
         os.makedirs(os.path.dirname(geojson_path), exist_ok=True)
 
-        process_image(model, image_path, geojson_path, conf, post_process)
+        process_image(model, image_path, geojson_path, conf, post_process, fit_ellipses)
     except Exception as e:
         log_and_raise(
             logger,
@@ -151,6 +160,7 @@ def run_inference(
     data_config: str,
     output_dir: str,
     post_process: bool = False,
+    fit_ellipses: bool = True,
     verbosity: str = "info",
     num_processes: int = 4,
     list_file: str = None,
@@ -164,6 +174,9 @@ def run_inference(
     id2label = {0: "alive", 1: "dead"}
 
     conf = setup(config_file_path, model_config=model_config, data_config=data_config)
+    # Use CLI override if provided, otherwise config value
+    if fit_ellipses is None:
+        fit_ellipses = getattr(conf, "fit_ellipses", True)
 
     # Select images either from a provided list file or by directory scan
     if list_file:
@@ -193,12 +206,13 @@ def run_inference(
 
     logger.info(f"Found {len(image_paths)} images to process.")
 
-    tasks = [
-        (image_path, conf, output_dir, id2label, post_process)
-        for image_path in image_paths
+    tasks = []
+    for image_path in image_paths:
         # Uncomment the following line to skip images already processed:
-        if not os.path.exists(os.path.join(output_dir, f"{os.path.splitext(os.path.basename(image_path))[0]}.geojson"))
-    ]
+        already_done = os.path.exists(os.path.join(output_dir, f"{os.path.splitext(os.path.basename(image_path))[0]}.geojson"))
+        if already_done:
+            continue
+        tasks.append((image_path, conf, output_dir, id2label, post_process, fit_ellipses))
 
     try:
         slurm_cpus = os.getenv("SLURM_CPUS_PER_TASK")
@@ -338,6 +352,32 @@ def main():
     parser.add_argument('--data-config', type=str, required=True, help="Path to the data configuration file")
     parser.add_argument('--outdir', type=str, help="Directory to save GeoJSON predictions (default: same as input)")
     parser.add_argument('--post-process', action="store_true", help="Enable or disable post-processing")
+    parser.add_argument(
+        '--fit-ellipses',
+        dest='fit_ellipses',
+        action="store_true",
+        default=None,
+        help="Fit ellipses to watershed segments (default: config or True).",
+    )
+    parser.add_argument(
+        '--no-fit-ellipses',
+        dest='fit_ellipses',
+        action="store_false",
+        help="Disable ellipse fitting; export watershed contours instead.",
+    )
+    parser.add_argument(
+        '--fit-ellipses',
+        dest='fit_ellipses',
+        action="store_true",
+        default=True,
+        help="Fit ellipses to watershed segments (default: enabled).",
+    )
+    parser.add_argument(
+        '--no-fit-ellipses',
+        dest='fit_ellipses',
+        action="store_false",
+        help="Disable ellipse fitting; export watershed contours instead.",
+    )
     parser.add_argument('--verbosity', type=str, choices=['info', 'debug', 'warning'], default='info')
     parser.add_argument('--list-file', type=str, help="Path to text file with list of image filenames to process")
 
@@ -351,6 +391,7 @@ def main():
         args.data_config,
         args.outdir,
         args.post_process,
+        args.fit_ellipses,
         verbosity=args.verbosity,
         list_file=args.list_file,
     )
