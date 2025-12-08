@@ -31,7 +31,8 @@ elif [ "$HPC_TYPE" == "lumi" ]; then
     export TREEMORT_VENV_PATH="/projappl/project_462001070/aurahman/venv"
     export TREEMORT_DATA_PATH="/scratch/project_462001070/aurahman/dead_trees"
     # Default MIOpen cache to scratch (avoid home on compute nodes)
-    export MIOPEN_USER_DB_PATH="/scratch/project_462001070/aurahman/.cache/miopen"
+    export MIOPEN_USER_DB_PATH="/tmp/${USER}-miopen-cache-${SLURM_NODEID}"
+    mkdir -p "${MIOPEN_USER_DB_PATH}"
 else
     echo "Error: Unsupported HPC_TYPE '$HPC_TYPE'."
     exit 1
