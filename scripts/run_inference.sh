@@ -77,8 +77,8 @@ module load $MODULE_NAME
 if [ -d "$TREEMORT_VENV_PATH" ]; then
     echo "[INFO] Activating virtual environment at $TREEMORT_VENV_PATH"
     source "$TREEMORT_VENV_PATH/bin/activate"
-    VENV_PY="$TREEMORT_VENV_PATH/bin/python3"
-    echo "[INFO] VENV_PY resolved to: $VENV_PY"
+    VENV_PY="\$TREEMORT_VENV_PATH/bin/python3"
+    echo "[INFO] VENV_PY resolved to: \$VENV_PY"
 else
     echo "[ERROR] Virtual environment not found at $TREEMORT_VENV_PATH"
     exit 1
@@ -127,8 +127,8 @@ export MIOPEN_CACHE_DIR="$MIOPEN_USER_DB_PATH"
 export HIP_CACHE_DIR="$MIOPEN_USER_DB_PATH"
 echo "[INFO] MIOpen cache path: $MIOPEN_USER_DB_PATH"
 
-if [ -z "$VENV_PY" ] || [ ! -x "$VENV_PY" ]; then
-    echo "[ERROR] VENV_PY is not set or not executable: '$VENV_PY'"
+if [ -z "\$VENV_PY" ] || [ ! -x "\$VENV_PY" ]; then
+    echo "[ERROR] VENV_PY is not set or not executable: '\$VENV_PY'"
     exit 1
 fi
 
@@ -136,7 +136,7 @@ fi
 [ -n "$LIST_FILE" ] && echo "[INFO] Processing only files listed in: $LIST_FILE"
 
 echo "[INFO] Starting inference..."
-CMD=(srun "$VENV_PY" "$TREEMORT_REPO_PATH/inference/engine.py"
+CMD=(srun "\$VENV_PY" "$TREEMORT_REPO_PATH/inference/engine.py"
     "$DATA_PATH"
     --config "$CONFIG_PATH"
     --model-config "$MODEL_CONFIG_PATH"
