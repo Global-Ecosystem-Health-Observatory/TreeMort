@@ -365,19 +365,6 @@ def main():
         action="store_false",
         help="Disable ellipse fitting; export watershed contours instead.",
     )
-    parser.add_argument(
-        '--fit-ellipses',
-        dest='fit_ellipses',
-        action="store_true",
-        default=True,
-        help="Fit ellipses to watershed segments (default: enabled).",
-    )
-    parser.add_argument(
-        '--no-fit-ellipses',
-        dest='fit_ellipses',
-        action="store_false",
-        help="Disable ellipse fitting; export watershed contours instead.",
-    )
     parser.add_argument('--verbosity', type=str, choices=['info', 'debug', 'warning'], default='info')
     parser.add_argument('--list-file', type=str, help="Path to text file with list of image filenames to process")
 
