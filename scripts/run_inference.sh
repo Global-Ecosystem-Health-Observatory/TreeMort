@@ -118,14 +118,14 @@ unset PYTHONPATH
 export PYTHONPATH="$TREEMORT_REPO_PATH"
 
 # Ensure MIOpen cache path is writable (apply to both user DB and cache dir)
-if [ -z "$MIOPEN_USER_DB_PATH" ]; then
-    MIOPEN_USER_DB_PATH="/tmp/miopen_cache_${SLURM_JOB_ID:-$$}"
+if [ -z "\$MIOPEN_USER_DB_PATH" ]; then
+    export MIOPEN_USER_DB_PATH="/tmp/miopen_cache_\${SLURM_JOB_ID:-\$\$}"
 fi
-mkdir -p "$MIOPEN_USER_DB_PATH"
+mkdir -p "\$MIOPEN_USER_DB_PATH"
 export MIOPEN_USER_DB_PATH
-export MIOPEN_CACHE_DIR="$MIOPEN_USER_DB_PATH"
-export HIP_CACHE_DIR="$MIOPEN_USER_DB_PATH"
-echo "[INFO] MIOpen cache path: $MIOPEN_USER_DB_PATH"
+export MIOPEN_CACHE_DIR="\$MIOPEN_USER_DB_PATH"
+export HIP_CACHE_DIR="\$MIOPEN_USER_DB_PATH"
+echo "[INFO] MIOpen cache path: \$MIOPEN_USER_DB_PATH"
 
 if [ -z "\$VENV_PY" ] || [ ! -x "\$VENV_PY" ]; then
     echo "[ERROR] VENV_PY is not set or not executable: '\$VENV_PY'"
