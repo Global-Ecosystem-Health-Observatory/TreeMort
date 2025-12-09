@@ -5,17 +5,17 @@ include = base_config.txt
 best-model = best.weights.pth
 
 # Postprocessing tuned for compact tree crowns at 10 cm
-min-area = 0.4
+min-area = 0.5
 max-aspect-ratio = 3.0
 min-solidity = 0.85
 
-min-distance = 10
+min-distance = 12
 dilation-radius = 2
 erosion-radius = 0
-blur-sigma = 1.2
+blur-sigma = 1.5
 
-segment-threshold = 0.4
-centroid-threshold = 0.5
+segment-threshold = 0.45
+centroid-threshold = 0.55
 
 tightness = 1.0
 
