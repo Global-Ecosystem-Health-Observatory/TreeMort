@@ -2,7 +2,7 @@
 
 include = base_config.txt
 
-data-folder = /scratch/project_462001070/aurahman/switzerland_300
+# data-folder = /scratch/project_462001070/aurahman/switzerland_300/Images
 
 nir-rgb-order = [0, 1, 2]
 

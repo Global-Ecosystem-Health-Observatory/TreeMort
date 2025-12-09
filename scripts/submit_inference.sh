@@ -57,6 +57,9 @@ elif [ "$DATA_TYPE" == "poland" ]; then
 elif [ "$DATA_TYPE" == "switzerland" ]; then
     export DATA_PATH="$TREEMORT_DATA_PATH/Switzerland/RGB/10cm"
     export OUTPUT_PATH="$TREEMORT_DATA_PATH/Switzerland/$PREDICTIONS_FOLDER"
+elif [ "$DATA_TYPE" == "switzerland_300" ]; then
+    export DATA_PATH="/scratch/project_462001070/aurahman/switzerland_300/Images"
+    export OUTPUT_PATH="/scratch/project_462001070/aurahman/switzerland_300/Predictions"
 else
     echo "Error: Unsupported DATA_TYPE '$DATA_TYPE'."
     exit 1
