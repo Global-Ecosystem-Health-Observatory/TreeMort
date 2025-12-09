@@ -1,19 +1,7 @@
 # Configurations for dataset creation for Switzerland_300
 
-include = base_config.txt
+include = switzerland.txt
 
 data-folder = None
 
 hdf5-file = None
-
-nir-rgb-order = [0, 1, 2]
-
-augment-brightness-jitter = 0.4
-augment-contrast-jitter = 0.35
-augment-gamma-range = [0.65, 1.35]
-augment-hue-jitter = 0.06
-augment-saturation-jitter = 0.3
-augment-noise-range = [0.75, 1.25]
-augment-scale-range = [0.5, 1.0]
-augment-scale-prob = 0.35
-augment-blur-prob = 0.35
