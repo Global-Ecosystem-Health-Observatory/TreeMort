@@ -2,9 +2,9 @@
 
 include = base_config.txt
 
-# data-folder = ${TREEMORT_DATA_PATH}/Switzerland/RGB/10cm
+data-folder = None
 
-# hdf5-file = Switzerland_RGB_10cm.h5
+hdf5-file = None
 
 nir-rgb-order = [0, 1, 2]
 
