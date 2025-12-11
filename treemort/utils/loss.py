@@ -6,18 +6,28 @@ from typing import Optional, List, Tuple
 
 
 class TreeMortalityLoss(nn.Module):
-    def __init__(self, mask_weight=1.0, centroid_weight=0.7, sdt_weight=0.5, boundary_weight=1.0):
+    def __init__(
+        self,
+        mask_weight: float = 1.0,
+        centroid_weight: float = 3.0,
+        sdt_weight: float = 0.5,
+        boundary_weight: float = 1.0,
+        centroid_pos_weight: float = 10.0,
+        centroid_min_target: float = 0.1,
+    ):
         super().__init__()
         self.mask_weight = mask_weight
         self.centroid_weight = centroid_weight
         self.sdt_weight = sdt_weight
         self.boundary_weight = boundary_weight
+        self.centroid_pos_weight = centroid_pos_weight
+        self.centroid_min_target = centroid_min_target
 
     def forward(self, pred, target, buffer=None):
         if buffer is None:
             buffer = torch.ones_like(target[:, 0:1], dtype=torch.bool)
 
-        buffer = buffer.squeeze(1)  # -> [B,h,w]
+        buffer = buffer.squeeze(1)  # -> [B, h, w]
 
         losses = []
 
@@ -26,7 +36,16 @@ class TreeMortalityLoss(nn.Module):
             losses.append(self.mask_weight * mask_loss)
 
         if pred.shape[1] >= 2:  # centroid
-            centroid_loss = self._centroid_loss(pred[:, 1], target[:, 1], buffer)
+            centroid_logits = pred[:, 1]
+            centroid_target = target[:, 1]
+
+            # use positively weighted MSE for centroid channel
+            centroid_loss = weighted_centroid_mse_loss(
+                centroid_logits,
+                centroid_target,
+                pos_weight=self.centroid_pos_weight,
+                min_target=self.centroid_min_target,
+            )
             losses.append(self.centroid_weight * centroid_loss)
 
         if pred.shape[1] >= 3:  # sdt + boundary
@@ -172,3 +191,19 @@ def mse_loss(logits, target):
     if logits.shape[-2:] != target.shape[-2:]:
         raise RuntimeError(f"MSE size mismatch: {logits.shape} vs {target.shape}")
     return F.mse_loss(torch.sigmoid(logits), target.float())
+
+
+def weighted_centroid_mse_loss(logits, target, pos_weight: float = 10.0, min_target: float = 0.0):
+    pred = torch.sigmoid(logits)
+
+    w = torch.ones_like(target)
+
+    if min_target > 0.0:
+        mask_pos = target > min_target
+    else:
+        mask_pos = target > 0.0
+
+    w[mask_pos] = pos_weight
+
+    loss = w * (pred - target.float())**2
+    return loss.sum() / w.sum()
