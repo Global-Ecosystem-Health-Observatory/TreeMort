@@ -15,7 +15,7 @@ from shapely.geometry import Polygon, MultiPolygon
 from skimage.filters import gaussian
 from skimage.feature import peak_local_max
 from skimage.measure import regionprops, find_contours
-from skimage.morphology import erosion, disk, remove_small_objects, binary_dilation
+from skimage.morphology import erosion, disk, remove_small_objects, binary_dilation, binary_opening, remove_small_holes
 from skimage.segmentation import watershed
 
 from rasterio.crs import CRS
@@ -384,13 +384,49 @@ def _update_maps(
     y: int,
     x: int,
 ) -> None:
-    binary_mask = (binary_confidence >= threshold).float()
-
+    # IMPORTANT: average over *all* overlapping windows.
+    # Using a thresholded mask biases the average and inflates probabilities.
     prediction_map[:, y : y + binary_confidence.shape[0], x : x + binary_confidence.shape[1]] += torch.stack(
         [binary_confidence, centroid_confidence, hybrid_confidence]
     )
 
-    count_map[y : y + binary_confidence.shape[0], x : x + binary_confidence.shape[1]] += binary_mask
+    count_map[y : y + binary_confidence.shape[0], x : x + binary_confidence.shape[1]] += 1.0
+def _binary_cleanup(mask: np.ndarray, conf) -> np.ndarray:
+    """Light mask cleanup to prevent thin bridges merging nearby circular crowns."""
+    mask = mask.astype(bool)
+
+    # Fill tiny holes inside crowns (helps circular objects)
+    holes_area = getattr(conf, "holes_area", 32)
+    if holes_area and holes_area > 0:
+        mask = remove_small_holes(mask, area_threshold=int(holes_area))
+
+    # Light opening breaks 1-2px bridges between adjacent crowns
+    opening_radius = getattr(conf, "opening_radius", 1)
+    if opening_radius and opening_radius > 0:
+        mask = binary_opening(mask, disk(int(opening_radius)))
+
+    return mask.astype(np.uint8)
+
+
+def _markers_from_centroids(centroid_map: np.ndarray, mask: np.ndarray, conf) -> np.ndarray:
+    """Create labeled markers from centroid peaks constrained to the segmentation mask."""
+    centroid_map_smoothed = gaussian(centroid_map, sigma=conf.blur_sigma)
+
+    # Constrain peak detection to the mask; this reduces spurious peaks in background.
+    local_max_coords = peak_local_max(
+        centroid_map_smoothed,
+        min_distance=conf.min_distance,
+        threshold_abs=conf.centroid_threshold,
+        exclude_border=False,
+        labels=mask.astype(bool),
+    )
+
+    markers = np.zeros_like(mask, dtype=np.int32)
+    for i, (row, col) in enumerate(local_max_coords, 1):
+        markers[row, col] = i
+
+    markers = ndi.label(markers > 0)[0]
+    return markers
 
 
 def threshold_prediction_map(prediction_map: np.ndarray, threshold: float = 0.5) -> np.ndarray:
@@ -442,25 +478,55 @@ def compute_watershed(segment_map, centroid_map, hybrid_map, conf):
 
     elif conf.output_channels == 3:
 
-        binary_hybrid = (hybrid_map < conf.hybrid_threshold).astype(np.uint8)
-        binary_seg[binary_hybrid == 0] = 0
+        # Base segmentation mask
+        binary_seg = (segment_map > conf.segment_threshold).astype(np.uint8)
+        binary_seg = remove_small_objects(binary_seg.astype(bool), min_size=conf.min_area_pixels).astype(np.uint8)
 
-        centroid_map_smoothed = gaussian(centroid_map, sigma=conf.blur_sigma)
+        # Optional hybrid gating: hybrid in [-1,0] typically, where values closer to 0 are boundary/background.
+        # If threshold is too negative (e.g., -0.5), you may keep only deep interiors and lose separations.
+        hybrid_thr = getattr(conf, "hybrid_threshold", None)
+        if hybrid_thr is not None:
+            binary_hybrid = (hybrid_map < hybrid_thr).astype(np.uint8)
+            before = int(binary_seg.sum())
+            binary_seg[binary_hybrid == 0] = 0
+            after = int(binary_seg.sum())
+            if before > 0 and after / max(before, 1) < 0.25:
+                logger.warning(
+                    f"Hybrid gating removed a large fraction of the segmentation mask (kept {after}/{before}={after/max(before,1):.2%}). "
+                    "For circular crowns, try a less negative hybrid_threshold (e.g., -0.2..-0.05) or set to 0 to disable gating."
+                )
 
-        local_max_coords = peak_local_max(
-            centroid_map_smoothed,
-            min_distance=conf.min_distance,
-            threshold_abs=conf.centroid_threshold,
-            exclude_border=False,
-        )
+        # Light morphological cleanup to break thin bridges between adjacent circular crowns.
+        binary_seg = _binary_cleanup(binary_seg, conf)
 
-        markers = np.zeros_like(centroid_map, dtype=np.int32)
-        for i, (row, col) in enumerate(local_max_coords, 1):
-            markers[row, col] = i
+        # Marker-controlled watershed using distance transform is much better at splitting touching objects
+        # than using -centroid as the watershed surface.
+        mask_bool = binary_seg.astype(bool)
+        if mask_bool.sum() == 0:
+            labels_ws = np.zeros_like(binary_seg, dtype=np.int32)
+        else:
+            dist = ndi.distance_transform_edt(mask_bool).astype(np.float32)
 
-        markers = ndi.label(markers)[0]
+            # Use centroid map peaks as seeds (constrained to mask).
+            markers = _markers_from_centroids(centroid_map, binary_seg, conf)
 
-        labels_ws = watershed(-centroid_map_smoothed, markers, mask=binary_seg)
+            # Fallback: if centroid peaks are missing, seed from distance peaks.
+            if markers.max() == 0:
+                fallback_thr = float(getattr(conf, "dist_peak_rel", 0.35))
+                dist_thr = dist.max() * fallback_thr
+                coords = peak_local_max(
+                    dist,
+                    min_distance=conf.min_distance,
+                    threshold_abs=dist_thr,
+                    exclude_border=False,
+                    labels=mask_bool,
+                )
+                markers = np.zeros_like(binary_seg, dtype=np.int32)
+                for i, (r, c) in enumerate(coords, 1):
+                    markers[r, c] = i
+                markers = ndi.label(markers > 0)[0]
+
+            labels_ws = watershed(-dist, markers, mask=mask_bool)
 
     else:
         log_and_raise(logger, ValueError(f"Unsupported number of output channels: {conf.output_channels}"))

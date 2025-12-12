@@ -136,6 +136,25 @@ def build_parser(config_files):
     inference_group.add("--dilation-radius", type=int, default=0, help="Radius of the structuring element for dilating binary masks.")
     inference_group.add("--erosion-radius", type=int, default=0, help="Radius of the structuring element for eroding binary masks.")
     inference_group.add("--blur-sigma", type=float, default=1.0, help="Standard deviation for Gaussian blur applied to prediction maps.")
+    # --- Additional post-processing controls for instance separation ---
+    inference_group.add(
+        "--opening-radius",
+        type=int,
+        default=1,
+        help="Radius (in pixels) for binary opening used to break thin bridges between adjacent circular crowns.",
+    )
+    inference_group.add(
+        "--holes-area",
+        type=int,
+        default=32,
+        help="Maximum hole area (in pixels) to fill inside segmentation masks; helps stabilize circular crowns.",
+    )
+    inference_group.add(
+        "--dist-peak-rel",
+        type=float,
+        default=0.35,
+        help="Relative threshold (fraction of max distance) for fallback peak detection on distance transform.",
+    )
     inference_group.add("--tightness", type=float, default=0.1, help="Tightness parameter for ellipse fitting.")
     # Default to False to keep detailed contours unless explicitly enabled
     inference_group.add(
