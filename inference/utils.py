@@ -211,7 +211,7 @@ def sliding_window_inference(
     device = next(model.parameters()).device
     padded_image = _pad_image(image, window_size)
 
-    prediction_map, count_map = _initialize_maps(padded_image.shape[1:], device=device)
+    prediction_map, count_map = _initialize_maps(padded_image.shape[1:], output_channels=output_channels, device=device)
     patches, coords = _generate_patches(padded_image, window_size, stride)
 
     for batch in _batch_patches(patches, coords, batch_size):
@@ -451,6 +451,7 @@ def compute_watershed(segment_map, centroid_map, hybrid_map, conf):
             centroid_map_smoothed,
             min_distance=conf.min_distance,
             threshold_abs=conf.centroid_threshold,
+            exclude_border=False,
         )
 
         markers = np.zeros_like(centroid_map, dtype=np.int32)
