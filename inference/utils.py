@@ -384,13 +384,15 @@ def _update_maps(
     y: int,
     x: int,
 ) -> None:
-    # IMPORTANT: average over *all* overlapping windows.
-    # Using a thresholded mask biases the average and inflates probabilities.
+    binary_mask = (binary_confidence >= threshold).float()    
+    
     prediction_map[:, y : y + binary_confidence.shape[0], x : x + binary_confidence.shape[1]] += torch.stack(
         [binary_confidence, centroid_confidence, hybrid_confidence]
     )
 
-    count_map[y : y + binary_confidence.shape[0], x : x + binary_confidence.shape[1]] += 1.0
+    count_map[y : y + binary_confidence.shape[0], x : x + binary_confidence.shape[1]] += binary_mask
+
+
 def _binary_cleanup(mask: np.ndarray, conf) -> np.ndarray:
     """Light mask cleanup to prevent thin bridges merging nearby circular crowns."""
     mask = mask.astype(bool)
