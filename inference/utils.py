@@ -542,26 +542,6 @@ def compute_watershed(segment_map, centroid_map, hybrid_map, conf):
         binary_seg = (segment_map > conf.segment_threshold).astype(np.uint8)
         binary_seg = remove_small_objects(binary_seg.astype(bool), min_size=conf.min_area_pixels).astype(np.uint8)
 
-        # Hybrid refinement (matches GT semantics):
-        #   inside crown: (0,1], boundary: -1, background: 0
-        # Use the hybrid channel primarily as a *boundary cutter* to break thin bridges.
-        boundary_thr = getattr(conf, "hybrid_boundary_threshold", -0.5)
-        boundary_mask = (hybrid_map < boundary_thr)
-        if np.any(boundary_mask):
-            before = int(binary_seg.sum())
-            binary_seg[boundary_mask] = 0
-            after = int(binary_seg.sum())
-            if before > 0 and after / max(before, 1) < 0.25:
-                logger.warning(
-                    f"Hybrid boundary cutting removed a large fraction of the segmentation mask (kept {after}/{before}={after/max(before,1):.2%}). "
-                    "Consider raising hybrid_boundary_threshold toward -0.2..-0.05 or disabling by setting it to -1.0."
-                )
-
-        # Optional: keep only interior-like pixels (shrinks mask to stable cores). Disabled by default.
-        inside_thr = getattr(conf, "hybrid_inside_threshold", None)
-        if inside_thr is not None:
-            binary_seg[hybrid_map <= float(inside_thr)] = 0
-
         # Light morphological cleanup to break thin bridges between adjacent circular crowns.
         binary_seg = _binary_cleanup(binary_seg, conf)
 
@@ -604,6 +584,32 @@ def compute_watershed(segment_map, centroid_map, hybrid_map, conf):
                 markers = ndi.label(markers > 0)[0]
 
             labels_ws = watershed(-dist, markers, mask=mask_bool)
+
+            # Optional post-watershed hybrid refinement:
+            # Cut boundary-like pixels from each instance and relabel connected components.
+            # This is safer than pre-watershed gating because it cannot erase the whole foreground mask.
+            if bool(getattr(conf, "use_hybrid_refine", False)):
+                boundary_thr = float(getattr(conf, "hybrid_boundary_threshold", -0.5))
+                boundary_mask = (hybrid_map < boundary_thr) & (labels_ws > 0)
+
+                before_px = int((labels_ws > 0).sum())
+                labels_ws_cut = labels_ws.copy()
+                labels_ws_cut[boundary_mask] = 0
+                after_px = int((labels_ws_cut > 0).sum())
+
+                # If cutting is too destructive, skip for this tile
+                min_keep_frac = float(getattr(conf, "hybrid_min_keep_frac", 0.40))
+                keep_frac = after_px / max(before_px, 1)
+                if before_px > 0 and keep_frac < min_keep_frac:
+                    logger.warning(
+                        f"Post-watershed hybrid cutting too aggressive (kept {after_px}/{before_px}={keep_frac:.2%}); skipping hybrid refine."
+                    )
+                else:
+                    # Relabel connected components after boundary removal
+                    cc = ndi.label(labels_ws_cut > 0)[0].astype(np.int32)
+                    # Preserve original labels where possible by assigning component ids
+                    # as new instance ids.
+                    labels_ws = cc
 
     else:
         log_and_raise(logger, ValueError(f"Unsupported number of output channels: {conf.output_channels}"))
@@ -903,15 +909,10 @@ def segment_filtering_only(segment_map: np.ndarray, conf) -> np.ndarray:
 def watershed_segmentation_only(
     segment_map: np.ndarray, centroid_map: np.ndarray, hybrid_map: np.ndarray, conf
 ) -> np.ndarray:
+    logger = get_logger()
+    
     binary_seg = (segment_map > conf.segment_threshold).astype(np.uint8)
     binary_seg = remove_small_objects(binary_seg.astype(bool), min_size=conf.min_area_pixels).astype(np.uint8)
-
-    boundary_thr = getattr(conf, "hybrid_boundary_threshold", -0.5)
-    binary_seg[hybrid_map < boundary_thr] = 0
-
-    inside_thr = getattr(conf, "hybrid_inside_threshold", None)
-    if inside_thr is not None:
-        binary_seg[hybrid_map <= float(inside_thr)] = 0
 
     centroid_map_smoothed = gaussian(centroid_map, sigma=conf.blur_sigma)
 
@@ -928,5 +929,31 @@ def watershed_segmentation_only(
     markers = ndi.label(markers)[0]
 
     labels_ws = watershed(-ndi.distance_transform_edt(binary_seg.astype(bool)).astype(np.float32), markers, mask=binary_seg.astype(bool))
+
+    # Optional post-watershed hybrid refinement:
+    # Cut boundary-like pixels from each instance and relabel connected components.
+    # This is safer than pre-watershed gating because it cannot erase the whole foreground mask.
+    if bool(getattr(conf, "use_hybrid_refine", False)):
+        boundary_thr = float(getattr(conf, "hybrid_boundary_threshold", -0.5))
+        boundary_mask = (hybrid_map < boundary_thr) & (labels_ws > 0)
+
+        before_px = int((labels_ws > 0).sum())
+        labels_ws_cut = labels_ws.copy()
+        labels_ws_cut[boundary_mask] = 0
+        after_px = int((labels_ws_cut > 0).sum())
+
+        # If cutting is too destructive, skip for this tile
+        min_keep_frac = float(getattr(conf, "hybrid_min_keep_frac", 0.40))
+        keep_frac = after_px / max(before_px, 1)
+        if before_px > 0 and keep_frac < min_keep_frac:
+            logger.warning(
+                f"Post-watershed hybrid cutting too aggressive (kept {after_px}/{before_px}={keep_frac:.2%}); skipping hybrid refine."
+            )
+        else:
+            # Relabel connected components after boundary removal
+            cc = ndi.label(labels_ws_cut > 0)[0].astype(np.int32)
+            # Preserve original labels where possible by assigning component ids
+            # as new instance ids.
+            labels_ws = cc
 
     return labels_ws
