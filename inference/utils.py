@@ -576,6 +576,17 @@ def compute_watershed(segment_map, centroid_map, hybrid_map, conf):
             # Use centroid map peaks as seeds (constrained to mask).
             markers = _markers_from_centroids(centroid_map, binary_seg, conf)
 
+            num_markers = int(markers.max())
+            logger.info(
+                f"[WS] centroid markers: {num_markers} | "
+                f"seg_pixels={int(binary_seg.sum())} | "
+                f"centroid stats in seg-mask: "
+                f"min={centroid_map[binary_seg>0].min():.4f}, "
+                f"med={np.median(centroid_map[binary_seg>0]):.4f}, "
+                f"p95={np.percentile(centroid_map[binary_seg>0],95):.4f}, "
+                f"max={centroid_map[binary_seg>0].max():.4f}"
+            )
+
             # Fallback: if centroid peaks are missing, seed from distance peaks.
             if markers.max() == 0:
                 fallback_thr = float(getattr(conf, "dist_peak_rel", 0.35))
