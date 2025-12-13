@@ -312,7 +312,7 @@ def _finalize_prediction(
     final_prediction[:, no_contribution_mask] = 0
 
     final_prediction[0] = torch.clamp(final_prediction[0], 0, 1)
-    final_prediction[1] = torch.clamp(final_prediction[1], 0, 1)
+    # final_prediction[1] = torch.clamp(final_prediction[1], 0, 1)
     final_prediction[2] = torch.clamp(final_prediction[2], -1, 1)
 
     _, original_h, original_w = original_shape
