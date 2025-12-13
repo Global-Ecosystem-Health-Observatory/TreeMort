@@ -15,8 +15,8 @@ from shapely.geometry import Polygon, MultiPolygon
 from skimage.filters import gaussian
 from skimage.feature import peak_local_max
 from skimage.measure import regionprops, find_contours
-from skimage.morphology import erosion, disk, remove_small_objects, binary_dilation, binary_opening, remove_small_holes
-from skimage.segmentation import watershed
+from skimage.morphology import erosion, disk, remove_small_objects, binary_dilation, binary_opening, binary_closing, remove_small_holes
+from skimage.segmentation import watershed, relabel_sequential
 
 from rasterio.crs import CRS
 from rasterio.enums import Resampling
@@ -627,13 +627,18 @@ def compute_watershed(segment_map, centroid_map, hybrid_map, conf):
     else:
         log_and_raise(logger, ValueError(f"Unsupported number of output channels: {conf.output_channels}"))
 
-    new_labels = _postprocess_labels(
+    # Basic postprocessing (merge tiny fragments)
+    labels_ws = _postprocess_labels(
         labels_ws,
         min_region_size=conf.min_area_pixels,
         dilation_radius=conf.dilation_radius,
     )
 
-    return new_labels
+    # --- Shape regularisation (post labels) ---
+    labels_ws = _smooth_label_boundaries(labels_ws, conf)
+    labels_ws = _filter_labels_by_shape(labels_ws, conf)
+
+    return labels_ws
 
 
 def _postprocess_labels(labels_ws, min_region_size=50, dilation_radius=1):
@@ -661,6 +666,79 @@ def _postprocess_labels(labels_ws, min_region_size=50, dilation_radius=1):
                     new_labels[mask] = target_label
 
     return new_labels
+
+
+def _smooth_label_boundaries(labels_ws, conf):
+    """
+    Smooth instance boundaries using light morphology.
+    Designed for roughly circular tree crowns.
+    """
+    close_r = int(getattr(conf, "shape_close_radius", 2))
+    open_r  = int(getattr(conf, "shape_open_radius", 1))
+
+    if close_r <= 0 and open_r <= 0:
+        return labels_ws
+
+    out = np.zeros_like(labels_ws, dtype=np.int32)
+    next_id = 1
+
+    se_close = disk(close_r) if close_r > 0 else None
+    se_open  = disk(open_r)  if open_r  > 0 else None
+
+    for lbl in np.unique(labels_ws):
+        if lbl == 0:
+            continue
+        m = labels_ws == lbl
+
+        if se_close is not None:
+            m = binary_closing(m, se_close)
+        if se_open is not None:
+            m = binary_opening(m, se_open)
+
+        if m.any():
+            out[m] = next_id
+            next_id += 1
+
+    out, _, _ = relabel_sequential(out)
+    return out
+
+
+def _filter_labels_by_shape(labels_ws, conf):
+    """
+    Remove implausible tree instances using geometric priors.
+    """
+    min_area = int(getattr(conf, "shape_min_area", 20))
+    max_area = getattr(conf, "shape_max_area", None)
+    min_solidity = float(getattr(conf, "shape_min_solidity", 0.80))
+    min_circularity = float(getattr(conf, "shape_min_circularity", 0.40))
+    max_eccentricity = float(getattr(conf, "shape_max_eccentricity", 0.95))
+
+    out = labels_ws.copy()
+    keep_labels = []
+
+    for r in regionprops(out):
+        A = r.area
+        if A < min_area:
+            continue
+        if max_area is not None and A > max_area:
+            continue
+
+        P = max(r.perimeter, 1e-6)
+        circularity = 4.0 * np.pi * A / (P * P)
+
+        if r.solidity < min_solidity:
+            continue
+        if circularity < min_circularity:
+            continue
+        if r.eccentricity > max_eccentricity:
+            continue
+
+        keep_labels.append(r.label)
+
+    mask_keep = np.isin(out, keep_labels)
+    out[~mask_keep] = 0
+    out, _, _ = relabel_sequential(out)
+    return out
 
 
 def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):

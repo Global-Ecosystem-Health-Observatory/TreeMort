@@ -183,6 +183,52 @@ def build_parser(config_files):
         ),
     )
 
+    # --- Shape regularisation (post-watershed) ---
+    inference_group.add(
+        "--shape-close-radius",
+        type=int,
+        default=2,
+        help="Radius (pixels) for morphological closing applied per-instance after watershed.",
+    )
+    inference_group.add(
+        "--shape-open-radius",
+        type=int,
+        default=1,
+        help="Radius (pixels) for morphological opening applied per-instance after watershed.",
+    )
+
+    # --- Shape filtering (instance priors) ---
+    inference_group.add(
+        "--shape-min-area",
+        type=int,
+        default=30,
+        help="Minimum instance area (pixels) to keep after watershed.",
+    )
+    inference_group.add(
+        "--shape-max-area",
+        type=lambda x: None if str(x).lower() in {"none", "null"} else int(x),
+        default=None,
+        help="Maximum instance area (pixels) to keep after watershed; set to none/null to disable.",
+    )
+    inference_group.add(
+        "--shape-min-solidity",
+        type=float,
+        default=0.80,
+        help="Minimum solidity (area / convex area) for an instance to be kept.",
+    )
+    inference_group.add(
+        "--shape-min-circularity",
+        type=float,
+        default=0.40,
+        help="Minimum circularity (4πA/P²) for an instance to be kept.",
+    )
+    inference_group.add(
+        "--shape-max-eccentricity",
+        type=float,
+        default=0.95,
+        help="Maximum eccentricity for an instance to be kept (0=circle, 1=line).",
+    )
+
     output_group = parser.add_argument_group('Output')
     output_group.add("--output-dir", type=str, default="./output", help="directory to save output files")
 

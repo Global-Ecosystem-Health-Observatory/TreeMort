@@ -35,3 +35,14 @@ tightness = 1.0
 
 # Disable ellipse fitting to keep detailed contours
 fit-ellipses = False
+
+# Shape regularisation (post-watershed)
+shape-close-radius = 2
+shape-open-radius = 1
+
+# Shape filtering (instance priors)
+shape-min-area = 30
+shape-max-area = null
+shape-min-solidity = 0.80
+shape-min-circularity = 0.40
+shape-max-eccentricity = 0.95
