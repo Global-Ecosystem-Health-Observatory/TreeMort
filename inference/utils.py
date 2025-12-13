@@ -445,23 +445,47 @@ def _binary_cleanup(mask: np.ndarray, conf) -> np.ndarray:
 
 
 def _markers_from_centroids(centroid_map: np.ndarray, mask: np.ndarray, conf) -> np.ndarray:
-    """Create labeled markers from centroid peaks constrained to the segmentation mask."""
-    centroid_map_smoothed = gaussian(centroid_map, sigma=conf.blur_sigma)
+    """
+    Create labeled markers from centroid logits using adaptive (percentile) thresholding
+    within the segmentation mask. This is robust to logit scale drift across tiles/domains.
+    """
+    mask_bool = mask.astype(bool)
+    markers = np.zeros_like(mask, dtype=np.int32)
+    if mask_bool.sum() == 0:
+        return markers
 
-    # Constrain peak detection to the mask; this reduces spurious peaks in background.
-    local_max_coords = peak_local_max(
-        centroid_map_smoothed,
-        min_distance=conf.min_distance,
-        threshold_abs=conf.centroid_threshold,
+    # Smooth logits lightly (helps stabilize local maxima)
+    cen_sm = gaussian(centroid_map.astype(np.float32), sigma=float(getattr(conf, "blur_sigma", 1.5)))
+
+    # Adaptive threshold inside the mask
+    vals = cen_sm[mask_bool]
+    if vals.size == 0:
+        return markers
+
+    # User-configurable knobs with safe defaults
+    pct = float(getattr(conf, "centroid_peak_percentile", 95))  # top 0.5% in-mask
+    abs_floor = float(getattr(conf, "centroid_threshold", -np.inf))  # keep as optional floor
+
+    thr_pct = float(np.percentile(vals, pct))
+    thr = max(abs_floor, thr_pct)
+
+    # Guard against flat maps (percentile == max => may return 0 peaks)
+    if np.isclose(thr, float(vals.max())):
+        thr = float(np.percentile(vals, max(90.0, pct - 5.0)))
+
+    coords = peak_local_max(
+        cen_sm,
+        min_distance=int(getattr(conf, "min_distance", 3)),
+        threshold_abs=float(thr),
         exclude_border=False,
-        labels=mask.astype(bool),
+        labels=mask_bool.astype(np.uint8),
     )
 
-    markers = np.zeros_like(mask, dtype=np.int32)
-    for i, (row, col) in enumerate(local_max_coords, 1):
-        markers[row, col] = i
+    for i, (r, c) in enumerate(coords, 1):
+        markers[r, c] = i
 
-    markers = ndi.label(markers > 0)[0]
+    # Ensure proper connected-component labeling of seed points
+    markers = ndi.label(markers > 0)[0].astype(np.int32)
     return markers
 
 
