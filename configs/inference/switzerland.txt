@@ -9,7 +9,7 @@ min-area = 0.5
 max-aspect-ratio = 3.0
 min-solidity = 0.85
 
-min-distance = 12
+min-distance = 3
 dilation-radius = 2
 erosion-radius = 0
 
