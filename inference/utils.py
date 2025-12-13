@@ -362,10 +362,13 @@ def _infer_patches(patches: list[torch.Tensor], model: torch.nn.Module, device: 
         elif C > 3:
             outputs = outputs[:, :3, ...]
 
-        # Apply activations: sigmoid on segmentation head only
+        # Apply activations according to target semantics:
+        # - segmentation: probability -> sigmoid
+        # - centroid heatmap: target in [0,1] (Gaussian bumps, clipped) -> sigmoid
+        # - hybrid SDT+boundary: regression target (inside (0,1], boundary=-1, background=0) -> keep raw
         seg_predictions = torch.sigmoid(outputs[:, 0:1, ...])
-        centroid_predictions = outputs[:, 1:2, ...]  # raw/logit (or zeros if padded)
-        hybrid_predictions = outputs[:, 2:3, ...]  # raw/logit (or zeros if padded)
+        centroid_predictions = torch.sigmoid(outputs[:, 1:2, ...])
+        hybrid_predictions = outputs[:, 2:3, ...]
 
         predictions = torch.cat([seg_predictions, centroid_predictions, hybrid_predictions], dim=1)
 
@@ -384,13 +387,14 @@ def _update_maps(
     y: int,
     x: int,
 ) -> None:
-    binary_mask = (binary_confidence >= threshold).float()    
-    
+    # IMPORTANT: average over *all* overlapping windows.
+    # Using a thresholded mask biases the average and inflates probabilities,
+    # and it also corrupts centroid/hybrid averaging.
     prediction_map[:, y : y + binary_confidence.shape[0], x : x + binary_confidence.shape[1]] += torch.stack(
         [binary_confidence, centroid_confidence, hybrid_confidence]
     )
 
-    count_map[y : y + binary_confidence.shape[0], x : x + binary_confidence.shape[1]] += binary_mask
+    count_map[y : y + binary_confidence.shape[0], x : x + binary_confidence.shape[1]] += 1.0
 
 
 def _binary_cleanup(mask: np.ndarray, conf) -> np.ndarray:
@@ -484,19 +488,25 @@ def compute_watershed(segment_map, centroid_map, hybrid_map, conf):
         binary_seg = (segment_map > conf.segment_threshold).astype(np.uint8)
         binary_seg = remove_small_objects(binary_seg.astype(bool), min_size=conf.min_area_pixels).astype(np.uint8)
 
-        # Optional hybrid gating: hybrid in [-1,0] typically, where values closer to 0 are boundary/background.
-        # If threshold is too negative (e.g., -0.5), you may keep only deep interiors and lose separations.
-        hybrid_thr = getattr(conf, "hybrid_threshold", None)
-        if hybrid_thr is not None:
-            binary_hybrid = (hybrid_map < hybrid_thr).astype(np.uint8)
+        # Hybrid refinement (matches GT semantics):
+        #   inside crown: (0,1], boundary: -1, background: 0
+        # Use the hybrid channel primarily as a *boundary cutter* to break thin bridges.
+        boundary_thr = getattr(conf, "hybrid_boundary_threshold", -0.5)
+        boundary_mask = (hybrid_map < boundary_thr)
+        if np.any(boundary_mask):
             before = int(binary_seg.sum())
-            binary_seg[binary_hybrid == 0] = 0
+            binary_seg[boundary_mask] = 0
             after = int(binary_seg.sum())
             if before > 0 and after / max(before, 1) < 0.25:
                 logger.warning(
-                    f"Hybrid gating removed a large fraction of the segmentation mask (kept {after}/{before}={after/max(before,1):.2%}). "
-                    "For circular crowns, try a less negative hybrid_threshold (e.g., -0.2..-0.05) or set to 0 to disable gating."
+                    f"Hybrid boundary cutting removed a large fraction of the segmentation mask (kept {after}/{before}={after/max(before,1):.2%}). "
+                    "Consider raising hybrid_boundary_threshold toward -0.2..-0.05 or disabling by setting it to -1.0."
                 )
+
+        # Optional: keep only interior-like pixels (shrinks mask to stable cores). Disabled by default.
+        inside_thr = getattr(conf, "hybrid_inside_threshold", None)
+        if inside_thr is not None:
+            binary_seg[hybrid_map <= float(inside_thr)] = 0
 
         # Light morphological cleanup to break thin bridges between adjacent circular crowns.
         binary_seg = _binary_cleanup(binary_seg, conf)
@@ -829,11 +839,14 @@ def watershed_segmentation_only(
     segment_map: np.ndarray, centroid_map: np.ndarray, hybrid_map: np.ndarray, conf
 ) -> np.ndarray:
     binary_seg = (segment_map > conf.segment_threshold).astype(np.uint8)
-
     binary_seg = remove_small_objects(binary_seg.astype(bool), min_size=conf.min_area_pixels).astype(np.uint8)
 
-    binary_hybrid = (hybrid_map < conf.hybrid_threshold).astype(np.uint8)
-    binary_seg[binary_hybrid == 0] = 0
+    boundary_thr = getattr(conf, "hybrid_boundary_threshold", -0.5)
+    binary_seg[hybrid_map < boundary_thr] = 0
+
+    inside_thr = getattr(conf, "hybrid_inside_threshold", None)
+    if inside_thr is not None:
+        binary_seg[hybrid_map <= float(inside_thr)] = 0
 
     centroid_map_smoothed = gaussian(centroid_map, sigma=conf.blur_sigma)
 
@@ -841,12 +854,14 @@ def watershed_segmentation_only(
         centroid_map_smoothed,
         min_distance=conf.min_distance,
         threshold_abs=conf.centroid_threshold,
+        exclude_border=False,
+        labels=binary_seg.astype(bool),
     )
     markers = np.zeros_like(centroid_map, dtype=np.int32)
     for i, (row, col) in enumerate(local_max_coords, 1):
         markers[row, col] = i
     markers = ndi.label(markers)[0]
 
-    labels_ws = watershed(-centroid_map_smoothed, markers, mask=binary_seg)
+    labels_ws = watershed(-ndi.distance_transform_edt(binary_seg.astype(bool)).astype(np.float32), markers, mask=binary_seg.astype(bool))
 
     return labels_ws

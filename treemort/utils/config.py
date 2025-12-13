@@ -163,6 +163,25 @@ def build_parser(config_files):
         default=False,
         help="Fit ellipses during inference post-processing.",
     )
+    inference_group.add(
+        "--hybrid-boundary-threshold",
+        type=float,
+        default=-0.5,
+        help=(
+            "Hybrid boundary cutter threshold. Pixels with hybrid < threshold are treated as boundary-like and removed "
+            "from the segmentation mask (GT: boundary=-1, background=0, inside>0). Set to -1.0 to effectively disable "
+            "boundary cutting."
+        ),
+    )
+    inference_group.add(
+        "--hybrid-inside-threshold",
+        type=float,
+        default=None,
+        help=(
+            "Optional hybrid interior threshold. If set, keeps only pixels with hybrid > threshold (shrinks mask to stable "
+            "crown cores). Disabled by default."
+        ),
+    )
 
     output_group = parser.add_argument_group('Output')
     output_group.add("--output-dir", type=str, default="./output", help="directory to save output files")

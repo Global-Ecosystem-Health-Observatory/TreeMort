@@ -12,7 +12,21 @@ min-solidity = 0.85
 min-distance = 12
 dilation-radius = 2
 erosion-radius = 0
+
 blur-sigma = 1.5
+
+# Instance-separation helpers
+opening-radius = 1
+holes-area = 32
+# Fallback peak detection on distance transform (relative to max distance in the mask)
+dist-peak-rel = 0.35
+
+# Hybrid refinement (GT: inside>0, boundary=-1, background=0)
+# Boundary cutter: remove pixels with hybrid < threshold from the segmentation mask.
+# Set to -1.0 to effectively disable boundary cutting.
+hybrid-boundary-threshold = -0.5
+# Optional interior keeper (disabled by default). If set, keeps only hybrid > threshold.
+# hybrid-inside-threshold = 0.05
 
 segment-threshold = 0.45
 centroid-threshold = 0.55
