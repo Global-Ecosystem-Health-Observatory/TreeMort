@@ -394,10 +394,10 @@ def _infer_patches(patches: list[torch.Tensor], model: torch.nn.Module, device: 
 
         # Apply activations according to target semantics:
         # - segmentation: probability -> sigmoid
-        # - centroid heatmap: target in [0,1] (Gaussian bumps, clipped) -> sigmoid
+        # - centroid: use raw logits for peak detection (sigmoid collapses contrast)
         # - hybrid SDT+boundary: regression target (inside (0,1], boundary=-1, background=0) -> keep raw
         seg_predictions = torch.sigmoid(outputs[:, 0:1, ...])
-        centroid_predictions = torch.sigmoid(outputs[:, 1:2, ...])
+        centroid_predictions = outputs[:, 1:2, ...]  # logits
         hybrid_predictions = outputs[:, 2:3, ...]
 
         predictions = torch.cat([seg_predictions, centroid_predictions, hybrid_predictions], dim=1)
