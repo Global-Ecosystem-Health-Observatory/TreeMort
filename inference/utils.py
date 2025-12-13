@@ -213,6 +213,7 @@ def sliding_window_inference(
 
     prediction_map, count_map = _initialize_maps(padded_image.shape[1:], output_channels=output_channels, device=device)
     patches, coords = _generate_patches(padded_image, window_size, stride)
+    blend_w = _make_blend_weights(window_size, device=device)
 
     for batch in _batch_patches(patches, coords, batch_size):
         prediction_map, count_map = process_batch(
@@ -223,6 +224,7 @@ def sliding_window_inference(
             model,
             threshold,
             device,
+            blend_w,
         )
 
     return _finalize_prediction(prediction_map, count_map, image.shape, threshold)
@@ -236,6 +238,22 @@ def _validate_inference_params(window_size: int, stride: int, threshold: float) 
     if not (0 <= threshold <= 1):
         log_and_raise(logger, ValueError("threshold must be between 0 and 1."))
 
+
+def _make_blend_weights(window_size: int, device: torch.device) -> torch.Tensor:
+    """
+    Create a smooth 2D blending window to reduce visible seams.
+
+    UNet-style models often have border effects. Weighting patch centers higher than
+    patch borders reduces stride-grid artifacts in smooth regression maps (centroid/hybrid).
+
+    Uses a Hann (raised cosine) window in each dimension. Hann is zero at the ends,
+    so we clamp to a small epsilon to keep borders contributing non-zero weight.
+
+    Returns a tensor of shape (window_size, window_size).
+    """
+    w1 = torch.hann_window(window_size, periodic=False, dtype=torch.float32, device=device)
+    w1 = w1.clamp_min(1e-3)
+    return torch.outer(w1, w1)
 
 def _initialize_maps(
     image_shape: Tuple[int, int],
@@ -253,13 +271,23 @@ def _generate_patches(
 ) -> Tuple[List[torch.Tensor], List[Tuple[int, int]]]:
     h, w = image.shape[1:]
     patches, coords = [], []
-    for y in range(0, h - window_size + 1, stride):
-        for x in range(0, w - window_size + 1, stride):
+
+    ys = list(range(0, h - window_size + 1, stride))
+    xs = list(range(0, w - window_size + 1, stride))
+
+    # Ensure we always include the last possible start so borders are covered
+    if not ys or ys[-1] != h - window_size:
+        ys.append(h - window_size)
+    if not xs or xs[-1] != w - window_size:
+        xs.append(w - window_size)
+
+    for y in ys:
+        for x in xs:
             patch = image[:, y : y + window_size, x : x + window_size].float()
             patches.append(patch)
             coords.append((y, x))
-    return patches, coords
 
+    return patches, coords
 
 def _batch_patches(
     patches: List[torch.Tensor], coords: List[Tuple[int, int]], batch_size: int
@@ -299,6 +327,7 @@ def process_batch(
     model: torch.nn.Module,
     threshold: float,
     device: torch.device,
+    blend_w: torch.Tensor,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     logger = get_logger()
 
@@ -320,6 +349,7 @@ def process_batch(
             threshold,
             y,
             x,
+            blend_w,
         )
 
     return prediction_map, count_map
@@ -386,15 +416,15 @@ def _update_maps(
     threshold: float,
     y: int,
     x: int,
+    blend_w: torch.Tensor,
 ) -> None:
-    # IMPORTANT: average over *all* overlapping windows.
-    # Using a thresholded mask biases the average and inflates probabilities,
-    # and it also corrupts centroid/hybrid averaging.
-    prediction_map[:, y : y + binary_confidence.shape[0], x : x + binary_confidence.shape[1]] += torch.stack(
-        [binary_confidence, centroid_confidence, hybrid_confidence]
-    )
+    # Weighted blending reduces patch-border seams (esp. for centroid/hybrid regression maps).
+    stacked = torch.stack([binary_confidence, centroid_confidence, hybrid_confidence])  # (3, H, W)
 
-    count_map[y : y + binary_confidence.shape[0], x : x + binary_confidence.shape[1]] += 1.0
+    w = blend_w.to(device=stacked.device, dtype=stacked.dtype)  # (H, W)
+
+    prediction_map[:, y : y + stacked.shape[1], x : x + stacked.shape[2]] += stacked * w
+    count_map[y : y + stacked.shape[1], x : x + stacked.shape[2]] += w
 
 
 def _binary_cleanup(mask: np.ndarray, conf) -> np.ndarray:
