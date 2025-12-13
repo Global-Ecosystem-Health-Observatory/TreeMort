@@ -463,15 +463,28 @@ def _markers_from_centroids(centroid_map: np.ndarray, mask: np.ndarray, conf) ->
         return markers
 
     # User-configurable knobs with safe defaults
-    pct = float(getattr(conf, "centroid_peak_percentile", 95))  # top 0.5% in-mask
-    abs_floor = float(getattr(conf, "centroid_threshold", -np.inf))  # keep as optional floor
+    pct = float(getattr(conf, "centroid_peak_percentile", 95))
 
+    # Percentile threshold is the primary mechanism (robust to logit scale drift).
     thr_pct = float(np.percentile(vals, pct))
-    thr = max(abs_floor, thr_pct)
+    thr = thr_pct
+
+    # Optional absolute floor: disabled by default because it can easily suppress peaks
+    # when centroid logits are not calibrated.
+    if bool(getattr(conf, "use_centroid_abs_floor", False)):
+        abs_floor = float(getattr(conf, "centroid_threshold", -np.inf))
+        thr = max(thr, abs_floor)
 
     # Guard against flat maps (percentile == max => may return 0 peaks)
     if np.isclose(thr, float(vals.max())):
         thr = float(np.percentile(vals, max(90.0, pct - 5.0)))
+
+    if os.getenv("TREEMORT_DEBUG_MARKERS", "0") == "1":
+        print(
+            f"[MARKERS] mask_pixels={int(mask_bool.sum())} pct={pct} thr={thr:.6f} thr_pct={thr_pct:.6f} "
+            f"use_abs_floor={bool(getattr(conf,'use_centroid_abs_floor', False))}",
+            flush=True,
+        )
 
     coords = peak_local_max(
         cen_sm,
