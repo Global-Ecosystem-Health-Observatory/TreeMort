@@ -35,7 +35,27 @@ def configure_loss_and_metrics(conf, class_weights=None):
     logger = get_logger()
     
     if conf.loss == "hybrid":
-        tree_mortality_loss = TreeMortalityLoss()
+        tree_mortality_loss = TreeMortalityLoss(
+            mask_weight=getattr(conf, "mask_weight", 1.0),
+            centroid_weight=getattr(conf, "centroid_weight", 3.0),
+            sdt_weight=getattr(conf, "sdt_weight", 0.5),
+            boundary_weight=getattr(conf, "boundary_weight", 1.0),
+            centroid_pos_weight=getattr(conf, "centroid_pos_weight", 10.0),
+            centroid_min_target=getattr(conf, "centroid_min_target", 0.1),
+            # Hybrid (SDT+boundary) stabilizers
+            hybrid_use_tanh=getattr(conf, "hybrid_use_tanh", True),
+            hybrid_bg_weight=getattr(conf, "hybrid_bg_weight", 0.10),
+            hybrid_interior_weight=getattr(conf, "hybrid_interior_weight", 3.00),
+            hybrid_boundary_weight=getattr(conf, "hybrid_boundary_weight", 1.00),
+        )
+
+        logger.info(
+            "TreeMortalityLoss(hybrid) params: "
+            f"hybrid_use_tanh={tree_mortality_loss.hybrid_use_tanh}, "
+            f"hybrid_bg_weight={tree_mortality_loss.hybrid_bg_weight}, "
+            f"hybrid_interior_weight={tree_mortality_loss.hybrid_interior_weight}, "
+            f"hybrid_boundary_weight={tree_mortality_loss.hybrid_boundary_weight}"
+        )
 
         def criterion(pred, target, buffer=None):
             if buffer is None:
