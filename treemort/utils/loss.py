@@ -14,6 +14,11 @@ class TreeMortalityLoss(nn.Module):
         boundary_weight: float = 1.0,
         centroid_pos_weight: float = 10.0,
         centroid_min_target: float = 0.1,
+        # Hybrid (SDT+boundary) stabilizers
+        hybrid_use_tanh: bool = True,
+        hybrid_bg_weight: float = 0.10,
+        hybrid_interior_weight: float = 3.00,
+        hybrid_boundary_weight: float = 1.00,
     ):
         super().__init__()
         self.mask_weight = mask_weight
@@ -22,6 +27,10 @@ class TreeMortalityLoss(nn.Module):
         self.boundary_weight = boundary_weight
         self.centroid_pos_weight = centroid_pos_weight
         self.centroid_min_target = centroid_min_target
+        self.hybrid_use_tanh = hybrid_use_tanh
+        self.hybrid_bg_weight = hybrid_bg_weight
+        self.hybrid_interior_weight = hybrid_interior_weight
+        self.hybrid_boundary_weight = hybrid_boundary_weight
 
     def forward(self, pred, target, buffer=None):
         if buffer is None:
@@ -70,15 +79,52 @@ class TreeMortalityLoss(nn.Module):
         return F.mse_loss(pred[valid_mask], target[valid_mask])
 
     def _sdt_boundary_loss(self, pred, target, buffer):
+        """Hybrid SDT+boundary loss with region weighting.
+
+        Target semantics:
+          - background: 0
+          - interior (inside crowns): (0, 1]
+          - boundary: -1
+
+        We downweight background (dominant), upweight interior (rare), and keep boundary moderate.
+        Optionally apply tanh to constrain predictions to (-1, 1).
+        """
         buffer = buffer.bool()
-        sdt_mask = (target != -1) & buffer
+
+        # Optional stabilization: constrain regression output range
+        if getattr(self, "hybrid_use_tanh", False):
+            pred_eff = torch.tanh(pred)
+        else:
+            pred_eff = pred
+
+        bg_mask = (target == 0) & buffer
+        interior_mask = (target > 0) & buffer
         boundary_mask = (target == -1) & buffer
 
-        sdt_loss = F.smooth_l1_loss(pred[sdt_mask], target[sdt_mask])
+        # Weighted Smooth L1 for background + interior (both are non-boundary SDT regions)
+        losses = []
+        weights = []
 
-        if boundary_mask.sum() > 0:
-            # boundary_loss = torch.exp(pred[boundary_mask] + 1).mean()
-            boundary_loss = F.l1_loss(pred[boundary_mask], target[boundary_mask])
+        if bg_mask.any():
+            bg_loss = F.smooth_l1_loss(pred_eff[bg_mask], target[bg_mask])
+            losses.append(bg_loss)
+            weights.append(float(getattr(self, "hybrid_bg_weight", 0.10)))
+
+        if interior_mask.any():
+            in_loss = F.smooth_l1_loss(pred_eff[interior_mask], target[interior_mask])
+            losses.append(in_loss)
+            weights.append(float(getattr(self, "hybrid_interior_weight", 3.00)))
+
+        if len(losses) > 0:
+            w = torch.tensor(weights, device=pred.device, dtype=torch.float32)
+            sdt_loss = (torch.stack(losses) * w).sum() / (w.sum() + 1e-8)
+        else:
+            sdt_loss = torch.tensor(0.0, device=pred.device)
+
+        # Boundary loss (L1) with its own internal weight
+        if boundary_mask.any():
+            bd_loss = F.l1_loss(pred_eff[boundary_mask], target[boundary_mask])
+            boundary_loss = float(getattr(self, "hybrid_boundary_weight", 1.00)) * bd_loss
         else:
             boundary_loss = torch.tensor(0.0, device=pred.device)
 

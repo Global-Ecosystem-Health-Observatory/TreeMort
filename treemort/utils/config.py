@@ -83,6 +83,31 @@ def build_parser(config_files):
     model_group.add("--learning-rate", type=float, default=2e-4, help="learning rate for optimizer")
     model_group.add("--activation", type=str, default="sigmoid", help="activation function")
     model_group.add("--loss", type=str, default="hybrid", help="loss function for the network")
+    # --- Hybrid (SDT+boundary) loss stabilizers ---
+    model_group.add(
+        "--hybrid-use-tanh",
+        type=lambda x: bool(strtobool(str(x))),
+        default=True,
+        help="If true, apply tanh to hybrid predictions inside the hybrid SDT+boundary loss.",
+    )
+    model_group.add(
+        "--hybrid-bg-weight",
+        type=float,
+        default=0.10,
+        help="Weight for background pixels (target==0) in the hybrid SDT loss term.",
+    )
+    model_group.add(
+        "--hybrid-interior-weight",
+        type=float,
+        default=3.00,
+        help="Weight for interior pixels (target>0) in the hybrid SDT loss term.",
+    )
+    model_group.add(
+        "--hybrid-boundary-weight",
+        type=float,
+        default=1.00,
+        help="Weight multiplier for boundary pixels (target==-1) in the hybrid boundary loss term.",
+    )
     model_group.add("--segment-threshold", type=float, default=0.5, help="Threshold for binary classification during inference (default: 0.5).")
     model_group.add("--centroid-threshold", type=float, default=0.5, help="Threshold for filtering peaks based on the centroid map.")
     model_group.add("--hybrid-threshold", type=float, default=-0.5, help="Threshold for filtering contours based on the hybrid map.")
@@ -154,6 +179,46 @@ def build_parser(config_files):
         type=float,
         default=0.35,
         help="Relative threshold (fraction of max distance) for fallback peak detection on distance transform.",
+    )
+
+    # --- Centroid marker extraction controls ---
+    inference_group.add(
+        "--centroid-peak-percentile",
+        type=float,
+        default=95.0,
+        help=(
+            "Percentile (within seg-mask) used as an adaptive threshold for centroid peak detection. "
+            "Example: 95 keeps peaks above the 95th percentile of centroid values inside the mask."
+        ),
+    )
+    inference_group.add(
+        "--use-centroid-abs-floor",
+        type=lambda x: bool(strtobool(str(x))),
+        default=False,
+        help=(
+            "If true, also enforce centroid-threshold as an absolute floor (thr = max(percentile_thr, centroid_threshold)). "
+            "Disabled by default because it can suppress peaks when centroid logits are not calibrated."
+        ),
+    )
+
+    # --- Optional hybrid refinement controls (post-watershed) ---
+    inference_group.add(
+        "--use-hybrid-refine",
+        type=lambda x: bool(strtobool(str(x))),
+        default=False,
+        help=(
+            "Enable optional post-watershed hybrid refinement (boundary cutting + relabel). "
+            "Disabled by default; enable only when hybrid head is reliable for the domain."
+        ),
+    )
+    inference_group.add(
+        "--hybrid-min-keep-frac",
+        type=float,
+        default=0.40,
+        help=(
+            "Minimum fraction of instance pixels that must remain after hybrid boundary cutting; "
+            "otherwise hybrid refinement is skipped for that tile."
+        ),
     )
     inference_group.add("--tightness", type=float, default=0.1, help="Tightness parameter for ellipse fitting.")
     # Default to False to keep detailed contours unless explicitly enabled
