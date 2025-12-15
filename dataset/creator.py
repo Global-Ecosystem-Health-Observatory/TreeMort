@@ -308,7 +308,7 @@ Usage:
 export TREEMORT_DATA_PATH="/Users/anisr/Documents/dead_trees" 
 export TREEMORT_REPO_PATH="/Users/anisr/Documents/TreeSeg"
 
-python3 -m dataset.creator ${TREEMORT_DATA_PATH}/configs/data/finland.txt
+python3 -m dataset.creator ${TREEMORT_REPO_PATH}/configs/data/finland.txt
 
 - For testing only
 

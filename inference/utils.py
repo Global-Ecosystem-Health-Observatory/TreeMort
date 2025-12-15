@@ -98,7 +98,7 @@ def load_model(
 ) -> torch.nn.Module:
     logger = get_logger()
 
-    best_model_path = os.path.join(conf.output_dir, conf.model, conf.best_model)
+    best_model_path = os.path.join(conf.output_dir, conf.model, conf.run_id, conf.best_model)
     validate_path(logger, best_model_path)
 
     model, *_ = build_model(conf, id2label, device)
