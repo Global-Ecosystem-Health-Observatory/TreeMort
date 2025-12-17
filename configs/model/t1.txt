@@ -14,4 +14,4 @@ output-channels = 3
 freeze-epochs = 3
 keep-first-encoder-blocks = 1
 
-resume-from = ${TREEMORT_REPO_PATH}/output/flair_unet_sdt/finland_rgb_b0/best.weights.pth
+resume-from = ${TREEMORT_OUTPUT_DIR}/flair_unet_sdt/finland_rgb_b0/best.weights.pth
