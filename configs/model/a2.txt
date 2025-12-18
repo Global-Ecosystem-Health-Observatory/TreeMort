@@ -4,7 +4,7 @@ include = base_config.txt
 
 model = flair_unet_sdt
 
-run-id = switzerland_rgbi_t1
+run-id = switzerland_rgbi_a2
 
 resume = True
 
@@ -14,6 +14,6 @@ output-channels = 3
 freeze-epochs = 3
 keep-first-encoder-blocks = 1
 
-resume-from = ${TREEMORT_REPO_PATH}/output/flair_unet_sdt/finland_rgb_b0/best.weights.pth
+resume-from = ${TREEMORT_OUTPUT_DIR}/flair_unet_sdt/finland_rgbi_b0/best.weights.pth
 
 add-synthetic-rgbi = True
