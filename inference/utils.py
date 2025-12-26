@@ -531,10 +531,12 @@ def compute_watershed(segment_map, centroid_map, hybrid_map, conf):
 
     logger = get_logger()
 
+    # --- 1) Base foreground mask from segmentation (shared with 1- and 3-channel paths) ---
     binary_seg = (segment_map > conf.segment_threshold).astype(np.uint8)
     binary_seg = remove_small_objects(binary_seg.astype(bool), min_size=conf.min_area_pixels).astype(np.uint8)
 
     if conf.output_channels == 1:
+        # Legacy 1-channel behaviour (kept as-is)
         smoothed_segment_map = gaussian(binary_seg, sigma=conf.blur_sigma)
 
         mask_grown = binary_dilation(binary_seg, disk(conf.dilation_radius))
@@ -551,66 +553,106 @@ def compute_watershed(segment_map, centroid_map, hybrid_map, conf):
 
     elif conf.output_channels == 3:
 
-        # Base segmentation mask
-        binary_seg = (segment_map > conf.segment_threshold).astype(np.uint8)
-        binary_seg = remove_small_objects(binary_seg.astype(bool), min_size=conf.min_area_pixels).astype(np.uint8)
-
-        # Light morphological cleanup to break thin bridges between adjacent circular crowns.
+        # --- 2) Cleanup of the segmentation mask (opening + hole fill) ---
         binary_seg = _binary_cleanup(binary_seg, conf)
-
-        # Marker-controlled watershed using distance transform is much better at splitting touching objects
-        # than using -centroid as the watershed surface.
         mask_bool = binary_seg.astype(bool)
+
         if mask_bool.sum() == 0:
             labels_ws = np.zeros_like(binary_seg, dtype=np.int32)
         else:
+            # --- 3) Distance transform (core watershed surface, like instance_watershed_postproc) ---
             dist = ndi.distance_transform_edt(mask_bool).astype(np.float32)
 
-            # Use centroid map peaks as seeds (constrained to mask).
-            markers = _markers_from_centroids(centroid_map, binary_seg, conf)
+            blur_sigma = float(getattr(conf, "blur_sigma", 1.0))
+            if blur_sigma > 0:
+                dist = gaussian(dist, sigma=blur_sigma, preserve_range=True)
+
+            # Optional hybrid-aware modulation of the surface (sharpen cuts along boundaries)
+            use_hybrid_surface = bool(getattr(conf, "use_hybrid_in_surface", False))
+            if use_hybrid_surface:
+                # Map hybrid to [0,1] "boundary strength": higher near strong boundaries.
+                # Original hybrid: ~[-1,1] with -1 on boundaries, >0 inside crowns, 0 background.
+                # Here we emphasise negative values.
+                h = np.clip(hybrid_map.astype(np.float32), -1.0, 1.0)
+                boundary_strength = np.clip(-h, 0.0, 1.0)
+                lam = float(getattr(conf, "hybrid_surface_lambda", 0.5))
+                surface = -dist + lam * boundary_strength
+            else:
+                surface = -dist
+
+            # --- 4) Seeds: distance peaks as baseline, optionally refined by centroid map ---
+            # 4a) Distance-based seeds (like instance_watershed_postproc)
+            dist_min_dist = int(getattr(conf, "dist_min_distance", getattr(conf, "min_distance", 3)))
+            dist_rel_thr = float(getattr(conf, "dist_peak_rel", 0.35))
+            dist_thr = dist.max() * dist_rel_thr if dist.max() > 0 else 0.0
+
+            coords_dist = peak_local_max(
+                dist,
+                min_distance=dist_min_dist,
+                threshold_abs=dist_thr,
+                exclude_border=False,
+                labels=mask_bool,
+            )
+            seeds_bool = np.zeros_like(mask_bool, dtype=bool)
+            if coords_dist.size > 0:
+                seeds_bool[tuple(coords_dist.T)] = True
+
+            # 4b) Optional centroid-derived seeds: we allow them to add or refine seeds,
+            #     but do not rely on them exclusively.
+            use_centroid_seeds = bool(getattr(conf, "use_centroid_seeds", True))
+            if use_centroid_seeds:
+                cen_markers = _markers_from_centroids(centroid_map, binary_seg, conf)
+                if cen_markers.max() > 0:
+                    seeds_bool |= (cen_markers > 0)
+
+            # Small dilation to stabilise watershed initiation around seed pixels
+            seeds_bool = binary_dilation(seeds_bool, disk(1))
+            markers = ndi.label(seeds_bool, structure=np.ones((3, 3), dtype=int))[0].astype(np.int32)
 
             num_markers = int(markers.max())
             logger.info(
-                f"[WS] centroid markers: {num_markers} | "
+                f"[WS] markers: {num_markers} | "
                 f"seg_pixels={int(binary_seg.sum())} | "
-                f"centroid stats in seg-mask: "
-                f"min={centroid_map[binary_seg>0].min():.4f}, "
-                f"med={np.median(centroid_map[binary_seg>0]):.4f}, "
-                f"p95={np.percentile(centroid_map[binary_seg>0],95):.4f}, "
-                f"max={centroid_map[binary_seg>0].max():.4f}"
+                f"centroid_used={use_centroid_seeds}"
             )
 
-            # Fallback: if centroid peaks are missing, seed from distance peaks.
-            if markers.max() == 0:
-                fallback_thr = float(getattr(conf, "dist_peak_rel", 0.35))
-                dist_thr = dist.max() * fallback_thr
-                coords = peak_local_max(
-                    dist,
-                    min_distance=conf.min_distance,
-                    threshold_abs=dist_thr,
-                    exclude_border=False,
-                    labels=mask_bool,
-                )
-                markers = np.zeros_like(binary_seg, dtype=np.int32)
-                for i, (r, c) in enumerate(coords, 1):
-                    markers[r, c] = i
-                markers = ndi.label(markers > 0)[0]
+            if num_markers == 0:
+                # Fallback: treat whole mask as one instance if we completely failed to seed.
+                labels_ws = ndi.label(mask_bool)[0].astype(np.int32)
+            else:
+                labels_ws = watershed(surface, markers=markers, mask=mask_bool)
 
-            labels_ws = watershed(-dist, markers, mask=mask_bool)
-
-            # Optional post-watershed hybrid refinement:
-            # Cut boundary-like pixels from each instance and relabel connected components.
-            # This is safer than pre-watershed gating because it cannot erase the whole foreground mask.
+            # --- 5) Optional post-watershed hybrid refinement (thin boundary cuts) ---
+            # Hybrid is most discriminative on boundaries of adjacent crowns. We use it to carve
+            # *thin* cracks through labels, then relabel, but never to erase most of the mask.
             if bool(getattr(conf, "use_hybrid_refine", False)):
                 boundary_thr = float(getattr(conf, "hybrid_boundary_threshold", -0.5))
+                # Raw boundary candidates where hybrid is strongly negative.
                 boundary_mask = (hybrid_map < boundary_thr) & (labels_ws > 0)
+
+                # Make cuts thin to avoid punching large holes inside crowns.
+                skeletonize = bool(getattr(conf, "hybrid_thin_boundaries", True))
+                if skeletonize:
+                    from skimage.morphology import skeletonize as skel
+
+                    # Work per-instance to avoid global skeleton artefacts.
+                    thin_boundary = np.zeros_like(boundary_mask, dtype=bool)
+                    for lbl in np.unique(labels_ws):
+                        if lbl == 0:
+                            continue
+                        m = labels_ws == lbl
+                        b_local = boundary_mask & m
+                        if not b_local.any():
+                            continue
+                        # Skeletonise within this label mask only.
+                        thin_boundary |= skel(b_local.astype(bool))
+                    boundary_mask = thin_boundary
 
                 before_px = int((labels_ws > 0).sum())
                 labels_ws_cut = labels_ws.copy()
                 labels_ws_cut[boundary_mask] = 0
                 after_px = int((labels_ws_cut > 0).sum())
 
-                # If cutting is too destructive, skip for this tile
                 min_keep_frac = float(getattr(conf, "hybrid_min_keep_frac", 0.40))
                 keep_frac = after_px / max(before_px, 1)
                 if before_px > 0 and keep_frac < min_keep_frac:
@@ -618,23 +660,19 @@ def compute_watershed(segment_map, centroid_map, hybrid_map, conf):
                         f"Post-watershed hybrid cutting too aggressive (kept {after_px}/{before_px}={keep_frac:.2%}); skipping hybrid refine."
                     )
                 else:
-                    # Relabel connected components after boundary removal
                     cc = ndi.label(labels_ws_cut > 0)[0].astype(np.int32)
-                    # Preserve original labels where possible by assigning component ids
-                    # as new instance ids.
                     labels_ws = cc
 
     else:
         log_and_raise(logger, ValueError(f"Unsupported number of output channels: {conf.output_channels}"))
 
-    # Basic postprocessing (merge tiny fragments)
+    # --- 6) Label-level cleanup and shape regularisation ---
     labels_ws = _postprocess_labels(
         labels_ws,
         min_region_size=conf.min_area_pixels,
         dilation_radius=conf.dilation_radius,
     )
 
-    # --- Shape regularisation (post labels) ---
     labels_ws = _smooth_label_boundaries(labels_ws, conf)
     labels_ws = _filter_labels_by_shape(labels_ws, conf)
 
