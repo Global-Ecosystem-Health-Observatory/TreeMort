@@ -5,7 +5,7 @@ import argparse
 import configargparse
 
 from pathlib import Path
-from multiprocessing import Pool, cpu_count
+from multiprocessing import get_context, cpu_count
 
 from skimage.morphology import label
 
@@ -219,8 +219,10 @@ def run_inference(
         slurm_cpus = os.getenv("SLURM_CPUS_PER_TASK")
         num_processes = int(slurm_cpus) if slurm_cpus else min(num_processes, cpu_count())
 
-        with Pool(processes=num_processes, initializer=initialize_logger, initargs=(verbosity,)) as pool:
+        ctx = get_context("spawn")
+        with ctx.Pool(processes=num_processes, initializer=initialize_logger, initargs=(verbosity,)) as pool:
             pool.starmap(process_single_image, tasks)
+
         logger.info(f"Batch processing completed: {len(image_paths)} images processed.")
     except Exception as e:
         log_and_raise(logger, RuntimeError(f"Error during parallel processing: {e}"))
