@@ -17,7 +17,7 @@ TreeMort is an open-source project for instance-level segmentation of standing d
    ```
 2. Set up a virtual environment:
    ```bash
-   python -m venv venv
+   python -m venv --system-site-packages venv
    source venv/bin/activate  # On Windows: venv\Scripts\activate
    ```
 3. Install dependencies (listed in `requirements.txt`):
