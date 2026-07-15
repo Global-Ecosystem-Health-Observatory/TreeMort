@@ -21,9 +21,19 @@ if [ "$HPC_TYPE" == "lumi" ]; then
     module use /appl/local/laifs/modules
     module load lumi-aif-singularity-bindings
 
+    # Strip CSC AI python wrapper from PATH so it is not found inside the container
+    CONTAINER_PATH=$(echo "$PATH" | tr ':' '\n' | grep -v '/appl/local/csc/soft/ai' | tr '\n' ':')
+    CONTAINER_PATH="${CONTAINER_PATH%:}"
+
+    # Remove stale/broken venv from previous attempt
+    [ -d "$TREEMORT_VENV_PATH" ] && rm -rf "$TREEMORT_VENV_PATH"
+
     echo "Creating virtual environment (inheriting container site-packages) at: $TREEMORT_VENV_PATH"
-    singularity exec "$SIF" python3 -m venv --system-site-packages "$TREEMORT_VENV_PATH" \
+    SINGULARITYENV_PATH="$CONTAINER_PATH" singularity exec "$SIF" \
+        python3 -m venv --system-site-packages "$TREEMORT_VENV_PATH" \
         || { echo "Error: Failed to create virtual environment."; exit 1; }
+
+    VENV_PY="$TREEMORT_VENV_PATH/bin/python3"
 
     pushd "$TREEMORT_REPO_PATH" >/dev/null
 
@@ -32,32 +42,20 @@ if [ "$HPC_TYPE" == "lumi" ]; then
     grep -vE '^(torch|torchvision|torchaudio)' requirements.txt > "$TMP_REQ"
 
     echo "Installing dependencies."
-    singularity exec "$SIF" bash -c "
-source '$TREEMORT_VENV_PATH/bin/activate' &&
-python -m pip install --upgrade pip setuptools wheel build &&
-python -m pip install --no-cache-dir -r '$TMP_REQ' &&
-python -m pip install --no-cache-dir -e '$TREEMORT_REPO_PATH'
-" || { echo "Error: Failed to install dependencies."; exit 1; }
+    singularity exec "$SIF" "$VENV_PY" -m pip install --upgrade pip setuptools wheel build \
+        || { echo "Error: Failed to upgrade pip."; exit 1; }
+    singularity exec "$SIF" "$VENV_PY" -m pip install --no-cache-dir -r "$TMP_REQ" \
+        || { echo "Error: Failed to install requirements."; exit 1; }
+    singularity exec "$SIF" "$VENV_PY" -m pip install --no-cache-dir -e "$TREEMORT_REPO_PATH" \
+        || { echo "Error: Failed to install package."; exit 1; }
 
     rm -f "$TMP_REQ"
     popd >/dev/null
 
     echo "Verifying TreeMort installation."
-    singularity exec "$SIF" bash -c "
-source '$TREEMORT_VENV_PATH/bin/activate' &&
-python - <<'PY'
-import importlib, sys
-for name in ('treemort', 'tree_mort', 'TreeMort'):
-    try:
-        m = importlib.import_module(name)
-        print(f\"Imported '{name}' from {getattr(m, '__file__', None)}\")
-        break
-    except Exception as e:
-        last = e
-else:
-    raise SystemExit(f'Could not import treemort/tree_mort/TreeMort: {last}')
-PY
-" || { echo "Error: Failed to import TreeMort."; exit 1; }
+    singularity exec "$SIF" "$VENV_PY" \
+        -c "import treemort; print('TreeMort OK:', treemort.__file__)" \
+        || { echo "Error: Failed to import TreeMort."; exit 1; }
 
 else
     # Puhti / local: module + pip approach
