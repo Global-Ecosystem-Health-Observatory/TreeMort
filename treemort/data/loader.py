@@ -1,6 +1,7 @@
 import random
 
 from pathlib import Path
+import torch
 from torch.utils.data import DataLoader
 
 from treemort.data.dataset import DeadTreeDataset
@@ -24,11 +25,37 @@ def prepare_datasets(conf):
 
     random.seed(None) # makes loader non-deterministic
 
-    train_transform = Augmentations()
+    aug_kwargs = {
+        "brightness": getattr(conf, "augment_brightness_jitter", 0.0),
+        "contrast": getattr(conf, "augment_contrast_jitter", 0.0),
+        "gamma_range": tuple(getattr(conf, "augment_gamma_range", [1.0, 1.0])),
+        "hue": getattr(conf, "augment_hue_jitter", 0.0),
+        "saturation": getattr(conf, "augment_saturation_jitter", 0.0),
+        "noise_range": tuple(getattr(conf, "augment_noise_range", [1.0, 1.0])),
+        "scale_range": tuple(getattr(conf, "augment_scale_range", [1.0, 1.0])),
+        "scale_prob": getattr(conf, "augment_scale_prob", 0.0),
+        "blur_prob": getattr(conf, "augment_blur_prob", 0.0),
+    }
+    train_transform = Augmentations(**aug_kwargs)
     val_transform = None
     test_transform = None
 
     image_processor = get_image_processor(conf.model, conf.backbone)
+
+    num_workers = getattr(conf, "num_workers", 4)
+
+    has_accelerator = torch.cuda.is_available()
+    if not has_accelerator and hasattr(torch.backends, "mps"):
+        has_accelerator = torch.backends.mps.is_available()
+    if not has_accelerator and hasattr(torch.version, "hip"):
+        has_accelerator = torch.version.hip is not None
+
+    loader_kwargs = dict(
+        num_workers=num_workers,
+        pin_memory=has_accelerator,
+    )
+    if num_workers > 0:
+        loader_kwargs["prefetch_factor"] = 2
 
     train_dataset = DeadTreeDataset(
         hdf5_file=hdf5_path,
@@ -52,8 +79,28 @@ def prepare_datasets(conf):
         image_processor=image_processor,
     )
 
-    train_loader = DataLoader(train_dataset, batch_size=conf.train_batch_size, sampler=BalancedSampler(hdf5_path, train_keys), drop_last=True)
-    val_loader = DataLoader(val_dataset, batch_size=conf.val_batch_size, sampler=BalancedSampler(hdf5_path, val_keys), shuffle=False, drop_last=True)
-    test_loader = DataLoader(test_dataset, batch_size=conf.test_batch_size, sampler=BalancedSampler(hdf5_path, test_keys), shuffle=False, drop_last=True)
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=conf.train_batch_size,
+        sampler=BalancedSampler(hdf5_path, train_keys),
+        drop_last=True,
+        **loader_kwargs
+    )
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=conf.val_batch_size,
+        sampler=BalancedSampler(hdf5_path, val_keys),
+        shuffle=False,
+        drop_last=True,
+        **loader_kwargs
+    )
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=conf.test_batch_size,
+        sampler=BalancedSampler(hdf5_path, test_keys),
+        shuffle=False,
+        drop_last=True,
+        **loader_kwargs
+    )
     
     return train_loader, val_loader, test_loader

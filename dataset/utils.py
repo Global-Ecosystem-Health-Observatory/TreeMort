@@ -53,44 +53,67 @@ def create_label_mask_with_centroids(
 
 
 def create_hybrid_sdt_boundary_labels(
-    img_arr: np.ndarray, 
-    polys: list[np.ndarray], 
+    img_arr: np.ndarray,
+    polys: list[np.ndarray],
     sigma: float = 2.0,
-    boundary_width: int = 2
+    boundary_width: int = 3,
+    interior_floor: float = 0.2,
+    boundary_sigma: float = 1.5,
 ):
     h, w = img_arr.shape[:2]
-    
+
     binary_mask = np.zeros((h, w), dtype=np.float32)
     centroid_mask = np.zeros((h, w), dtype=np.float32)
     sdt_max = np.zeros((h, w), dtype=np.float32)
     boundary_mask = np.zeros((h, w), dtype=np.uint8)
+    dist_to_bg = np.zeros((h, w), dtype=np.float32)
 
     for poly in tqdm(polys, desc="Processing trees"):
         instance_mask = np.zeros((h, w), dtype=np.uint8)
         cv2.fillPoly(instance_mask, [poly], 1)
-        
+
         binary_mask = np.clip(binary_mask + instance_mask, 0, 1)
-        
+
         M = cv2.moments(poly)
         if M["m00"] > 0:
             cx = int(M["m10"]/M["m00"])
             cy = int(M["m01"]/M["m00"])
             y, x = np.ogrid[:h, :w]
             centroid_mask += np.exp(-((x-cx)**2 + (y-cy)**2)/(2*sigma**2))
-        
+
+        # Distance from boundary (inside instance)
         dist = cv2.distanceTransform(instance_mask, cv2.DIST_L2, 3)
+        # store max dist for interior
         if np.max(dist) > 0:
             dist_normalized = dist / np.max(dist)
+            # apply interior floor to strengthen interior signal
+            dist_normalized = np.maximum(dist_normalized, interior_floor)
             sdt_max = np.maximum(sdt_max, dist_normalized)
-        
-        contours, _ = cv2.findContours(instance_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        cv2.drawContours(boundary_mask, contours, -1, 1, boundary_width)
+        # accumulate max distance to background for all polys
+        dist_to_bg = np.maximum(dist_to_bg, dist)
 
-    hybrid_channel = np.where(boundary_mask > 0, -1.0, sdt_max)
-    hybrid_channel = np.where(binary_mask == 0, 0.0, hybrid_channel)  # Zero background
-    
+        # --- soft boundary band using distance transform ---
+        # distance from boundary (inside instance)
+        # dist is already distance from background (inside mask)
+        band = (dist > 0) & (dist <= boundary_width)
+        # soft negative ramp: -exp(-d / sigma)
+        boundary_mask = np.maximum(
+            boundary_mask,
+            band.astype(np.uint8)
+        )
+
+    # --- build hybrid channel ---
+    hybrid_channel = sdt_max.copy()
+
+    # soft negative boundary ramp
+    boundary_pixels = boundary_mask > 0
+    hybrid_channel[boundary_pixels] = -np.exp(-dist_to_bg[boundary_pixels] / boundary_sigma)
+
+    # zero background
+    hybrid_channel[binary_mask == 0] = 0.0
+
     centroid_mask = np.clip(centroid_mask, 0, 1)
-    
+
     return binary_mask, centroid_mask, hybrid_channel
 
 
@@ -119,9 +142,9 @@ def get_image_and_polygons(
     nir_rgb_order: list[int],
     normalize_channelwise: bool,
     normalize_imagewise: bool,
-) -> tuple[np.ndarray, list[np.ndarray]]:
+) -> tuple[np.ndarray, list[np.ndarray], np.ndarray]:
 
-    img_arr, bounds, resolution = load_geotiff(
+    img_arr, bounds, resolution, raw_arr = load_geotiff(
         image_filepath,
         nir_rgb_order,
         normalize_channelwise,
@@ -142,7 +165,7 @@ def get_image_and_polygons(
 
         adjusted_polygons.append(np.int32(np.array(adjusted_polygon).reshape((-1, 1, 2))))
 
-    return img_arr, adjusted_polygons
+    return img_arr, adjusted_polygons, raw_arr
 
 
 def geo_to_img_coords(
@@ -166,7 +189,7 @@ def load_geotiff(
     nir_rgb_order: list[int],
     normalize_channelwise: bool = False,
     normalize_imagewise: bool = False,
-) -> tuple[np.ndarray, tuple[float], tuple[float]]:
+) -> tuple[np.ndarray, tuple[float], tuple[float], np.ndarray]:
            
     with rasterio.open(filename) as img:
         img_arr = np.moveaxis(img.read(), 0, -1).astype(np.float32)
@@ -178,17 +201,19 @@ def load_geotiff(
         else:
             img_arr[img_arr < -3e38] = 0
 
+        raw_arr = img_arr.copy()
+
         if normalize_channelwise:
-            img_arr = normalize_channelwise_to_uint8(img_arr)
+            img_arr = normalize_channelwise_to_uint8(img_arr.copy())
         elif normalize_imagewise:
-            img_arr = normalize_imagewise_to_uint8(img_arr)
+            img_arr = normalize_imagewise_to_uint8(img_arr.copy())
         else:
             img_arr = np.uint8(np.clip(img_arr, 0, 255))
 
         bounds = tuple(img.bounds)
         resolution = img.res
 
-    return img_arr, bounds, resolution
+    return img_arr, bounds, resolution, raw_arr
 
 
 def load_geojson_labels(geojson_path: str) -> list[list[list[float]]]:

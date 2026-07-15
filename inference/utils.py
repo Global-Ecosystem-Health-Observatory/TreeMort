@@ -10,13 +10,13 @@ import numpy as np
 from scipy import ndimage as ndi
 from affine import Affine
 from typing import Optional, List, Tuple, Generator, Dict
-from shapely.geometry import Polygon
+from shapely.geometry import Polygon, MultiPolygon
 
 from skimage.filters import gaussian
 from skimage.feature import peak_local_max
 from skimage.measure import regionprops, find_contours
-from skimage.morphology import erosion, disk, remove_small_objects, binary_dilation
-from skimage.segmentation import watershed
+from skimage.morphology import erosion, disk, remove_small_objects, binary_dilation, binary_opening, binary_closing, remove_small_holes
+from skimage.segmentation import watershed, relabel_sequential
 
 from rasterio.crs import CRS
 from rasterio.enums import Resampling
@@ -34,6 +34,49 @@ def initialize_logger(verbosity: str) -> None:
 def log_and_raise(logger, exception: Exception):
     logger.error(str(exception))
     raise exception
+
+
+def _safe_polygon(coords) -> Optional[Polygon]:
+    """
+    Build a polygon defensively:
+    - ensure at least 3 points
+    - close the ring
+    - buffer(0) to fix minor invalidities
+    - if MultiPolygon, keep the largest
+    Returns None on failure.
+    """
+    try:
+        coords_arr = np.asarray(coords)
+    except Exception:
+        return None
+
+    if coords_arr.shape[0] < 3:
+        return None
+
+    # Close ring if needed
+    if not np.array_equal(coords_arr[0], coords_arr[-1]):
+        coords_arr = np.vstack([coords_arr, coords_arr[0]])
+
+    try:
+        poly = Polygon(coords_arr)
+    except Exception:
+        return None
+
+    if not poly.is_valid:
+        try:
+            poly = poly.buffer(0)
+        except Exception:
+            return None
+
+    if poly.is_empty:
+        return None
+
+    if isinstance(poly, MultiPolygon):
+        if len(poly.geoms) == 0:
+            return None
+        poly = max(poly.geoms, key=lambda g: g.area)
+
+    return poly
 
 
 def expand_path(path):
@@ -55,7 +98,7 @@ def load_model(
 ) -> torch.nn.Module:
     logger = get_logger()
 
-    best_model_path = os.path.join(conf.output_dir, conf.model, conf.best_model)
+    best_model_path = os.path.join(conf.output_dir, conf.model, conf.run_id, conf.best_model)
     validate_path(logger, best_model_path)
 
     model, *_ = build_model(conf, id2label, device)
@@ -168,8 +211,9 @@ def sliding_window_inference(
     device = next(model.parameters()).device
     padded_image = _pad_image(image, window_size)
 
-    prediction_map, count_map = _initialize_maps(padded_image.shape[1:], device=device)
+    prediction_map, count_map = _initialize_maps(padded_image.shape[1:], output_channels=output_channels, device=device)
     patches, coords = _generate_patches(padded_image, window_size, stride)
+    blend_w = _make_blend_weights(window_size, device=device)
 
     for batch in _batch_patches(patches, coords, batch_size):
         prediction_map, count_map = process_batch(
@@ -180,6 +224,7 @@ def sliding_window_inference(
             model,
             threshold,
             device,
+            blend_w,
         )
 
     return _finalize_prediction(prediction_map, count_map, image.shape, threshold)
@@ -193,6 +238,22 @@ def _validate_inference_params(window_size: int, stride: int, threshold: float) 
     if not (0 <= threshold <= 1):
         log_and_raise(logger, ValueError("threshold must be between 0 and 1."))
 
+
+def _make_blend_weights(window_size: int, device: torch.device) -> torch.Tensor:
+    """
+    Create a smooth 2D blending window to reduce visible seams.
+
+    UNet-style models often have border effects. Weighting patch centers higher than
+    patch borders reduces stride-grid artifacts in smooth regression maps (centroid/hybrid).
+
+    Uses a Hann (raised cosine) window in each dimension. Hann is zero at the ends,
+    so we clamp to a small epsilon to keep borders contributing non-zero weight.
+
+    Returns a tensor of shape (window_size, window_size).
+    """
+    w1 = torch.hann_window(window_size, periodic=False, dtype=torch.float32, device=device)
+    w1 = w1.clamp_min(1e-3)
+    return torch.outer(w1, w1)
 
 def _initialize_maps(
     image_shape: Tuple[int, int],
@@ -210,13 +271,23 @@ def _generate_patches(
 ) -> Tuple[List[torch.Tensor], List[Tuple[int, int]]]:
     h, w = image.shape[1:]
     patches, coords = [], []
-    for y in range(0, h - window_size + 1, stride):
-        for x in range(0, w - window_size + 1, stride):
+
+    ys = list(range(0, h - window_size + 1, stride))
+    xs = list(range(0, w - window_size + 1, stride))
+
+    # Ensure we always include the last possible start so borders are covered
+    if not ys or ys[-1] != h - window_size:
+        ys.append(h - window_size)
+    if not xs or xs[-1] != w - window_size:
+        xs.append(w - window_size)
+
+    for y in ys:
+        for x in xs:
             patch = image[:, y : y + window_size, x : x + window_size].float()
             patches.append(patch)
             coords.append((y, x))
-    return patches, coords
 
+    return patches, coords
 
 def _batch_patches(
     patches: List[torch.Tensor], coords: List[Tuple[int, int]], batch_size: int
@@ -241,7 +312,7 @@ def _finalize_prediction(
     final_prediction[:, no_contribution_mask] = 0
 
     final_prediction[0] = torch.clamp(final_prediction[0], 0, 1)
-    final_prediction[1] = torch.clamp(final_prediction[1], 0, 1)
+    # final_prediction[1] = torch.clamp(final_prediction[1], 0, 1)
     final_prediction[2] = torch.clamp(final_prediction[2], -1, 1)
 
     _, original_h, original_w = original_shape
@@ -256,6 +327,7 @@ def process_batch(
     model: torch.nn.Module,
     threshold: float,
     device: torch.device,
+    blend_w: torch.Tensor,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     logger = get_logger()
 
@@ -277,6 +349,7 @@ def process_batch(
             threshold,
             y,
             x,
+            blend_w,
         )
 
     return prediction_map, count_map
@@ -319,10 +392,13 @@ def _infer_patches(patches: list[torch.Tensor], model: torch.nn.Module, device: 
         elif C > 3:
             outputs = outputs[:, :3, ...]
 
-        # Apply activations: sigmoid on segmentation head only
+        # Apply activations according to target semantics:
+        # - segmentation: probability -> sigmoid
+        # - centroid: use raw logits for peak detection (sigmoid collapses contrast)
+        # - hybrid SDT+boundary: regression target (inside (0,1], boundary=-1, background=0) -> keep raw
         seg_predictions = torch.sigmoid(outputs[:, 0:1, ...])
-        centroid_predictions = outputs[:, 1:2, ...]  # raw/logit (or zeros if padded)
-        hybrid_predictions = outputs[:, 2:3, ...]  # raw/logit (or zeros if padded)
+        centroid_predictions = outputs[:, 1:2, ...]  # logits
+        hybrid_predictions = outputs[:, 2:3, ...]
 
         predictions = torch.cat([seg_predictions, centroid_predictions, hybrid_predictions], dim=1)
 
@@ -340,14 +416,90 @@ def _update_maps(
     threshold: float,
     y: int,
     x: int,
+    blend_w: torch.Tensor,
 ) -> None:
-    binary_mask = (binary_confidence >= threshold).float()
+    # Weighted blending reduces patch-border seams (esp. for centroid/hybrid regression maps).
+    stacked = torch.stack([binary_confidence, centroid_confidence, hybrid_confidence])  # (3, H, W)
 
-    prediction_map[:, y : y + binary_confidence.shape[0], x : x + binary_confidence.shape[1]] += torch.stack(
-        [binary_confidence, centroid_confidence, hybrid_confidence]
+    w = blend_w.to(device=stacked.device, dtype=stacked.dtype)  # (H, W)
+
+    prediction_map[:, y : y + stacked.shape[1], x : x + stacked.shape[2]] += stacked * w
+    count_map[y : y + stacked.shape[1], x : x + stacked.shape[2]] += w
+
+
+def _binary_cleanup(mask: np.ndarray, conf) -> np.ndarray:
+    """Light mask cleanup to prevent thin bridges merging nearby circular crowns."""
+    mask = mask.astype(bool)
+
+    # Fill tiny holes inside crowns (helps circular objects)
+    holes_area = getattr(conf, "holes_area", 32)
+    if holes_area and holes_area > 0:
+        mask = remove_small_holes(mask, area_threshold=int(holes_area))
+
+    # Light opening breaks 1-2px bridges between adjacent crowns
+    opening_radius = getattr(conf, "opening_radius", 1)
+    if opening_radius and opening_radius > 0:
+        mask = binary_opening(mask, disk(int(opening_radius)))
+
+    return mask.astype(np.uint8)
+
+
+def _markers_from_centroids(centroid_map: np.ndarray, mask: np.ndarray, conf) -> np.ndarray:
+    """
+    Create labeled markers from centroid logits using adaptive (percentile) thresholding
+    within the segmentation mask. This is robust to logit scale drift across tiles/domains.
+    """
+    mask_bool = mask.astype(bool)
+    markers = np.zeros_like(mask, dtype=np.int32)
+    if mask_bool.sum() == 0:
+        return markers
+
+    # Smooth logits lightly (helps stabilize local maxima)
+    cen_sm = gaussian(centroid_map.astype(np.float32), sigma=float(getattr(conf, "blur_sigma", 1.5)))
+
+    # Adaptive threshold inside the mask
+    vals = cen_sm[mask_bool]
+    if vals.size == 0:
+        return markers
+
+    # User-configurable knobs with safe defaults
+    pct = float(getattr(conf, "centroid_peak_percentile", 95))
+
+    # Percentile threshold is the primary mechanism (robust to logit scale drift).
+    thr_pct = float(np.percentile(vals, pct))
+    thr = thr_pct
+
+    # Optional absolute floor: disabled by default because it can easily suppress peaks
+    # when centroid logits are not calibrated.
+    if bool(getattr(conf, "use_centroid_abs_floor", False)):
+        abs_floor = float(getattr(conf, "centroid_threshold", -np.inf))
+        thr = max(thr, abs_floor)
+
+    # Guard against flat maps (percentile == max => may return 0 peaks)
+    if np.isclose(thr, float(vals.max())):
+        thr = float(np.percentile(vals, max(90.0, pct - 5.0)))
+
+    if os.getenv("TREEMORT_DEBUG_MARKERS", "0") == "1":
+        print(
+            f"[MARKERS] mask_pixels={int(mask_bool.sum())} pct={pct} thr={thr:.6f} thr_pct={thr_pct:.6f} "
+            f"use_abs_floor={bool(getattr(conf,'use_centroid_abs_floor', False))}",
+            flush=True,
+        )
+
+    coords = peak_local_max(
+        cen_sm,
+        min_distance=int(getattr(conf, "min_distance", 3)),
+        threshold_abs=float(thr),
+        exclude_border=False,
+        labels=mask_bool.astype(np.uint8),
     )
 
-    count_map[y : y + binary_confidence.shape[0], x : x + binary_confidence.shape[1]] += binary_mask
+    for i, (r, c) in enumerate(coords, 1):
+        markers[r, c] = i
+
+    # Ensure proper connected-component labeling of seed points
+    markers = ndi.label(markers > 0)[0].astype(np.int32)
+    return markers
 
 
 def threshold_prediction_map(prediction_map: np.ndarray, threshold: float = 0.5) -> np.ndarray:
@@ -379,10 +531,12 @@ def compute_watershed(segment_map, centroid_map, hybrid_map, conf):
 
     logger = get_logger()
 
+    # --- 1) Base foreground mask from segmentation (shared with 1- and 3-channel paths) ---
     binary_seg = (segment_map > conf.segment_threshold).astype(np.uint8)
     binary_seg = remove_small_objects(binary_seg.astype(bool), min_size=conf.min_area_pixels).astype(np.uint8)
 
     if conf.output_channels == 1:
+        # Legacy 1-channel behaviour (kept as-is)
         smoothed_segment_map = gaussian(binary_seg, sigma=conf.blur_sigma)
 
         mask_grown = binary_dilation(binary_seg, disk(conf.dilation_radius))
@@ -399,35 +553,130 @@ def compute_watershed(segment_map, centroid_map, hybrid_map, conf):
 
     elif conf.output_channels == 3:
 
-        binary_hybrid = (hybrid_map < conf.hybrid_threshold).astype(np.uint8)
-        binary_seg[binary_hybrid == 0] = 0
+        # --- 2) Cleanup of the segmentation mask (opening + hole fill) ---
+        binary_seg = _binary_cleanup(binary_seg, conf)
+        mask_bool = binary_seg.astype(bool)
 
-        centroid_map_smoothed = gaussian(centroid_map, sigma=conf.blur_sigma)
+        if mask_bool.sum() == 0:
+            labels_ws = np.zeros_like(binary_seg, dtype=np.int32)
+        else:
+            # --- 3) Distance transform (core watershed surface, like instance_watershed_postproc) ---
+            dist = ndi.distance_transform_edt(mask_bool).astype(np.float32)
 
-        local_max_coords = peak_local_max(
-            centroid_map_smoothed,
-            min_distance=conf.min_distance,
-            threshold_abs=conf.centroid_threshold,
-        )
+            blur_sigma = float(getattr(conf, "blur_sigma", 1.0))
+            if blur_sigma > 0:
+                dist = gaussian(dist, sigma=blur_sigma, preserve_range=True)
 
-        markers = np.zeros_like(centroid_map, dtype=np.int32)
-        for i, (row, col) in enumerate(local_max_coords, 1):
-            markers[row, col] = i
+            # Optional hybrid-aware modulation of the surface (sharpen cuts along boundaries)
+            use_hybrid_surface = bool(getattr(conf, "use_hybrid_in_surface", False))
+            if use_hybrid_surface:
+                # Map hybrid to [0,1] "boundary strength": higher near strong boundaries.
+                # Original hybrid: ~[-1,1] with -1 on boundaries, >0 inside crowns, 0 background.
+                # Here we emphasise negative values.
+                h = np.clip(hybrid_map.astype(np.float32), -1.0, 1.0)
+                boundary_strength = np.clip(-h, 0.0, 1.0)
+                lam = float(getattr(conf, "hybrid_surface_lambda", 0.5))
+                surface = -dist + lam * boundary_strength
+            else:
+                surface = -dist
 
-        markers = ndi.label(markers)[0]
+            # --- 4) Seeds: distance peaks as baseline, optionally refined by centroid map ---
+            # 4a) Distance-based seeds (like instance_watershed_postproc)
+            dist_min_dist = int(getattr(conf, "dist_min_distance", getattr(conf, "min_distance", 3)))
+            dist_rel_thr = float(getattr(conf, "dist_peak_rel", 0.35))
+            dist_thr = dist.max() * dist_rel_thr if dist.max() > 0 else 0.0
 
-        labels_ws = watershed(-centroid_map_smoothed, markers, mask=binary_seg)
+            coords_dist = peak_local_max(
+                dist,
+                min_distance=dist_min_dist,
+                threshold_abs=dist_thr,
+                exclude_border=False,
+                labels=mask_bool,
+            )
+            seeds_bool = np.zeros_like(mask_bool, dtype=bool)
+            if coords_dist.size > 0:
+                seeds_bool[tuple(coords_dist.T)] = True
+
+            # 4b) Optional centroid-derived seeds: we allow them to add or refine seeds,
+            #     but do not rely on them exclusively.
+            use_centroid_seeds = bool(getattr(conf, "use_centroid_seeds", True))
+            if use_centroid_seeds:
+                cen_markers = _markers_from_centroids(centroid_map, binary_seg, conf)
+                if cen_markers.max() > 0:
+                    seeds_bool |= (cen_markers > 0)
+
+            # Small dilation to stabilise watershed initiation around seed pixels
+            seeds_bool = binary_dilation(seeds_bool, disk(1))
+            markers = ndi.label(seeds_bool, structure=np.ones((3, 3), dtype=int))[0].astype(np.int32)
+
+            num_markers = int(markers.max())
+            logger.info(
+                f"[WS] markers: {num_markers} | "
+                f"seg_pixels={int(binary_seg.sum())} | "
+                f"centroid_used={use_centroid_seeds}"
+            )
+
+            if num_markers == 0:
+                # Fallback: treat whole mask as one instance if we completely failed to seed.
+                labels_ws = ndi.label(mask_bool)[0].astype(np.int32)
+            else:
+                labels_ws = watershed(surface, markers=markers, mask=mask_bool)
+
+            # --- 5) Optional post-watershed hybrid refinement (thin boundary cuts) ---
+            # Hybrid is most discriminative on boundaries of adjacent crowns. We use it to carve
+            # *thin* cracks through labels, then relabel, but never to erase most of the mask.
+            if bool(getattr(conf, "use_hybrid_refine", False)):
+                boundary_thr = float(getattr(conf, "hybrid_boundary_threshold", -0.5))
+                # Raw boundary candidates where hybrid is strongly negative.
+                boundary_mask = (hybrid_map < boundary_thr) & (labels_ws > 0)
+
+                # Make cuts thin to avoid punching large holes inside crowns.
+                skeletonize = bool(getattr(conf, "hybrid_thin_boundaries", True))
+                if skeletonize:
+                    from skimage.morphology import skeletonize as skel
+
+                    # Work per-instance to avoid global skeleton artefacts.
+                    thin_boundary = np.zeros_like(boundary_mask, dtype=bool)
+                    for lbl in np.unique(labels_ws):
+                        if lbl == 0:
+                            continue
+                        m = labels_ws == lbl
+                        b_local = boundary_mask & m
+                        if not b_local.any():
+                            continue
+                        # Skeletonise within this label mask only.
+                        thin_boundary |= skel(b_local.astype(bool))
+                    boundary_mask = thin_boundary
+
+                before_px = int((labels_ws > 0).sum())
+                labels_ws_cut = labels_ws.copy()
+                labels_ws_cut[boundary_mask] = 0
+                after_px = int((labels_ws_cut > 0).sum())
+
+                min_keep_frac = float(getattr(conf, "hybrid_min_keep_frac", 0.40))
+                keep_frac = after_px / max(before_px, 1)
+                if before_px > 0 and keep_frac < min_keep_frac:
+                    logger.warning(
+                        f"Post-watershed hybrid cutting too aggressive (kept {after_px}/{before_px}={keep_frac:.2%}); skipping hybrid refine."
+                    )
+                else:
+                    cc = ndi.label(labels_ws_cut > 0)[0].astype(np.int32)
+                    labels_ws = cc
 
     else:
         log_and_raise(logger, ValueError(f"Unsupported number of output channels: {conf.output_channels}"))
 
-    new_labels = _postprocess_labels(
+    # --- 6) Label-level cleanup and shape regularisation ---
+    labels_ws = _postprocess_labels(
         labels_ws,
         min_region_size=conf.min_area_pixels,
         dilation_radius=conf.dilation_radius,
     )
 
-    return new_labels
+    labels_ws = _smooth_label_boundaries(labels_ws, conf)
+    labels_ws = _filter_labels_by_shape(labels_ws, conf)
+
+    return labels_ws
 
 
 def _postprocess_labels(labels_ws, min_region_size=50, dilation_radius=1):
@@ -455,6 +704,79 @@ def _postprocess_labels(labels_ws, min_region_size=50, dilation_radius=1):
                     new_labels[mask] = target_label
 
     return new_labels
+
+
+def _smooth_label_boundaries(labels_ws, conf):
+    """
+    Smooth instance boundaries using light morphology.
+    Designed for roughly circular tree crowns.
+    """
+    close_r = int(getattr(conf, "shape_close_radius", 2))
+    open_r  = int(getattr(conf, "shape_open_radius", 1))
+
+    if close_r <= 0 and open_r <= 0:
+        return labels_ws
+
+    out = np.zeros_like(labels_ws, dtype=np.int32)
+    next_id = 1
+
+    se_close = disk(close_r) if close_r > 0 else None
+    se_open  = disk(open_r)  if open_r  > 0 else None
+
+    for lbl in np.unique(labels_ws):
+        if lbl == 0:
+            continue
+        m = labels_ws == lbl
+
+        if se_close is not None:
+            m = binary_closing(m, se_close)
+        if se_open is not None:
+            m = binary_opening(m, se_open)
+
+        if m.any():
+            out[m] = next_id
+            next_id += 1
+
+    out, _, _ = relabel_sequential(out)
+    return out
+
+
+def _filter_labels_by_shape(labels_ws, conf):
+    """
+    Remove implausible tree instances using geometric priors.
+    """
+    min_area = int(getattr(conf, "shape_min_area", 20))
+    max_area = getattr(conf, "shape_max_area", None)
+    min_solidity = float(getattr(conf, "shape_min_solidity", 0.80))
+    min_circularity = float(getattr(conf, "shape_min_circularity", 0.40))
+    max_eccentricity = float(getattr(conf, "shape_max_eccentricity", 0.95))
+
+    out = labels_ws.copy()
+    keep_labels = []
+
+    for r in regionprops(out):
+        A = r.area
+        if A < min_area:
+            continue
+        if max_area is not None and A > max_area:
+            continue
+
+        P = max(r.perimeter, 1e-6)
+        circularity = 4.0 * np.pi * A / (P * P)
+
+        if r.solidity < min_solidity:
+            continue
+        if circularity < min_circularity:
+            continue
+        if r.eccentricity > max_eccentricity:
+            continue
+
+        keep_labels.append(r.label)
+
+    mask_keep = np.isin(out, keep_labels)
+    out[~mask_keep] = 0
+    out, _, _ = relabel_sequential(out)
+    return out
 
 
 def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
@@ -526,8 +848,8 @@ def extract_ellipses(labels_ws, transform: Affine, conf, num_points=100):
             transformed_ellipse = np.vstack([transformed_ellipse, transformed_ellipse[0]])
 
         # Create and validate polygon
-        ellipse_poly = Polygon(transformed_ellipse.tolist())
-        if ellipse_poly.is_valid and not ellipse_poly.is_empty:
+        ellipse_poly = _safe_polygon(transformed_ellipse)
+        if ellipse_poly and ellipse_poly.is_valid and not ellipse_poly.is_empty:
             convex_hull = ellipse_poly.convex_hull
             area = ellipse_poly.area
             aspect_ratio = convex_hull.length / (4 * np.sqrt(area)) if area > 0 else float("inf")
@@ -580,18 +902,15 @@ def extract_contours(binary_mask: np.ndarray, transform: Affine) -> List[Dict]:
             if not np.array_equal(transformed_contour[0], transformed_contour[-1]):
                 transformed_contour = np.vstack([transformed_contour, transformed_contour[0]])
 
-            polygon = Polygon(transformed_contour)
+            polygon = _safe_polygon(transformed_contour)
 
-            if not polygon.is_valid:
-                polygon = polygon.buffer(0)
-
-            if polygon.is_valid and not polygon.is_empty:
+            if polygon:
                 features.append(
                     {
                         "type": "Feature",
                         "geometry": {
                             "type": "Polygon",
-                            "coordinates": [transformed_contour.tolist()],
+                            "coordinates": [np.asarray(polygon.exterior.coords)[:, :2].tolist()],
                         },
                         "properties": {},
                     }
@@ -648,18 +967,15 @@ def extract_contours_from_labels(label_map: np.ndarray, transform: Affine) -> Li
             if not np.array_equal(transformed_contour[0], transformed_contour[-1]):
                 transformed_contour = np.vstack([transformed_contour, transformed_contour[0]])
 
-            polygon = Polygon(transformed_contour)
+            polygon = _safe_polygon(transformed_contour)
 
-            if not polygon.is_valid:
-                polygon = polygon.buffer(0)
-
-            if polygon.is_valid and not polygon.is_empty:
+            if polygon:
                 features.append(
                     {
                         "type": "Feature",
                         "geometry": {
                             "type": "Polygon",
-                            "coordinates": [transformed_contour.tolist()],
+                            "coordinates": [np.asarray(polygon.exterior.coords)[:, :2].tolist()],
                         },
                         "properties": {"label": int(label)},
                     }
@@ -722,12 +1038,10 @@ def segment_filtering_only(segment_map: np.ndarray, conf) -> np.ndarray:
 def watershed_segmentation_only(
     segment_map: np.ndarray, centroid_map: np.ndarray, hybrid_map: np.ndarray, conf
 ) -> np.ndarray:
+    logger = get_logger()
+    
     binary_seg = (segment_map > conf.segment_threshold).astype(np.uint8)
-
     binary_seg = remove_small_objects(binary_seg.astype(bool), min_size=conf.min_area_pixels).astype(np.uint8)
-
-    binary_hybrid = (hybrid_map < conf.hybrid_threshold).astype(np.uint8)
-    binary_seg[binary_hybrid == 0] = 0
 
     centroid_map_smoothed = gaussian(centroid_map, sigma=conf.blur_sigma)
 
@@ -735,12 +1049,40 @@ def watershed_segmentation_only(
         centroid_map_smoothed,
         min_distance=conf.min_distance,
         threshold_abs=conf.centroid_threshold,
+        exclude_border=False,
+        labels=binary_seg.astype(bool),
     )
     markers = np.zeros_like(centroid_map, dtype=np.int32)
     for i, (row, col) in enumerate(local_max_coords, 1):
         markers[row, col] = i
     markers = ndi.label(markers)[0]
 
-    labels_ws = watershed(-centroid_map_smoothed, markers, mask=binary_seg)
+    labels_ws = watershed(-ndi.distance_transform_edt(binary_seg.astype(bool)).astype(np.float32), markers, mask=binary_seg.astype(bool))
+
+    # Optional post-watershed hybrid refinement:
+    # Cut boundary-like pixels from each instance and relabel connected components.
+    # This is safer than pre-watershed gating because it cannot erase the whole foreground mask.
+    if bool(getattr(conf, "use_hybrid_refine", False)):
+        boundary_thr = float(getattr(conf, "hybrid_boundary_threshold", -0.5))
+        boundary_mask = (hybrid_map < boundary_thr) & (labels_ws > 0)
+
+        before_px = int((labels_ws > 0).sum())
+        labels_ws_cut = labels_ws.copy()
+        labels_ws_cut[boundary_mask] = 0
+        after_px = int((labels_ws_cut > 0).sum())
+
+        # If cutting is too destructive, skip for this tile
+        min_keep_frac = float(getattr(conf, "hybrid_min_keep_frac", 0.40))
+        keep_frac = after_px / max(before_px, 1)
+        if before_px > 0 and keep_frac < min_keep_frac:
+            logger.warning(
+                f"Post-watershed hybrid cutting too aggressive (kept {after_px}/{before_px}={keep_frac:.2%}); skipping hybrid refine."
+            )
+        else:
+            # Relabel connected components after boundary removal
+            cc = ndi.label(labels_ws_cut > 0)[0].astype(np.int32)
+            # Preserve original labels where possible by assigning component ids
+            # as new instance ids.
+            labels_ws = cc
 
     return labels_ws

@@ -16,6 +16,9 @@ class DeadTreeDataset(Dataset):
         self.crop_size = crop_size
         self.transform = transform
         self.image_processor = image_processor
+        self._channel_mean = None
+        self._channel_std = None
+        self._load_normalization_stats()
         self._adjust_image_processor_mean_std()
 
     def _load_data(self, idx):
@@ -44,12 +47,26 @@ class DeadTreeDataset(Dataset):
         image, label = self._center_crop_or_pad(image, label, self.crop_size)
 
         if self.image_processor:
-            image = apply_image_processor(image, self.image_processor)
+            image, label = apply_image_processor(image, label, self.image_processor)
             
         if self.transform:
             image, label = self.transform(image, label)
 
         return image, label
+
+    def _load_normalization_stats(self):
+        try:
+            with h5py.File(self.hdf5_file, "r") as hf:
+                mean = hf.attrs.get("channel_mean")
+                std = hf.attrs.get("channel_std")
+            if mean is None or std is None:
+                return
+            mean = torch.tensor(mean, dtype=torch.float32) / 255.0
+            std = torch.tensor(np.clip(std, 1e-6, None), dtype=torch.float32) / 255.0
+            self._channel_mean = mean
+            self._channel_std = std
+        except OSError:
+            return
 
     def _adjust_image_processor_mean_std(self):
         if self.image_processor:

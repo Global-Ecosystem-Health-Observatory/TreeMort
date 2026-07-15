@@ -7,20 +7,17 @@ HPC_TYPE=${HPC_TYPE:-"puhti"}
 if [ "$HPC_TYPE" == "lumi" ]; then
     PROJECT_NAME="project_462001070"
     PARTITION_NAME="small"
-    MODULE_NAME="pytorch/2.5"
-    MODULE_USE_CMD="module use /appl/local/csc/modulefiles/"
 else
     PROJECT_NAME="project_2004205"
     PARTITION_NAME="small"
-    MODULE_NAME="pytorch/2.5"
-    MODULE_USE_CMD=""
 fi
 
 # Create SBATCH script
 SBATCH_SCRIPT=$(mktemp)
 
-# SLURM Job Configuration
-cat <<EOT > $SBATCH_SCRIPT
+if [ "$HPC_TYPE" == "lumi" ]; then
+
+    cat <<EOT > $SBATCH_SCRIPT
 #!/bin/bash
 #SBATCH --job-name=treemort-creator
 #SBATCH --account=$PROJECT_NAME
@@ -32,9 +29,45 @@ cat <<EOT > $SBATCH_SCRIPT
 #SBATCH --partition=$PARTITION_NAME
 #SBATCH --mem-per-cpu=6000
 
-$MODULE_USE_CMD
-echo "Loading module: $MODULE_NAME"
-module load $MODULE_NAME
+module purge
+module use /appl/local/laifs/modules
+module load lumi-aif-singularity-bindings
+
+SIF="/appl/local/laifs/containers/lumi-multitorch-latest.sif"
+
+if [ -z "$DATA_CONFIG_PATH" ] || [ ! -f "$DATA_CONFIG_PATH" ]; then
+    echo "[ERROR] Data config file is missing or invalid."
+    exit 1
+fi
+
+echo "[INFO] Starting creator..."
+srun singularity run "\${SIF}" bash -c "source $TREEMORT_VENV_PATH/bin/activate && PYTHONPATH=$TREEMORT_REPO_PATH python3 -m dataset.creator \"$DATA_CONFIG_PATH\" --num-workers \$SLURM_CPUS_PER_TASK"
+
+EXIT_STATUS=\$?
+if [ \$EXIT_STATUS -ne 0 ]; then
+    echo "[ERROR] Job failed with exit status \$EXIT_STATUS"
+else
+    echo "[INFO] Job completed successfully"
+fi
+
+exit \$EXIT_STATUS
+EOT
+
+else
+    # Puhti / default: module + venv approach
+    cat <<EOT > $SBATCH_SCRIPT
+#!/bin/bash
+#SBATCH --job-name=treemort-creator
+#SBATCH --account=$PROJECT_NAME
+#SBATCH --output=output/stdout/%A_%a.out
+#SBATCH --error=output/stderr/%A_%a.err
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=6
+#SBATCH --time=05:00:00
+#SBATCH --partition=$PARTITION_NAME
+#SBATCH --mem-per-cpu=6000
+
+module load pytorch/2.5
 
 if [ -d "$TREEMORT_VENV_PATH" ]; then
     echo "[INFO] Activating virtual environment at $TREEMORT_VENV_PATH"
@@ -49,8 +82,7 @@ if [ -z "$DATA_CONFIG_PATH" ] || [ ! -f "$DATA_CONFIG_PATH" ]; then
     exit 1
 fi
 
-# Ensure the repo root is on PYTHONPATH so we can run non-installed packages like `dataset`
-export PYTHONPATH="$TREEMORT_REPO_PATH:${PYTHONPATH:-}"
+export PYTHONPATH="$TREEMORT_REPO_PATH:\${PYTHONPATH:-}"
 
 echo "[INFO] Starting creator..."
 srun python3 -m dataset.creator "$DATA_CONFIG_PATH" --num-workers \$SLURM_CPUS_PER_TASK
@@ -64,6 +96,8 @@ fi
 
 exit \$EXIT_STATUS
 EOT
+
+fi
 
 echo "Generated SBATCH script:"
 cat $SBATCH_SCRIPT

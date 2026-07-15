@@ -63,6 +63,22 @@ def extract_patches(image, label, window_size, stride, buffer=32):
     return patches
 
 
+def compute_channel_stats(raw_image: np.ndarray) -> dict:
+    """
+    Compute per-channel statistics (sum, squared sum, count) from the raw imagery.
+    Returned values stay in float64 for numerical stability.
+    """
+    flat = raw_image.reshape(-1, raw_image.shape[-1]).astype(np.float64)
+    channel_sum = flat.sum(axis=0)
+    channel_sumsq = np.square(flat).sum(axis=0)
+    pixel_count = flat.shape[0]
+    return {
+        "channel_sum": channel_sum,
+        "channel_sumsq": channel_sumsq,
+        "pixel_count": pixel_count,
+    }
+
+
 def process_image(image_path, label_path, conf):
     logger = get_logger()
 
@@ -76,13 +92,14 @@ def process_image(image_path, label_path, conf):
 
             transformer = Transformer.from_crs(crs, geographic_crs, always_xy=True)
 
-        img_arr, polygons = get_image_and_polygons(
+        img_arr, polygons, raw_img = get_image_and_polygons(
             image_path,
             label_path,
             conf.nir_rgb_order,
             conf.normalize_channelwise,
             conf.normalize_imagewise,
         )
+        raw_stats = compute_channel_stats(raw_img)
 
         binary_mask, centroid_mask, hybrid_channel = create_hybrid_sdt_boundary_labels(img_arr, polygons)
         combined_mask = np.stack([binary_mask, centroid_mask, hybrid_channel], axis=-1)
@@ -124,18 +141,18 @@ def process_image(image_path, label_path, conf):
                 )
             )
 
-        return image_name, labeled_patches
+        return image_name, labeled_patches, raw_stats
 
     except Exception as e:
         logger.error(f"Failed to process {image_path}: {e}")
-        return image_name, []
+        return image_name, [], None
 
 
 def write_to_hdf5(hdf5_file, data):
     logger = get_logger()
 
     with h5py.File(hdf5_file, "a") as hf:
-        for image_name, labeled_patches in data:
+        for image_name, labeled_patches, _ in data:
             if not labeled_patches:
                 logger.warning(f"No labeled patches for image: {image_name}")
                 continue
@@ -202,6 +219,9 @@ def convert_to_hdf5(
         label_list = label_list[:no_of_samples]
 
     chunk_count = len(image_list) // chunk_size + int(len(image_list) % chunk_size != 0)
+    channel_sum = None
+    channel_sumsq = None
+    pixel_count = 0
 
     for chunk_idx in range(chunk_count):
         chunk_files = list(
@@ -231,10 +251,33 @@ def convert_to_hdf5(
                 except Exception as e:
                     logger.error(f"File {file} generated an exception: {e}")
 
+            # Merge stats from this chunk before writing
+            for _, _, stats in results:
+                if stats is None:
+                    continue
+                if channel_sum is None:
+                    channel_sum = np.zeros_like(stats["channel_sum"], dtype=np.float64)
+                    channel_sumsq = np.zeros_like(stats["channel_sumsq"], dtype=np.float64)
+                channel_sum += stats["channel_sum"]
+                channel_sumsq += stats["channel_sumsq"]
+                pixel_count += stats["pixel_count"]
+
             write_to_hdf5(hdf5_path, results)
 
         files_left = max(0, len(image_list) - (chunk_idx + 1) * chunk_size)
         logger.info(f"Completed chunk {chunk_idx + 1}/{chunk_count}. {files_left} files left to process.")
+
+    if pixel_count > 0 and channel_sum is not None:
+        mean = channel_sum / pixel_count
+        variance = np.maximum(channel_sumsq / pixel_count - mean**2, 0.0)
+        std = np.sqrt(variance)
+
+        with h5py.File(hdf5_path, "a") as hf:
+            hf.attrs["pixel_count"] = int(pixel_count)
+            hf.attrs["channel_order"] = np.array(conf.nir_rgb_order, dtype=np.int32)
+            hf.attrs["channel_mean"] = mean.astype(np.float32)
+            hf.attrs["channel_std"] = std.astype(np.float32)
+        logger.info("Stored dataset stats in HDF5 attributes.")
 
 
 if __name__ == "__main__":
@@ -265,7 +308,7 @@ Usage:
 export TREEMORT_DATA_PATH="/Users/anisr/Documents/dead_trees" 
 export TREEMORT_REPO_PATH="/Users/anisr/Documents/TreeSeg"
 
-python3 -m dataset.creator ${TREEMORT_DATA_PATH}/configs/data/finland.txt
+python3 -m dataset.creator ${TREEMORT_REPO_PATH}/configs/data/finland.txt
 
 - For testing only
 

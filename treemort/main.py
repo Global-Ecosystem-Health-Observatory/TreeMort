@@ -21,6 +21,10 @@ def run(conf, eval_only):
     else:
         logger.info(f"Output directory already exists: {conf.output_dir}")
 
+    run_dir = getattr(conf, "run_dir", os.path.join(conf.output_dir, conf.model))
+    os.makedirs(run_dir, exist_ok=True)
+    logger.info(f"Run directory: {run_dir}")
+
     id2label = {0: "alive", 1: "dead"}
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -42,6 +46,13 @@ def run(conf, eval_only):
     if getattr(conf, "test_only", False) and not eval_only:
         logger.warning("`test_only` is True but `--eval-only` not set. Forcing evaluation-only mode.")
         eval_only = True
+
+    if eval_only and not getattr(conf, "resume", False):
+        logger.info("Evaluation requested; forcing resume to load saved weights.")
+        conf.resume = True
+    if eval_only and getattr(conf, "resume_from", None):
+        logger.info("Eval-only run: ignoring 'resume_from' override to use run_dir checkpoint.")
+        conf.resume_from = None
 
     logger.info("Loading or resuming model...")
     # Use a sensible length for model setup even in test-only mode

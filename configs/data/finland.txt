@@ -5,3 +5,15 @@ include = base_config.txt
 data-folder = ${TREEMORT_DATA_PATH}/Finland/RGBNIR/25cm
 
 hdf5-file = Finland_RGBNIR_25cm.h5
+
+nir-rgb-order = [3, 0, 1, 2]
+
+augment-brightness-jitter = 0.35
+augment-contrast-jitter = 0.3
+augment-gamma-range = [0.7, 1.3]
+augment-hue-jitter = 0.05
+augment-saturation-jitter = 0.25
+augment-noise-range = [0.8, 1.2]
+augment-scale-range = [0.6, 1.0]
+augment-scale-prob = 0.3
+augment-blur-prob = 0.3
