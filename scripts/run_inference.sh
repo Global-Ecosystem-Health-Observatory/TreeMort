@@ -74,6 +74,9 @@ module purge
 module use /appl/local/laifs/modules
 module load lumi-aif-singularity-bindings
 
+# Remove old CSC AI paths — lumi-aif-singularity-bindings refuses to run if they are present
+PATH=\$(echo "\$PATH" | tr ':' '\n' | grep -v '/appl/local/csc/soft/ai' | tr '\n' ':'); PATH="\${PATH%:}"; export PATH
+
 SIF="/appl/local/laifs/containers/lumi-multitorch-latest.sif"
 
 export HF_HOME="$TREEMORT_DATA_PATH/huggingface_cache"

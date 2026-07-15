@@ -40,6 +40,9 @@ if [ -z "$DATA_CONFIG_PATH" ] || [ ! -f "$DATA_CONFIG_PATH" ]; then
     exit 1
 fi
 
+# Remove old CSC AI paths — lumi-aif-singularity-bindings refuses to run if they are present
+PATH=\$(echo "\$PATH" | tr ':' '\n' | grep -v '/appl/local/csc/soft/ai' | tr '\n' ':'); PATH="\${PATH%:}"; export PATH
+
 echo "[INFO] Starting creator..."
 srun singularity run "\${SIF}" bash -c "source $TREEMORT_VENV_PATH/bin/activate && PYTHONPATH=$TREEMORT_REPO_PATH python3 -m dataset.creator \"$DATA_CONFIG_PATH\" --num-workers \$SLURM_CPUS_PER_TASK"
 
