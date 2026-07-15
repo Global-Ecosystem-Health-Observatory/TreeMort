@@ -8,15 +8,14 @@
 # All other vars (TREEMORT_VENV_PATH, TREEMORT_REPO_PATH, GPUS_PER_NODE,
 # MASTER_ADDR, MASTER_PORT) come from the exported SBATCH job environment.
 
-source "${TREEMORT_VENV_PATH}/bin/activate"
-
 export RANK="${SLURM_PROCID}"
 export LOCAL_RANK="${SLURM_LOCALID}"
 export ROCR_VISIBLE_DEVICES="${SLURM_LOCALID}"
 
 cd "${TREEMORT_REPO_PATH}"
 
-python -m torch.distributed.run \
+# Use the full venv path to avoid resolving to the CSC AI python3 wrapper via PATH
+"${TREEMORT_VENV_PATH}/bin/python3" -m torch.distributed.run \
     --nnodes="${SLURM_JOB_NUM_NODES}" \
     --nproc_per_node="${GPUS_PER_NODE}" \
     --rdzv_id="${SLURM_JOB_ID}" \

@@ -109,8 +109,14 @@ elif [ ! -d "$OUTPUT_PATH" ]; then
     mkdir -p "$OUTPUT_PATH" || { echo "[ERROR] Failed to create output directory."; exit 1; }
 fi
 
+export PYTHONPATH="$TREEMORT_REPO_PATH"
+export PYTHONNOUSERSITE=1
+
 echo "[INFO] Starting inference..."
-srun singularity run "\${SIF}" bash -c 'source $TREEMORT_VENV_PATH/bin/activate && PYTHONNOUSERSITE=1 PYTHONPATH=$TREEMORT_REPO_PATH python $TREEMORT_REPO_PATH/inference/engine.py $INFER_ARGS'
+srun singularity exec "\${SIF}" \\
+    "$TREEMORT_VENV_PATH/bin/python3" \\
+    "$TREEMORT_REPO_PATH/inference/engine.py" \\
+    $INFER_ARGS
 EOT
 
 else
