@@ -20,8 +20,8 @@ if [ "$HPC_TYPE" == "puhti" ]; then
     export TREEMORT_VENV_PATH="/projappl/project_2004205/aurahman/venv"
     export TREEMORT_DATA_PATH="/scratch/project_2008436/aurahman/dead_trees"
 elif [ "$HPC_TYPE" == "lumi" ]; then
-    export TREEMORT_VENV_PATH="/projappl/project_462001070/aurahman/venv"
-    export TREEMORT_DATA_PATH="/scratch/project_462001070/aurahman/dead_trees"
+    export TREEMORT_VENV_PATH="/projappl/project_4620001070/aurahman/venv"
+    export TREEMORT_DATA_PATH="/scratch/project_4620001070/aurahman/dead_trees"
 else
     echo "Error: Unsupported HPC_TYPE '$HPC_TYPE'."
     exit 1
