@@ -34,8 +34,7 @@ def resume_or_load(conf, id2label, n_batches, device, is_main=True):
         logger.info("Training model from scratch.")
 
     if dist.is_available() and dist.is_initialized():
-        local_rank = int(os.environ.get("LOCAL_RANK", 0))
-        model = DDP(model, device_ids=[local_rank])
+        model = DDP(model, device_ids=[0])
 
     return model, optimizer, schedular, criterion, metrics, callbacks
 
