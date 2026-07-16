@@ -20,12 +20,12 @@ def run(conf, eval_only):
     is_distributed = world_size > 1
     is_main = rank == 0
 
-    if is_distributed:
-        dist.init_process_group(backend="nccl", init_method="env://")
-        torch.cuda.set_device(0)
-
     # ROCR_VISIBLE_DEVICES restricts each process to a single GPU exposed as device 0
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+    if is_distributed:
+        dist.init_process_group(backend="nccl", init_method="env://", device_id=device)
+        torch.cuda.set_device(0)
     if is_main:
         logger.info(f"Using device: {device}  |  world_size={world_size}")
 
