@@ -55,14 +55,17 @@ INFER_ARGS="$DATA_PATH --config $CONFIG_PATH --model-config $MODEL_CONFIG_PATH -
 # Create SBATCH script
 SBATCH_SCRIPT=$(mktemp)
 
+SCRATCH_OUTPUT_DIR="/scratch/$PROJECT_NAME/aurahman/output"
+mkdir -p "$SCRATCH_OUTPUT_DIR/stdout" "$SCRATCH_OUTPUT_DIR/stderr"
+
 if [ "$HPC_TYPE" == "lumi" ]; then
 
     cat <<EOT > $SBATCH_SCRIPT
 #!/bin/bash
 #SBATCH --job-name=treemort-inference
 #SBATCH --account=$PROJECT_NAME
-#SBATCH --output=output/stdout/%A_%a.out
-#SBATCH --error=output/stderr/%A_%a.err
+#SBATCH --output=$SCRATCH_OUTPUT_DIR/stdout/%A_%a.out
+#SBATCH --error=$SCRATCH_OUTPUT_DIR/stderr/%A_%a.err
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=7
 #SBATCH --gpus-per-node=1
@@ -80,6 +83,7 @@ PATH=\$(echo "\$PATH" | tr ':' '\n' | grep -v '/appl/local/csc/soft/ai' | tr '\n
 SIF="/appl/local/laifs/containers/lumi-multitorch-latest.sif"
 
 export HF_HOME="$TREEMORT_DATA_PATH/huggingface_cache"
+export TREEMORT_OUTPUT_DIR="$TREEMORT_REPO_PATH/output"
 
 if [ -z "$CONFIG_PATH" ] || [ ! -f "$CONFIG_PATH" ]; then
     echo "[ERROR] Config file is missing or invalid: $CONFIG_PATH"
