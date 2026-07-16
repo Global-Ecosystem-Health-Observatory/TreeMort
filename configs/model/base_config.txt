@@ -28,7 +28,7 @@ class-weights = [0.1, 0.9]
 
 model-weights = best # available options [best, latest]
 
-learning-rate = 8e-4
+learning-rate = 2e-4
 
 segment-threshold = 0.5
 
