@@ -1,5 +1,6 @@
 import os
 import torch
+import torch.distributed as dist
 import argparse
 
 from treemort.data.loader import prepare_datasets
@@ -13,68 +14,83 @@ logger = get_logger(__name__)
 
 
 def run(conf, eval_only):
+    local_rank = int(os.environ.get("LOCAL_RANK", 0))
+    rank = int(os.environ.get("RANK", 0))
+    world_size = int(os.environ.get("WORLD_SIZE", 1))
+    is_distributed = world_size > 1
+    is_main = rank == 0
+
+    if is_distributed:
+        dist.init_process_group(backend="nccl", init_method="env://")
+        torch.cuda.set_device(local_rank)
+
+    device = torch.device(f"cuda:{local_rank}" if torch.cuda.is_available() else "cpu")
+    if is_main:
+        logger.info(f"Using device: {device}  |  world_size={world_size}")
+
     assert os.path.exists(conf.data_folder), f"[ERROR] Data folder {conf.data_folder} does not exist."
 
-    if not os.path.exists(conf.output_dir):
-        os.makedirs(conf.output_dir)
-        logger.info(f"Created output directory: {conf.output_dir}")
-    else:
-        logger.info(f"Output directory already exists: {conf.output_dir}")
-
     run_dir = getattr(conf, "run_dir", os.path.join(conf.output_dir, conf.model))
-    os.makedirs(run_dir, exist_ok=True)
-    logger.info(f"Run directory: {run_dir}")
+
+    if is_main:
+        os.makedirs(conf.output_dir, exist_ok=True)
+        os.makedirs(run_dir, exist_ok=True)
+        logger.info(f"Run directory: {run_dir}")
+
+    if is_distributed:
+        dist.barrier()
 
     id2label = {0: "alive", 1: "dead"}
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    logger.info(f"Using device: {device}")
-
     logger.info("Preparing datasets...")
-    train_loader, val_loader, test_loader = prepare_datasets(conf)
+    train_loader, val_loader, test_loader = prepare_datasets(conf, rank=rank, world_size=world_size)
 
-    # Safely compute lengths when some loaders are None (e.g., test-only mode)
     train_len = len(train_loader) if train_loader is not None else 0
     val_len = len(val_loader) if val_loader is not None else 0
     test_len = len(test_loader) if test_loader is not None else 0
 
-    logger.info(
-        f"Datasets prepared: Train({train_len}), Val({val_len}), Test({test_len})"
-    )
+    if is_main:
+        logger.info(f"Datasets prepared: Train({train_len}), Val({val_len}), Test({test_len})")
 
-    # If test-only is enabled in config, force eval-only behavior
     if getattr(conf, "test_only", False) and not eval_only:
-        logger.warning("`test_only` is True but `--eval-only` not set. Forcing evaluation-only mode.")
+        if is_main:
+            logger.warning("`test_only` is True but `--eval-only` not set. Forcing evaluation-only mode.")
         eval_only = True
 
     if eval_only and not getattr(conf, "resume", False):
-        logger.info("Evaluation requested; forcing resume to load saved weights.")
+        if is_main:
+            logger.info("Evaluation requested; forcing resume to load saved weights.")
         conf.resume = True
     if eval_only and getattr(conf, "resume_from", None):
-        logger.info("Eval-only run: ignoring 'resume_from' override to use run_dir checkpoint.")
+        if is_main:
+            logger.info("Eval-only run: ignoring 'resume_from' override to use run_dir checkpoint.")
         conf.resume_from = None
 
-    logger.info("Loading or resuming model...")
-    # Use a sensible length for model setup even in test-only mode
+    if is_main:
+        logger.info("Loading or resuming model...")
     num_steps_for_setup = train_len if train_len > 0 else test_len
     model, optimizer, schedular, criterion, metrics, callbacks = resume_or_load(
-        conf, id2label, num_steps_for_setup, device
+        conf, id2label, num_steps_for_setup, device, is_main=is_main
     )
-    logger.info("Model, optimizer, criterion, metrics, and callbacks are set up.")
+    if is_main:
+        logger.info("Model, optimizer, criterion, metrics, and callbacks are set up.")
 
     if eval_only:
         if test_loader is None or test_len == 0:
             raise RuntimeError("Evaluation requested but no test_loader is available (got None or empty).")
-        logger.info("Evaluation-only mode started.")
+        if is_main:
+            logger.info("Evaluation-only mode started.")
         evaluator(model, test_loader, test_len, metrics, conf)
-        logger.info("Evaluation completed.")
+        if is_main:
+            logger.info("Evaluation completed.")
 
     else:
         if train_loader is None or val_loader is None:
             raise RuntimeError(
                 "Training requested but train/val loaders are None. Set `--eval-only` or disable `test_only` in config."
             )
-        logger.info("Training mode started.")
+        if is_main:
+            logger.info("Training mode started.")
         trainer(
             model,
             optimizer=optimizer,
@@ -85,8 +101,14 @@ def run(conf, eval_only):
             val_loader=val_loader,
             conf=conf,
             callbacks=callbacks,
+            is_main=is_main,
+            is_distributed=is_distributed,
         )
-        logger.info("Training completed.")
+        if is_main:
+            logger.info("Training completed.")
+
+    if is_distributed:
+        dist.destroy_process_group()
 
 
 if __name__ == "__main__":
@@ -95,11 +117,11 @@ if __name__ == "__main__":
     parser.add_argument("--data-config", type=str, required=True, help="Path to the additional data configuration file")
     parser.add_argument('--verbosity',   type=str, default='info', choices=['info', 'debug', 'warning'])
     parser.add_argument("--eval-only",   action="store_true", help="If set, only evaluate the model without training")
-    
+
     args = parser.parse_args()
-    
+
     _ = configure_logger(verbosity=args.verbosity)
-    
+
     conf = setup(args.config, data_config=args.data_config)
 
     run(conf, args.eval_only)

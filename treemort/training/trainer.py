@@ -18,29 +18,30 @@ def trainer(
     val_loader,
     conf,
     callbacks,
+    is_main=True,
+    is_distributed=False,
 ):
     logger = get_logger()
 
     device = next(model.parameters()).device
     best_metric = float('inf')
 
-    for epoch in tqdm(range(conf.epochs), desc="Epochs", unit="epoch"):
-        
-        train_loss, train_metrics = train_one_epoch(
-            model, optimizer, schedular, criterion, metrics, 
-            train_loader, conf, device
-        )
+    for epoch in tqdm(range(conf.epochs), desc="Epochs", unit="epoch", disable=not is_main):
 
-        # logger.info(f"[Train] Loss: {train_loss:.4f}")
-        # log_metrics(train_metrics, "Train")
+        if is_distributed and hasattr(train_loader.sampler, 'set_epoch'):
+            train_loader.sampler.set_epoch(epoch)
+
+        train_loss, train_metrics = train_one_epoch(
+            model, optimizer, schedular, criterion, metrics,
+            train_loader, conf, device,
+            is_main=is_main, is_distributed=is_distributed,
+        )
 
         val_loss, val_metrics = validate_one_epoch(
-            model, criterion, metrics, 
-            val_loader, conf, device
+            model, criterion, metrics,
+            val_loader, conf, device,
+            is_main=is_main, is_distributed=is_distributed,
         )
-
-        # logger.info(f"[Val] Loss: {val_loss:.4f}")
-        # log_metrics(val_metrics, "Val")
 
         stop_training = handle_callbacks(
             callbacks,

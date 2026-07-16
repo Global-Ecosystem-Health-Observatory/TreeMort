@@ -1,6 +1,8 @@
 import os
 import torch
 import torch.nn as nn
+import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel as DDP
 
 from treemort.modeling.model_config import configure_model
 from treemort.modeling.callback_builder import build_callbacks
@@ -10,7 +12,7 @@ from treemort.utils.logger import get_logger
 from treemort.utils.checkpoints import get_checkpoint
 
 
-def resume_or_load(conf, id2label, n_batches, device):
+def resume_or_load(conf, id2label, n_batches, device, is_main=True):
     logger = get_logger()
 
     logger.info("Building model...")
@@ -22,13 +24,18 @@ def resume_or_load(conf, id2label, n_batches, device):
         n_batches,
         run_dir,
         optimizer,
-        best_model=getattr(conf, 'best_model', 'best.weights.pth')
+        best_model=getattr(conf, 'best_model', 'best.weights.pth'),
+        is_main=is_main,
     )
 
     if conf.resume:
         load_checkpoint_if_available(model, conf, run_dir)
     else:
         logger.info("Training model from scratch.")
+
+    if dist.is_available() and dist.is_initialized():
+        local_rank = int(os.environ.get("LOCAL_RANK", 0))
+        model = DDP(model, device_ids=[local_rank])
 
     return model, optimizer, schedular, criterion, metrics, callbacks
 

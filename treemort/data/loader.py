@@ -12,7 +12,7 @@ from treemort.utils.augment import Augmentations
 from treemort.utils.datautils import load_and_organize_data, stratify_images_by_patch_count, stratify_images_by_region
 
 
-def prepare_datasets(conf):
+def prepare_datasets(conf, rank=0, world_size=1):
     hdf5_path = Path(conf.data_folder).parent / conf.hdf5_file
 
     image_patch_map = load_and_organize_data(hdf5_path)
@@ -82,14 +82,14 @@ def prepare_datasets(conf):
     train_loader = DataLoader(
         train_dataset,
         batch_size=conf.train_batch_size,
-        sampler=BalancedSampler(hdf5_path, train_keys),
+        sampler=BalancedSampler(hdf5_path, train_keys, rank=rank, world_size=world_size),
         drop_last=True,
         **loader_kwargs
     )
     val_loader = DataLoader(
         val_dataset,
         batch_size=conf.val_batch_size,
-        sampler=BalancedSampler(hdf5_path, val_keys),
+        sampler=BalancedSampler(hdf5_path, val_keys, rank=rank, world_size=world_size),
         shuffle=False,
         drop_last=True,
         **loader_kwargs
@@ -97,7 +97,7 @@ def prepare_datasets(conf):
     test_loader = DataLoader(
         test_dataset,
         batch_size=conf.test_batch_size,
-        sampler=BalancedSampler(hdf5_path, test_keys),
+        sampler=BalancedSampler(hdf5_path, test_keys, rank=rank, world_size=world_size),
         shuffle=False,
         drop_last=True,
         **loader_kwargs

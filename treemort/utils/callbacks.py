@@ -1,3 +1,4 @@
+import os
 import torch
 
 from treemort.utils.logger import get_logger
@@ -23,10 +24,15 @@ class ModelCheckpoint:
         self.monitor = monitor
 
     def __call__(self, epoch, model, optimizer, val_loss=None):
+        if int(os.environ.get("RANK", 0)) != 0:
+            return
+
         current_value = val_loss
-        
+
         if self.monitor != 'val_loss' and hasattr(self, 'val_metrics'):
             current_value = self.val_metrics.get(self.monitor, val_loss)
+
+        actual_model = model.module if hasattr(model, 'module') else model
 
         if self.save_best_only:
             if (self.mode == "min" and current_value < self.best) or \
@@ -34,12 +40,12 @@ class ModelCheckpoint:
                 self.best = current_value
                 if self.verbose:
                     logger.info(f"Saving best model with {self.monitor}: {current_value}")
-                torch.save(model.state_dict(), self.filepath)
+                torch.save(actual_model.state_dict(), self.filepath)
         else:
             if epoch % self.save_freq == 0:
                 if self.verbose:
                     logger.info(f"Saving model at epoch {epoch}")
-                torch.save(model.state_dict(), self.filepath.format(epoch=epoch))
+                torch.save(actual_model.state_dict(), self.filepath.format(epoch=epoch))
 
 
 class ReduceLROnPlateau:

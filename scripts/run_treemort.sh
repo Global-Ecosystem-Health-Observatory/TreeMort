@@ -29,6 +29,7 @@ if [ "$HPC_TYPE" == "lumi" ]; then
     PARTITION_NAME="small-g"
     TEST_PARTITION_NAME="dev-g"
     GPUS_PER_NODE="${GPUS_PER_NODE:-8}"
+    SCRATCH_OUTPUT_DIR="/scratch/$PROJECT_NAME/aurahman/output"
 else
     PROJECT_NAME="project_2004205"
     PARTITION_NAME="gpu"
@@ -59,8 +60,8 @@ if [ "$HPC_TYPE" == "lumi" ]; then
 #!/bin/bash
 #SBATCH --job-name=tree-mort
 #SBATCH --account=$PROJECT_NAME
-#SBATCH --output=output/stdout/%A_%a.out
-#SBATCH --error=output/stderr/%A_%a.err
+#SBATCH --output=$SCRATCH_OUTPUT_DIR/stdout/%A_%a.out
+#SBATCH --error=$SCRATCH_OUTPUT_DIR/stderr/%A_%a.err
 #SBATCH --ntasks-per-node=$GPUS_PER_NODE
 #SBATCH --gpus-per-node=$GPUS_PER_NODE
 #SBATCH --cpus-per-task=7
@@ -153,6 +154,11 @@ fi
 
 echo "Generated SBATCH script:"
 cat $SBATCH_SCRIPT
+
+# Ensure log directories exist before submitting
+if [ "$HPC_TYPE" == "lumi" ]; then
+    mkdir -p "$SCRATCH_OUTPUT_DIR/stdout" "$SCRATCH_OUTPUT_DIR/stderr"
+fi
 
 # Submit job to SLURM
 sbatch --export=ALL $SBATCH_SCRIPT
