@@ -43,7 +43,7 @@ if [ "$TEST_RUN" = true ]; then
 elif [ "$EVAL_ONLY" = true ]; then
     TIME_LIMIT="01:00:00"
 else
-    TIME_LIMIT="36:00:00"
+    TIME_LIMIT="06:00:00"
 fi
 
 # Create SBATCH script
