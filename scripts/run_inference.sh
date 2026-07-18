@@ -60,6 +60,17 @@ mkdir -p "$SCRATCH_OUTPUT_DIR/stdout" "$SCRATCH_OUTPUT_DIR/stderr"
 
 if [ "$HPC_TYPE" == "lumi" ]; then
 
+    # Array-job support: set directive and per-task list-file arg.
+    # LIST_DIR and CHUNKS are exported by submit_inference.sh when --chunks N is used.
+    # LIST_ARG uses a mixed-quote trick so ${SLURM_ARRAY_TASK_ID} stays literal here
+    # but expands at job runtime inside the generated SBATCH script.
+    ARRAY_DIRECTIVE=""
+    LIST_ARG=""
+    if [ -n "${LIST_DIR:-}" ] && [ "${CHUNKS:-1}" -gt 1 ]; then
+        ARRAY_DIRECTIVE="#SBATCH --array=0-$((CHUNKS-1))"
+        printf -v LIST_ARG ' --list-file %s/${SLURM_ARRAY_TASK_ID}.txt' "$LIST_DIR"
+    fi
+
     cat <<EOT > $SBATCH_SCRIPT
 #!/bin/bash
 #SBATCH --job-name=treemort-inference
@@ -72,6 +83,7 @@ if [ "$HPC_TYPE" == "lumi" ]; then
 #SBATCH --mem-per-gpu=60G
 #SBATCH --time=05:00:00
 #SBATCH --partition=$PARTITION_NAME
+$ARRAY_DIRECTIVE
 
 module purge
 module use /appl/local/laifs/modules
@@ -120,7 +132,7 @@ echo "[INFO] Starting inference..."
 srun singularity exec "\${SIF}" \\
     "$TREEMORT_VENV_PATH/bin/python3" \\
     "$TREEMORT_REPO_PATH/inference/engine.py" \\
-    $INFER_ARGS
+    $INFER_ARGS$LIST_ARG
 EOT
 
 else

@@ -54,6 +54,47 @@ else
     exit 1
 fi
 
-# Forward any optional flags (e.g., --post-process, --list-file) to the inference script.
-# Positional args $1-$3 are HPC_TYPE, MODEL_TYPE, DATA_TYPE; flags start from $4.
-bash "$TREEMORT_REPO_PATH/scripts/run_inference.sh" "${@:4}"
+# Parse flags from positional args 4+.
+# --chunks N  → split work across N array tasks (one GPU each).
+# All other flags are forwarded to run_inference.sh.
+CHUNKS=1
+PASS_ARGS=()
+set -- "${@:4}"
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --chunks)
+            CHUNKS="$2"; shift 2 ;;
+        *)
+            PASS_ARGS+=("$1"); shift ;;
+    esac
+done
+
+# For array jobs: discover images and split into CHUNKS list files.
+if [ "$CHUNKS" -gt 1 ]; then
+    PROJECT_NAME="project_462001070"
+    LIST_DIR="/scratch/$PROJECT_NAME/aurahman/output/lists/infer_$(date +%s)"
+    mkdir -p "$LIST_DIR"
+
+    find "$DATA_PATH" -type f \( -name "*.tif" -o -name "*.tiff" -o -name "*.jp2" \) \
+        | sort > "$LIST_DIR/all.txt"
+    TOTAL=$(wc -l < "$LIST_DIR/all.txt")
+    echo "[INFO] Found $TOTAL images — splitting into $CHUNKS chunks (list dir: $LIST_DIR)"
+
+    mapfile -t IMAGES < "$LIST_DIR/all.txt"
+    PER_CHUNK=$(( (TOTAL + CHUNKS - 1) / CHUNKS ))
+    for ((i=0; i<TOTAL; i++)); do
+        chunk=$(( i / PER_CHUNK ))
+        [ "$chunk" -ge "$CHUNKS" ] && chunk=$(( CHUNKS - 1 ))
+        echo "${IMAGES[$i]}" >> "$LIST_DIR/$chunk.txt"
+    done
+
+    for ((c=0; c<CHUNKS; c++)); do
+        COUNT=$(wc -l < "$LIST_DIR/$c.txt" 2>/dev/null || echo 0)
+        echo "[INFO]   chunk $c: $COUNT images"
+    done
+
+    export LIST_DIR
+    export CHUNKS
+fi
+
+bash "$TREEMORT_REPO_PATH/scripts/run_inference.sh" "${PASS_ARGS[@]}"
