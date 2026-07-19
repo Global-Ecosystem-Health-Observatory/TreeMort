@@ -96,6 +96,8 @@ SIF="/appl/local/laifs/containers/lumi-multitorch-latest.sif"
 
 export HF_HOME="$TREEMORT_DATA_PATH/huggingface_cache"
 export TREEMORT_OUTPUT_DIR="$TREEMORT_REPO_PATH/output"
+export MIOPEN_USER_DB_PATH="$TREEMORT_REPO_PATH/.cache/miopen"
+mkdir -p "\$MIOPEN_USER_DB_PATH"
 
 if [ -z "$CONFIG_PATH" ] || [ ! -f "$CONFIG_PATH" ]; then
     echo "[ERROR] Config file is missing or invalid: $CONFIG_PATH"
