@@ -83,6 +83,9 @@ def build_parser(config_files):
     model_group.add("--learning-rate", type=float, default=2e-4, help="learning rate for optimizer")
     model_group.add("--activation", type=str, default="sigmoid", help="activation function")
     model_group.add("--loss", type=str, default="hybrid", help="loss function for the network")
+    # --- Loss component weights ---
+    model_group.add("--centroid-weight", type=float, default=3.0, help="Weight for centroid MSE term in hybrid loss.")
+    model_group.add("--centroid-pos-weight", type=float, default=10.0, help="Positive-class weight for centroid MSE (upweights sparse positive pixels).")
     # --- Hybrid (SDT+boundary) loss stabilizers ---
     model_group.add(
         "--hybrid-use-tanh",

@@ -4,6 +4,8 @@ include = base_config.txt
 
 model = flair_unet_sdt
 
-resume = True
+resume = False
+
+run-id = sdt_v1
 
 output-channels = 3

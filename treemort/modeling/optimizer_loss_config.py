@@ -33,7 +33,14 @@ def configure_optimizer(model, learning_rate, total_steps):
 
 def configure_loss_and_metrics(conf, class_weights=None):
     if conf.loss == "hybrid":
-        tree_mortality_loss = TreeMortalityLoss()
+        tree_mortality_loss = TreeMortalityLoss(
+            centroid_weight=getattr(conf, "centroid_weight", 3.0),
+            centroid_pos_weight=getattr(conf, "centroid_pos_weight", 10.0),
+            hybrid_use_tanh=getattr(conf, "hybrid_use_tanh", True),
+            hybrid_bg_weight=getattr(conf, "hybrid_bg_weight", 0.10),
+            hybrid_interior_weight=getattr(conf, "hybrid_interior_weight", 3.00),
+            hybrid_boundary_weight=getattr(conf, "hybrid_boundary_weight", 1.00),
+        )
 
         def criterion(pred, target, buffer=None):
             if buffer is None:

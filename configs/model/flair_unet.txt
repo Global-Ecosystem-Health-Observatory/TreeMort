@@ -4,4 +4,6 @@ include = base_config.txt
 
 model = flair_unet
 
-resume = True
+resume = False
+
+run-id = cold_start
