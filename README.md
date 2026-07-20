@@ -1,7 +1,7 @@
 # TreeMort: Dead Tree Detection and Segmentation with Hybrid Self-Attention U-Nets
 
 ## Overview
-TreeMort is an open-source project for instance-level segmentation of standing dead trees in high-resolution aerial imagery, developed by the Global Ecosystem Health Observatory. This README provides instructions for running the TreeMort-3T-UNet model locally on your machine. The model integrates a Self-Attention U-Net with multi-task learning (segmentation masks, centroid heatmaps, hybrid SDT-boundary maps) and a hybrid loss function (BCE, Dice, Focal, MSE), enhanced by a watershed-guided post-processing pipeline. It achieves a 41.5% improvement in Mean Tree IoU (0.371 vs. 0.262 for U-Net) and a 57% reduction in centroid error (3.70 px vs. 8.60 px), as detailed in our accepted manuscript (Rahman et al., 2025, Int J Appl Earth Obs Geoinf).
+TreeMort is an open-source project for instance-level segmentation of standing dead trees in high-resolution aerial imagery, developed by the Global Ecosystem Health Observatory. This README provides instructions for running the TreeMort model locally on your machine. The model integrates a Self-Attention U-Net with multi-task learning (segmentation masks, centroid heatmaps, hybrid SDT-boundary maps) and a hybrid loss function (BCE, Dice, Focal, MSE), enhanced by a watershed-guided post-processing pipeline. Post-publication improvements — including upweighted centroid loss reweighting, region-weighted hybrid loss, and Hann-window patch blending — push Mean Tree IoU to **0.448** (+20.8% over the published result of 0.371, +70.5% over the U-Net baseline of 0.262), as detailed below.
 
 ## Features
 - Multi-task learning for segmentation, centroid localization, and boundary refinement.
@@ -127,7 +127,7 @@ Model training uses configuration files located in `configs/model/` to control t
   - `loss` and `activation`: Loss function type and output activation function.
   - `val-size` and `test-size`: Proportions of data reserved for validation and testing.
 
-- **`flair_unet.txt`**: An example model configuration for the TreeMort-1T-UNet (self-attention U-Net with a FLAIR backbone):
+- **`flair_unet.txt`**: Model configuration for the TreeMort-1T-UNet (self-attention U-Net with a FLAIR backbone):
 
   ```
   # settings for TreeMort-1T-UNet (self attention unet with flair backbone)
@@ -139,7 +139,22 @@ Model training uses configuration files located in `configs/model/` to control t
   resume = True
   ```
 
-  This file inherits all settings from `base_config.txt`, specifies the model architecture as `flair_unet`, and sets `resume = True` to continue training from the latest checkpoint if available.
+- **`flair_unet_highrecall.txt`**: Variant with upweighted centroid loss to reduce missed trees (best results):
+
+  ```
+  # flair_unet with upweighted centroid loss to improve recall
+
+  include = base_config.txt
+
+  model = flair_unet
+  resume = False
+  run-id = high_recall
+
+  centroid-weight = 5.0        # default 3.0 — weight of centroid MSE term in hybrid loss
+  centroid-pos-weight = 20.0   # default 10.0 — upweights sparse positive pixels in centroid map
+  ```
+
+  `centroid-weight` and `centroid-pos-weight` are passed to `TreeMortalityLoss` in `treemort/utils/loss.py` and can be tuned to trade off precision vs. recall.
 
 Users can create their own model configuration files to experiment with different architectures or hyperparameters by inheriting from `base_config.txt` and overriding specific parameters as needed.
 
@@ -156,7 +171,23 @@ Users can create their own model configuration files to experiment with differen
   ```
 
 ## Results
-- **Performance**: Achieves Mean Pixel IoU 0.259, Mean Tree IoU 0.371, Instance F1-Score 0.59, and Centroid Error 3.70 px on test set (see manuscript for details).
+
+Performance on the Finland RGB-NIR 25 cm test set (52 tiles):
+
+| Model | Pixel IoU | Tree IoU | Precision | Recall | F1 |
+|---|---|---|---|---|---|
+| U-Net baseline | — | 0.262 | — | — | — |
+| TreeMort (published, Rahman et al. 2025) | 0.259 | 0.371 | — | 0.590 | — |
+| **TreeMort (improved, this branch)** | **0.323** | **0.448** | **0.775** | **0.683** | **0.695** |
+
+The improved result uses `flair_unet_highrecall` (centroid loss reweighting: `centroid-weight=5.0`, `centroid-pos-weight=20.0`) with post-processing threshold 0.4.
+
+Key improvements over the published model:
+- **Centroid loss reweighting** — upweighting sparse positive pixels in centroid MSE loss directly reduces missed trees
+- **Region-weighted hybrid loss** — separate weights for background (0.10), interior (3.00), and boundary (1.00) in the SDT branch
+- **Hann-window patch blending** — reduces seam artifacts in sliding-window inference
+- **Watershed post-processing** — dual-seed watershed with shape filtering (min-area, solidity, aspect-ratio)
+
 - **Manuscript Reference**: Rahman, A. U., Heinaro, E., Ahishali, M., & Junttila, S. (2025). Dual-Task Learning for Dead Tree Detection and Segmentation with Hybrid Self-Attention U-Nets in Aerial Imagery. *Int J Appl Earth Obs Geoinf*. Accepted September 2025.
 
 ## License
