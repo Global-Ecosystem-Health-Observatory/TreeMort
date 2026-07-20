@@ -1,0 +1,8 @@
+# TTA inference config for Finland_RGBNIR_25cm
+# Identical to finland.txt but with test-time augmentation enabled.
+# Averages predictions over 4 orientations (orig, H-flip, V-flip, 180-rot).
+# ~4x inference time per image; expected +1-3% Tree IoU.
+
+include = finland.txt
+
+tta = True

@@ -54,6 +54,7 @@ def process_image(
             stride=conf.stride,
             threshold=conf.segment_threshold,
             output_channels=conf.output_channels,
+            tta=getattr(conf, "tta", False),
         )
         logger.info(f"Sliding window inference completed in {time.time() - start_time:.2f} seconds.")
         start_time = time.time()

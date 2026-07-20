@@ -293,6 +293,12 @@ def build_parser(config_files):
         default=0.95,
         help="Maximum eccentricity for an instance to be kept (0=circle, 1=line).",
     )
+    inference_group.add(
+        "--tta",
+        action="store_true",
+        default=False,
+        help="Enable test-time augmentation: average predictions over 4 orientations (orig, H-flip, V-flip, 180-rot).",
+    )
 
     output_group = parser.add_argument_group('Output')
     output_group.add("--output-dir", type=str, default="./output", help="directory to save output files")

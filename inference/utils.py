@@ -205,6 +205,7 @@ def sliding_window_inference(
     batch_size: int = 1,
     threshold: float = 0.5,
     output_channels: int = 3,
+    tta: bool = False,
 ) -> torch.Tensor:
     _validate_inference_params(window_size, stride, threshold)
 
@@ -225,6 +226,7 @@ def sliding_window_inference(
             threshold,
             device,
             blend_w,
+            tta=tta,
         )
 
     return _finalize_prediction(prediction_map, count_map, image.shape, threshold)
@@ -328,12 +330,13 @@ def process_batch(
     threshold: float,
     device: torch.device,
     blend_w: torch.Tensor,
+    tta: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     logger = get_logger()
 
     _validate_batch_inputs(patches, coords, threshold)
 
-    predictions = _infer_patches(patches, model, device)
+    predictions = _infer_patches(patches, model, device, tta=tta)
 
     for i, (y, x) in enumerate(coords):
         binary_confidence = predictions[i, 0]
@@ -364,45 +367,70 @@ def _validate_batch_inputs(patches: list[torch.Tensor], coords: list[tuple[int, 
         log_and_raise(logger, ValueError("Threshold must be between 0 and 1."))
 
 
-def _infer_patches(patches: list[torch.Tensor], model: torch.nn.Module, device: torch.device) -> torch.Tensor:
+def _run_model_raw(batch_tensor: torch.Tensor, model: torch.nn.Module) -> torch.Tensor:
+    """Run model and return normalized raw outputs (B, 3, H, W), before any activation."""
+    outputs = model(batch_tensor)
+
+    if outputs.ndim == 3:
+        outputs = outputs.unsqueeze(1)
+    elif outputs.ndim != 4:
+        raise RuntimeError(f"Unexpected model output shape: {tuple(outputs.shape)}")
+
+    outputs = outputs.to(dtype=torch.float32)
+
+    C = outputs.shape[1]
+    if C < 3:
+        pad = torch.zeros(
+            (outputs.shape[0], 3 - C, outputs.shape[2], outputs.shape[3]),
+            device=outputs.device,
+            dtype=outputs.dtype,
+        )
+        outputs = torch.cat([outputs, pad], dim=1)
+    elif C > 3:
+        outputs = outputs[:, :3, ...]
+
+    return outputs
+
+
+def _apply_output_activations(raw: torch.Tensor) -> torch.Tensor:
+    """Apply per-channel activations to raw model output (B, 3, H, W)."""
+    seg = torch.sigmoid(raw[:, 0:1, ...])
+    centroid = raw[:, 1:2, ...]   # logits — sigmoid collapses peak contrast
+    hybrid = raw[:, 2:3, ...]     # regression target — keep raw
+    return torch.cat([seg, centroid, hybrid], dim=1)
+
+
+def _infer_patches(
+    patches: list[torch.Tensor],
+    model: torch.nn.Module,
+    device: torch.device,
+    tta: bool = False,
+) -> torch.Tensor:
     logger = get_logger()
 
     batch_tensor = torch.stack(patches).to(device)
 
     with torch.no_grad():
-        outputs = model(batch_tensor)
+        if tta:
+            # Average raw logits across 4 orientations before applying activations.
+            # Averaging in logit space is more principled than averaging probabilities.
+            tta_augmentations = [
+                (batch_tensor,                              lambda x: x),
+                (torch.flip(batch_tensor, dims=[3]),        lambda x: torch.flip(x, dims=[3])),   # H-flip
+                (torch.flip(batch_tensor, dims=[2]),        lambda x: torch.flip(x, dims=[2])),   # V-flip
+                (torch.flip(batch_tensor, dims=[2, 3]),     lambda x: torch.flip(x, dims=[2, 3])), # 180°
+            ]
+            raw_sum = None
+            for aug_input, undo_aug in tta_augmentations:
+                raw = _run_model_raw(aug_input, model)
+                raw = undo_aug(raw)
+                raw_sum = raw if raw_sum is None else raw_sum + raw
+            predictions = _apply_output_activations(raw_sum / len(tta_augmentations))
+        else:
+            raw = _run_model_raw(batch_tensor, model)
+            predictions = _apply_output_activations(raw)
 
-        # Normalize to 4D: (B, C, H, W)
-        if outputs.ndim == 3:  # (B, H, W) -> (B, 1, H, W)
-            outputs = outputs.unsqueeze(1)
-        elif outputs.ndim != 4:
-            raise RuntimeError(f"Unexpected model output shape: {tuple(outputs.shape)}")
-
-        outputs = outputs.to(dtype=torch.float32)
-
-        # Pad or truncate to exactly 3 channels: [seg, centroid, hybrid]
-        C = outputs.shape[1]
-        if C < 3:
-            pad = torch.zeros(
-                (outputs.shape[0], 3 - C, outputs.shape[2], outputs.shape[3]),
-                device=outputs.device,
-                dtype=outputs.dtype,
-            )
-            outputs = torch.cat([outputs, pad], dim=1)
-        elif C > 3:
-            outputs = outputs[:, :3, ...]
-
-        # Apply activations according to target semantics:
-        # - segmentation: probability -> sigmoid
-        # - centroid: use raw logits for peak detection (sigmoid collapses contrast)
-        # - hybrid SDT+boundary: regression target (inside (0,1], boundary=-1, background=0) -> keep raw
-        seg_predictions = torch.sigmoid(outputs[:, 0:1, ...])
-        centroid_predictions = outputs[:, 1:2, ...]  # logits
-        hybrid_predictions = outputs[:, 2:3, ...]
-
-        predictions = torch.cat([seg_predictions, centroid_predictions, hybrid_predictions], dim=1)
-
-        logger.debug(f"Predictions shape: {tuple(predictions.shape)}")
+        logger.debug(f"Predictions shape: {tuple(predictions.shape)}, tta={tta}")
 
     return predictions
 
