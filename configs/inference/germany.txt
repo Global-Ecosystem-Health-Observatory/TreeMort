@@ -1,4 +1,4 @@
-# Configurations for inference for Germany_RGBNIR_25cm
+# Configurations for inference for Germany_RGBNIR_10cm
 
 include = base_config.txt
 
