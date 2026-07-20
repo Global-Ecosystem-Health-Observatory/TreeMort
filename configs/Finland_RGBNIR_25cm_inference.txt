@@ -1,9 +1,0 @@
-# configurations for inference creation
-
-window-size = 256
-stride = 128
-nir-rgb-order = [3, 0, 1, 2]
-
-best-model = /projappl/project_2004205/rahmanan/saved_models/flair_unet/best.weights.pth
-
-model-config = /users/rahmanan/TreeMort/configs/flair_unet_bs8_cs256.txt
