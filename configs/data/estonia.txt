@@ -1,0 +1,9 @@
+# Configurations for dataset creation for Estonia
+
+include = base_config.txt
+
+data-folder = ${TREEMORT_DATA_PATH}/Estonia/RGBNIR/25cm
+
+hdf5-file = Estonia_RGBNIR_25cm.h5
+
+nir-rgb-order = [3, 0, 1, 2]

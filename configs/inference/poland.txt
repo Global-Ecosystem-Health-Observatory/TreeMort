@@ -1,0 +1,19 @@
+# Configurations for inference for Poland_RGBNIR_25cm
+
+include = base_config.txt
+
+best-model = best.weights.pth
+
+min-area = 1.0
+max-aspect-ratio = 3.0
+min-solidity = 0.85
+
+min-distance = 5
+dilation-radius = 1
+erosion-radius = 1
+blur-sigma = 1.0
+
+segment-threshold = 0.4
+centroid-threshold = 0.4
+
+tightness = 1.0

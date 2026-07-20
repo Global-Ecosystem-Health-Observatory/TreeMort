@@ -1,0 +1,9 @@
+# Configurations for dataset creation for Germany
+
+include = base_config.txt
+
+data-folder = ${TREEMORT_DATA_PATH}/Germany/RGBNIR/25cm
+
+hdf5-file = Germany_RGBNIR_25cm.h5
+
+nir-rgb-order = [3, 0, 1, 2]

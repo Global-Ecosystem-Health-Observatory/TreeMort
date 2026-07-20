@@ -1,0 +1,15 @@
+# flair_unet for cross-domain transfer learning
+# Start from Finland-trained weights, fine-tune on target domain
+
+include = base_config.txt
+
+model = flair_unet
+resume = False
+
+# Resume from Finland teacher checkpoint
+# Set TREEMORT_TEACHER_PATH to the Finland best.weights.pth before running
+resume-from = ${TREEMORT_TEACHER_PATH}
+
+# Freeze encoder for first 5 epochs, then unfreeze progressively
+freeze-epochs = 5
+keep-first-encoder-blocks = 1
