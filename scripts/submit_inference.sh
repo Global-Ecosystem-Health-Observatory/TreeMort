@@ -33,9 +33,14 @@ else
     exit 1
 fi
 
+# Strip variant suffixes (e.g. _tta) to get the base data type for paths and data config.
+BASE_DATA_TYPE="${DATA_TYPE%%_*}"
+
 # Set necessary environment variables for inference.
+# CONFIG_PATH uses the full DATA_TYPE so variant configs (e.g. finland_tta.txt) are respected.
+# DATA_CONFIG_PATH and data/output paths use BASE_DATA_TYPE (the underlying dataset).
 export CONFIG_PATH="$TREEMORT_REPO_PATH/configs/inference/${DATA_TYPE}.txt"
-export DATA_CONFIG_PATH="$TREEMORT_REPO_PATH/configs/data/${DATA_TYPE}.txt"
+export DATA_CONFIG_PATH="$TREEMORT_REPO_PATH/configs/data/${BASE_DATA_TYPE}.txt"
 export MODEL_CONFIG_PATH="$TREEMORT_REPO_PATH/configs/model/${MODEL_TYPE}.txt"
 
 export PREDICTIONS_FOLDER="Predictions_${MODEL_TYPE}"
@@ -43,14 +48,14 @@ if [[ "$@" == *"--post-process"* ]]; then
     PREDICTIONS_FOLDER="${PREDICTIONS_FOLDER}_post_process"
 fi
 
-if [ "$DATA_TYPE" == "finland" ]; then
+if [ "$BASE_DATA_TYPE" == "finland" ]; then
     export DATA_PATH="$TREEMORT_DATA_PATH/Finland/RGBNIR/25cm"
     export OUTPUT_PATH="$TREEMORT_DATA_PATH/Finland/$PREDICTIONS_FOLDER"
-elif [ "$DATA_TYPE" == "poland" ]; then
+elif [ "$BASE_DATA_TYPE" == "poland" ]; then
     export DATA_PATH="$TREEMORT_DATA_PATH/Poland/RGBNIR/25cm"
     export OUTPUT_PATH="$TREEMORT_DATA_PATH/Poland/$PREDICTIONS_FOLDER"
 else
-    echo "Error: Unsupported DATA_TYPE '$DATA_TYPE'."
+    echo "Error: Unsupported DATA_TYPE '$DATA_TYPE' (base: '$BASE_DATA_TYPE')."
     exit 1
 fi
 
