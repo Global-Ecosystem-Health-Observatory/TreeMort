@@ -13,7 +13,7 @@ dilation-radius = 1
 erosion-radius = 1
 blur-sigma = 1.0
 
-segment-threshold = 0.35
-centroid-threshold = 0.35
+segment-threshold = 0.4
+centroid-threshold = 0.4
 
 tightness = 1.0
