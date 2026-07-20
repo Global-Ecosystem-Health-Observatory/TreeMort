@@ -1,53 +1,354 @@
 import os
-import ast  # To parse lists from config files
-import logging
+from pathlib import Path
 import configargparse
+from distutils.util import strtobool
+
+from treemort.utils.logger import get_logger, log_and_raise
 
 
-def setup(config_file_path=None):
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-    
-    if config_file_path:
-        if not os.path.exists(config_file_path):
-            logging.error(f"Config file not found at: {config_file_path}")
-            raise FileNotFoundError(f"Config file not found at: {config_file_path}")
-        logging.info(f"Using config file: {config_file_path}")
-    
-    parser = configargparse.ArgParser(default_config_files=[config_file_path] if config_file_path else [])
-    
+def expand_path(path):
+    return os.path.expandvars(path)
+
+
+def validate_path(path: str, is_dir: bool = False) -> bool:
+    logger = get_logger()
+
+    if not os.path.exists(path):
+        log_and_raise(logger, FileNotFoundError(f"Path does not exist: {path}"))
+    if is_dir and not os.path.isdir(path):
+        log_and_raise(logger, NotADirectoryError(f"Expected directory but got: {path}"))
+    return True
+
+
+def load_include_files(config_file_path: str, data_config: str = None, model_config: str = None) -> list[str]:
+    logger = get_logger()
+
+    include_files = []
+    processed_files = set()
+
+    def process_file(file_path):
+        if file_path in processed_files:
+            return
+        processed_files.add(file_path)
+
+        with open(file_path, "r") as f:
+            for line in f:
+                if line.strip().startswith("include"):
+                    _, include_val = line.split("=", 1)
+                    include_val = include_val.strip()
+
+                    if data_config is not None:
+                        include_val = include_val.replace("{data_config}", data_config)
+
+                    if model_config is not None:
+                        include_val = include_val.replace("{model_config}", model_config)
+
+                    if os.path.sep not in include_val:
+                        include_path = os.path.join(os.path.dirname(file_path), include_val)
+                    else:
+                        include_path = include_val
+
+                    if os.path.exists(include_path):
+                        if include_path not in include_files:
+                            process_file(include_path)
+                            logger.info(f"Including config file: {include_path}")
+                            include_files.append(include_path)
+                    else:
+                        logger.warning(f"Include file not found: {include_path}")
+
+    process_file(config_file_path)
+
+    if data_config is None:
+        include_path = os.path.join(os.path.dirname(os.path.dirname(config_file_path)), "data", "base_config.txt")
+        if include_path not in include_files:
+            include_files.append(include_path)
+
+    if model_config is None:
+        include_path = os.path.join(os.path.dirname(os.path.dirname(config_file_path)), "model", "base_config.txt")
+        if include_path not in include_files:
+            include_files.append(include_path)
+
+    return include_files
+
+
+def build_parser(config_files):
+    parser = configargparse.ArgParser(default_config_files=config_files)
+
     model_group = parser.add_argument_group('Model')
-    model_group.add( "-m", "--model",         type=str,   required=True,        help="neural network model name for training")
-    model_group.add( "-b", "--backbone",      type=str,   default=None,         help="model backbone")
-    model_group.add("-mw", "--model-weights", type=str,   default="latest",     help="weights file for training continuation")
-    model_group.add("-lr", "--learning-rate", type=float, default=2e-4,         help="learning rate for optimizer")
-    model_group.add("-av", "--activation",    type=str,   default="sigmoid",    help="activation function")
-    model_group.add("-ls", "--loss",          type=str,   default="hybrid",     help="loss function for the network")
-    model_group.add("-th", "--threshold",     type=float, default=0.5,          help="threshold for classifier")
-    model_group.add("-cw", "--class-weights", type=float, nargs="+", default=[0.5, 0.5], help="class weights for imbalanced classes")
+    model_group.add("--model", type=str, required=True, help="neural network model name for training")
+    model_group.add("--run-id", type=str, default="", help="Unique identifier for the training run; used to isolate checkpoints.")
+    model_group.add("--backbone", type=str, default=None, help="model backbone")
+    model_group.add("--model-weights", type=str, default="latest", help="weights file for training continuation")
+    model_group.add("--best-model", type=str, default='best.weights.pth', help="Path to the file containing the best model weights.")
+    model_group.add("--learning-rate", type=float, default=2e-4, help="learning rate for optimizer")
+    model_group.add("--activation", type=str, default="sigmoid", help="activation function")
+    model_group.add("--loss", type=str, default="hybrid", help="loss function for the network")
+    # --- Loss component weights ---
+    model_group.add("--centroid-weight", type=float, default=3.0, help="Weight for centroid MSE term in hybrid loss.")
+    model_group.add("--centroid-pos-weight", type=float, default=10.0, help="Positive-class weight for centroid MSE (upweights sparse positive pixels).")
+    # --- Hybrid (SDT+boundary) loss stabilizers ---
+    model_group.add(
+        "--hybrid-use-tanh",
+        type=lambda x: bool(strtobool(str(x))),
+        default=True,
+        help="If true, apply tanh to hybrid predictions inside the hybrid SDT+boundary loss.",
+    )
+    model_group.add(
+        "--hybrid-bg-weight",
+        type=float,
+        default=0.10,
+        help="Weight for background pixels (target==0) in the hybrid SDT loss term.",
+    )
+    model_group.add(
+        "--hybrid-interior-weight",
+        type=float,
+        default=3.00,
+        help="Weight for interior pixels (target>0) in the hybrid SDT loss term.",
+    )
+    model_group.add(
+        "--hybrid-boundary-weight",
+        type=float,
+        default=1.00,
+        help="Weight multiplier for boundary pixels (target==-1) in the hybrid boundary loss term.",
+    )
+    model_group.add("--segment-threshold", type=float, default=0.5, help="Threshold for binary classification during inference (default: 0.5).")
+    model_group.add("--centroid-threshold", type=float, default=0.5, help="Threshold for filtering peaks based on the centroid map.")
+    model_group.add("--hybrid-threshold", type=float, default=-0.5, help="Threshold for filtering contours based on the hybrid map.")
+    model_group.add("--class-weights", type=float, nargs="+", default=[0.5, 0.5], help="class weights for imbalanced classes")
 
     train_group = parser.add_argument_group('Training')
-    train_group.add( "-e", "--epochs",           type=int,   required=True, help="number of epochs for training")
-    train_group.add("-ib", "--train-batch-size", type=int,   required=True, help="batch size for training")
-    train_group.add("-vb", "--val-batch-size",   type=int,   required=True, help="batch size for validation")
-    train_group.add("-ob", "--test-batch-size",  type=int,   required=True, help="batch size for testing")
-    train_group.add("-is", "--train-crop-size",  type=int,   required=True, help="crop size for training")
-    train_group.add("-vs", "--val-crop-size",    type=int,   required=True, help="crop size for validation")
-    train_group.add("-os", "--test-crop-size",   type=int,   required=True, help="crop size for testing")
-    train_group.add("-vz", "--val-size",         type=float, default=0.2,   help="split for validation set")
-    train_group.add("-tz", "--test-size",        type=float, default=0.1,   help="split for test set")
-    train_group.add("-rs", "--resume",           action="store_true",       help="resume training using stored model weights")
+    train_group.add("--epochs", type=int, required=True, help="number of epochs for training")
+    train_group.add("--train-batch-size", type=int, required=True, help="batch size for training")
+    train_group.add("--val-batch-size", type=int, required=True, help="batch size for validation")
+    train_group.add("--test-batch-size", type=int, required=True, help="batch size for testing")
+    train_group.add("--train-crop-size", type=int, required=True, help="crop size for training")
+    train_group.add("--val-crop-size", type=int, required=True, help="crop size for validation")
+    train_group.add("--test-crop-size", type=int, required=True, help="crop size for testing")
+    train_group.add("--val-size", type=float, default=0.2, help="split for validation set")
+    train_group.add("--test-size", type=float, default=0.1, help="split for test set")
+    train_group.add("--resume", action="store_true", help="resume training using stored model weights")
+    train_group.add("--freeze-epochs", type=int, default=0, help="Number of epochs to keep encoder blocks frozen during transfer learning (default: 0 disables freezing).")
+    train_group.add("--keep-first-encoder-blocks", type=int, default=1, help="Number of initial encoder blocks to keep trainable during freeze phase.")
+    train_group.add("--resume-from", type=str, default=None, help="Optional checkpoint path to initialize weights from before training.")
 
     data_group = parser.add_argument_group('Data')
-    data_group.add( "-d", "--data-folder",     type=str, required=True, help="directory with aerial image and label data")
-    data_group.add("-hf", "--hdf5-file",       type=str, required=True, help="hdf5 file containing data")
-    data_group.add("-ic", "--input-channels",  type=int, required=True, help="number of input channels")
-    data_group.add("-oc", "--output-channels", type=int, required=True, help="number of output channels")
-    
+    data_group.add("--data-folder",     type=str, required=True, help="directory with aerial image and label data")
+    data_group.add("--hdf5-file",       type=str, required=True, help="hdf5 file containing data")
+    data_group.add("--window-size",     type=int, default=256,   help="Size of the sliding window for inference (default: 256 pixels).")
+    data_group.add("--stride",          type=int, default=128,   help="Stride length for sliding window during inference (default: 128 pixels).")
+    data_group.add("--input-channels",  type=int, required=True, help="number of input channels")
+    data_group.add("--output-channels", type=int, required=True, help="number of output channels")
+    data_group.add("--nir-rgb-order",   type=int, nargs='+', default=[3, 0, 1, 2], help="Order of NIR, Red, Green, and Blue channels in the input imagery.")
+    data_group.add("--normalize-imagewise",   action="store_true", help="normalize imagewise")
+    data_group.add("--normalize-channelwise", action="store_true", help="normalize channelwise")
+    data_group.add("--test-only", action="store_true", default=False, help="run evaluation on entire data as test set")
+    data_group.add("--augment-brightness-jitter", type=float, default=0.0, help="Max fractional brightness jitter (0 disables).")
+    data_group.add("--augment-contrast-jitter", type=float, default=0.0, help="Max fractional contrast jitter (0 disables).")
+    data_group.add("--augment-gamma-range", type=float, nargs=2, default=[1.0, 1.0], help="Gamma range [min max] for power-law augmentation.")
+    data_group.add("--augment-hue-jitter", type=float, default=0.0, help="Hue jitter magnitude applied to RGB channels.")
+    data_group.add("--augment-saturation-jitter", type=float, default=0.0, help="Fractional saturation jitter applied to RGB channels.")
+    data_group.add("--augment-noise-range", type=float, nargs=2, default=[1.0, 1.0], help="Multiplicative noise range [min max].")
+    data_group.add("--augment-scale-range", type=float, nargs=2, default=[1.0, 1.0], help="Scale jitter range [min max] for downsampling/upsampling.")
+    data_group.add("--augment-scale-prob", type=float, default=0.0, help="Probability of applying scale jitter.")
+    data_group.add("--augment-blur-prob", type=float, default=0.0, help="Probability of applying Gaussian blur.")
+    data_group.add("--num-workers", type=int, default=4, help="Number of DataLoader workers to use.")
+
+    inference_group = parser.add_argument_group('Inference')
+    inference_group.add("--min-area", type=float, default=1.0, help="Minimum area (in pixels) for retaining a detected region.")
+    inference_group.add("--max-aspect-ratio", type=float, default=3.0, help="Maximum allowable aspect ratio for detected regions.")
+    inference_group.add("--min-solidity", type=float, default=0.85, help="Minimum solidity for retaining a detected region (solidity = area/convex hull).")
+    inference_group.add("--min-distance", type=int, default=5, help="Minimum distance between peaks for watershed segmentation.")
+    inference_group.add("--dilation-radius", type=int, default=0, help="Radius of the structuring element for dilating binary masks.")
+    inference_group.add("--erosion-radius", type=int, default=0, help="Radius of the structuring element for eroding binary masks.")
+    inference_group.add("--blur-sigma", type=float, default=1.0, help="Standard deviation for Gaussian blur applied to prediction maps.")
+    # --- Additional post-processing controls for instance separation ---
+    inference_group.add(
+        "--opening-radius",
+        type=int,
+        default=1,
+        help="Radius (in pixels) for binary opening used to break thin bridges between adjacent circular crowns.",
+    )
+    inference_group.add(
+        "--holes-area",
+        type=int,
+        default=32,
+        help="Maximum hole area (in pixels) to fill inside segmentation masks; helps stabilize circular crowns.",
+    )
+    inference_group.add(
+        "--dist-peak-rel",
+        type=float,
+        default=0.35,
+        help="Relative threshold (fraction of max distance) for fallback peak detection on distance transform.",
+    )
+
+    # --- Centroid marker extraction controls ---
+    inference_group.add(
+        "--centroid-peak-percentile",
+        type=float,
+        default=95.0,
+        help=(
+            "Percentile (within seg-mask) used as an adaptive threshold for centroid peak detection. "
+            "Example: 95 keeps peaks above the 95th percentile of centroid values inside the mask."
+        ),
+    )
+    inference_group.add(
+        "--use-centroid-abs-floor",
+        type=lambda x: bool(strtobool(str(x))),
+        default=False,
+        help=(
+            "If true, also enforce centroid-threshold as an absolute floor (thr = max(percentile_thr, centroid_threshold)). "
+            "Disabled by default because it can suppress peaks when centroid logits are not calibrated."
+        ),
+    )
+
+    # --- Optional hybrid refinement controls (post-watershed) ---
+    inference_group.add(
+        "--use-hybrid-refine",
+        type=lambda x: bool(strtobool(str(x))),
+        default=False,
+        help=(
+            "Enable optional post-watershed hybrid refinement (boundary cutting + relabel). "
+            "Disabled by default; enable only when hybrid head is reliable for the domain."
+        ),
+    )
+    inference_group.add(
+        "--hybrid-min-keep-frac",
+        type=float,
+        default=0.40,
+        help=(
+            "Minimum fraction of instance pixels that must remain after hybrid boundary cutting; "
+            "otherwise hybrid refinement is skipped for that tile."
+        ),
+    )
+    inference_group.add("--tightness", type=float, default=0.1, help="Tightness parameter for ellipse fitting.")
+    # Default to False to keep detailed contours unless explicitly enabled
+    inference_group.add(
+        "--fit-ellipses",
+        type=lambda x: bool(strtobool(str(x))),
+        default=False,
+        help="Fit ellipses during inference post-processing.",
+    )
+    inference_group.add(
+        "--hybrid-boundary-threshold",
+        type=float,
+        default=-0.5,
+        help=(
+            "Hybrid boundary cutter threshold. Pixels with hybrid < threshold are treated as boundary-like and removed "
+            "from the segmentation mask (GT: boundary=-1, background=0, inside>0). Set to -1.0 to effectively disable "
+            "boundary cutting."
+        ),
+    )
+    inference_group.add(
+        "--hybrid-inside-threshold",
+        type=float,
+        default=None,
+        help=(
+            "Optional hybrid interior threshold. If set, keeps only pixels with hybrid > threshold (shrinks mask to stable "
+            "crown cores). Disabled by default."
+        ),
+    )
+
+    # --- Shape regularisation (post-watershed) ---
+    inference_group.add(
+        "--shape-close-radius",
+        type=int,
+        default=2,
+        help="Radius (pixels) for morphological closing applied per-instance after watershed.",
+    )
+    inference_group.add(
+        "--shape-open-radius",
+        type=int,
+        default=1,
+        help="Radius (pixels) for morphological opening applied per-instance after watershed.",
+    )
+
+    # --- Shape filtering (instance priors) ---
+    inference_group.add(
+        "--shape-min-area",
+        type=int,
+        default=30,
+        help="Minimum instance area (pixels) to keep after watershed.",
+    )
+    inference_group.add(
+        "--shape-max-area",
+        type=lambda x: None if str(x).lower() in {"none", "null"} else int(x),
+        default=None,
+        help="Maximum instance area (pixels) to keep after watershed; set to none/null to disable.",
+    )
+    inference_group.add(
+        "--shape-min-solidity",
+        type=float,
+        default=0.80,
+        help="Minimum solidity (area / convex area) for an instance to be kept.",
+    )
+    inference_group.add(
+        "--shape-min-circularity",
+        type=float,
+        default=0.40,
+        help="Minimum circularity (4πA/P²) for an instance to be kept.",
+    )
+    inference_group.add(
+        "--shape-max-eccentricity",
+        type=float,
+        default=0.95,
+        help="Maximum eccentricity for an instance to be kept (0=circle, 1=line).",
+    )
+    inference_group.add(
+        "--tta",
+        action="store_true",
+        default=False,
+        help="Enable test-time augmentation: average predictions over 4 orientations (orig, H-flip, V-flip, 180-rot).",
+    )
+
     output_group = parser.add_argument_group('Output')
-    output_group.add("-o", "--output-dir", type=str, default="output", help="directory to save output files")
-    
-    conf, _ = parser.parse_known_args()
-    
-    logging.info("Configuration successfully loaded.")
-    
+    output_group.add("--output-dir", type=str, default="./output", help="directory to save output files")
+
+    return parser
+
+
+def setup(config_file_path, model_config=None, data_config=None, cli_args=None):
+    logger = get_logger()
+
+    validate_path(config_file_path)
+
+    logger.info(f"Using config file: {config_file_path}")
+
+    include_files = load_include_files(config_file_path, model_config=model_config, data_config=data_config)
+    config_files = include_files + [config_file_path]
+
+    parser = build_parser(config_files)
+
+    # If cli_args is None, use real sys.argv; otherwise use the provided list
+    if cli_args is None:
+        conf, _ = parser.parse_known_args()
+    else:
+        conf, _ = parser.parse_known_args(args=cli_args)
+
+    conf.data_folder = expand_path(conf.data_folder)
+    out_dir = expand_path(conf.output_dir)
+    # Fallback if the env var was not resolved or empty
+    if (not out_dir) or ("$" in out_dir):
+        env_out = os.environ.get("TREEMORT_OUTPUT_DIR", "")
+        out_dir = env_out or "./output"
+    conf.output_dir = os.path.abspath(out_dir)
+    resume_path = getattr(conf, "resume_from", None)
+    if resume_path:
+        conf.resume_from = os.path.abspath(expand_path(resume_path))
+
+    run_id = (getattr(conf, "run_id", "") or "").strip()
+    if not run_id:
+        hdf5_name = getattr(conf, "hdf5_file", None)
+        if hdf5_name:
+            run_id = Path(hdf5_name).stem
+        else:
+            run_id = "default"
+    conf.run_id = run_id.replace(" ", "_")
+    base_run_dir = os.path.join(conf.output_dir, conf.model)
+    if conf.run_id:
+        base_run_dir = os.path.join(base_run_dir, conf.run_id)
+    conf.run_dir = base_run_dir
+
+    conf.min_area_pixels = conf.min_area / 0.0625
+
+    logger.info("Configuration successfully loaded.")
     return conf

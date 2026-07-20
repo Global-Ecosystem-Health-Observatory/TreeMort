@@ -1,4 +1,3 @@
-import logging
 import segmentation_models_pytorch as smp
 
 from transformers import (
@@ -20,13 +19,9 @@ from treemort.modeling.network.custom_models import (
     CustomBeit,
 )
 from treemort.modeling.network.hcfnet.HCFnet import HCFnet
+from treemort.utils.logger import get_logger
 
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def configure_model(conf, id2label):
@@ -40,6 +35,7 @@ def configure_model(conf, id2label):
         "detr": lambda: configure_detr(conf, id2label),
         "beit": lambda: configure_beit(conf, id2label),
         "flair_unet": lambda: configure_flair_unet(conf),
+        "flair_unet_sdt": lambda: configure_flair_unet(conf),
         "hcfnet": lambda: configure_hcfnet(conf),
     }
 
@@ -114,15 +110,14 @@ def configure_flair_unet(conf):
         filename=filename,
         architecture="unet",
         encoder="resnet34",
-        n_channels=4,
+        n_channels=conf.input_channels,
         n_classes=15,
         use_metadata=False,
     ).get_model()
 
     model = CombinedModel(
         pretrained_model=pretrained_model,
-        n_classes=1,
-        output_size=conf.test_crop_size,
+        n_classes=conf.output_channels,
     )
     return model
 

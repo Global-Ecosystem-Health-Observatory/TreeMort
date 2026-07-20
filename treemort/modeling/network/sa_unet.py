@@ -1,5 +1,5 @@
 # Adapted from https://github.com/jvanvugt/pytorch-unet replacing the convolutions in the downwards path with
-# self attention layers
+# self attention layers (Source. https://github.com/aval-e/DeepLab4Avalanches)
 
 import torch
 from torch import nn

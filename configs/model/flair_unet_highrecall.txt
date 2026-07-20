@@ -1,0 +1,13 @@
+# flair_unet with upweighted centroid loss to improve recall
+# centroid_weight 3.0→5.0, centroid_pos_weight 10.0→20.0
+
+include = base_config.txt
+
+model = flair_unet
+
+resume = False
+
+run-id = high_recall
+
+centroid-weight = 5.0
+centroid-pos-weight = 20.0

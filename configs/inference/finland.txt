@@ -1,0 +1,19 @@
+# Configurations for inference creation for Finland_RGBNIR_25cm
+
+include = base_config.txt
+
+best-model = best.weights.pth
+
+min-area = 1.0            # Smaller canopies typical of boreal species in sq. m
+max-aspect-ratio = 3.0    # Compact shapes expected for Finnish tree canopies
+min-solidity = 0.85       # Focus on dense, contiguous canopies
+
+min-distance = 5
+dilation-radius = 1
+erosion-radius = 1
+blur-sigma = 1.0
+
+segment-threshold = 0.4
+centroid-threshold = 0.4
+
+tightness = 1.0

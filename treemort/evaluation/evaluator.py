@@ -1,31 +1,47 @@
-import logging
+import torch
 
-from treemort.utils.iou import IOUCallback
+from treemort.training.output_processing import process_model_output
 
+from treemort.utils.logger import get_logger
+from treemort.utils.metrics import log_epoch_metrics
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-)
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
-def evaluator(model, dataset, num_samples, batch_size, threshold, model_name):
-    iou_callback = IOUCallback(
-        model=model,
-        dataset=dataset,
-        num_samples=num_samples,
-        batch_size=batch_size,
-        threshold=threshold,
-        model_name=model_name,
-    )
+def evaluator(model, dataloader, num_samples, metrics, conf):
+    try:
+        logger.info("Starting evaluation...")
+        model.eval()
+        device = next(model.parameters()).device
 
-    iou_results = iou_callback.evaluate()
+        all_batch_metrics = []
 
-    logger.info(f"Mean IOU Pixels: {iou_results['mean_iou_pixels']:.3f}")
-    logger.info(f"Mean IOU Trees: {iou_results['mean_iou_trees']:.3f}")
-    logger.info(f"Mean IOU: {iou_results['mean_iou']:.3f}")
-    logger.info(f"Mean Balanced IOU: {iou_results['mean_balanced_iou']:.3f}")
-    logger.info(f"Mean Dice Score: {iou_results['mean_dice_score']:.3f}")
-    logger.info(f"Mean Adjusted Dice Score: {iou_results['mean_adjusted_dice_score']:.3f}")
-    logger.info(f"Mean MCC: {iou_results['mean_mcc']:.3f}")
+        with torch.no_grad():
+            for batch_idx, (images, labels) in enumerate(dataloader):
+                images, labels = images.to(device), labels.to(device)
+
+                buffer_mask = labels[:, 3, :, :].unsqueeze(1)  # [B, 1, H, W]
+                _, _, h, w = buffer_mask.shape
+
+                logits = process_model_output(model, images, conf.model)
+
+                target_mask = labels[:, 0, :, :].unsqueeze(1)  # [B, 1, h, w]
+                target_centroid = labels[:, 1, :, :].unsqueeze(1)  # [B, 1, h, w]
+                target_hybrid = labels[:, 2, :, :].unsqueeze(1)  # [B, 1, h, w]
+                targets = torch.cat([
+                    target_mask,        # Channel 0
+                    target_centroid,    # Channel 1
+                    target_hybrid,      # Channel 2
+                    buffer_mask         # Channel 3
+                ], dim=1)  # [B, 4, h, w]
+
+                batch_metrics = metrics(logits, targets)
+                all_batch_metrics.append(batch_metrics)
+
+        log_epoch_metrics(all_batch_metrics, phase="Test", confidence=0.95)
+
+        return model
+
+    except Exception as e:
+        logger.error(f"Error during evaluation: {e}")
+        raise

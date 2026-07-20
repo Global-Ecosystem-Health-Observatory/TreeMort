@@ -1,24 +1,80 @@
 #!/bin/bash
-#SBATCH --job-name=treemort-creator                # Job name
-#SBATCH --account=project_2004205                  # Project account
-#SBATCH --output=output/stdout/%A_%a.out           # Output log
-#SBATCH --error=output/stderr/%A_%a.err            # Error log
-#SBATCH --ntasks=1                                 # Number of tasks (1 process)
-#SBATCH --cpus-per-task=6                          # Number of CPU cores per task
-#SBATCH --time=05:00:00                            # Time limit (hh:mm:ss)
-#SBATCH --partition=small                          # Partition to submit to
-#SBATCH --mem-per-cpu=6000                         # Memory per CPU in MB (6GB per CPU)
 
-# Usage:
-# export TREEMORT_VENV_PATH="/custom/path/to/venv"
-# sbatch --export=ALL,CONFIG_PATH="/custom/path/to/config" run_creator.sh
+# Set default HPC type to "puhti"
+HPC_TYPE=${HPC_TYPE:-"puhti"}
 
-MODULE_NAME="pytorch/2.3"
+# Set HPC-specific variables
+if [ "$HPC_TYPE" == "lumi" ]; then
+    PROJECT_NAME="project_462001070"
+    PARTITION_NAME="small"
+else
+    PROJECT_NAME="project_2004205"
+    PARTITION_NAME="small"
+fi
 
-TREEMORT_VENV_PATH="${TREEMORT_VENV_PATH:-/projappl/project_2004205/rahmanan/venv}"
+# Create SBATCH script
+SBATCH_SCRIPT=$(mktemp)
 
-echo "Loading module: $MODULE_NAME"
-module load $MODULE_NAME
+if [ "$HPC_TYPE" == "lumi" ]; then
+
+    cat <<EOT > $SBATCH_SCRIPT
+#!/bin/bash
+#SBATCH --job-name=treemort-creator
+#SBATCH --account=$PROJECT_NAME
+#SBATCH --output=output/stdout/%A_%a.out
+#SBATCH --error=output/stderr/%A_%a.err
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=6
+#SBATCH --time=05:00:00
+#SBATCH --partition=$PARTITION_NAME
+#SBATCH --mem-per-cpu=6000
+
+module purge
+module use /appl/local/laifs/modules
+module load lumi-aif-singularity-bindings
+
+SIF="/appl/local/laifs/containers/lumi-multitorch-latest.sif"
+
+if [ -z "$DATA_CONFIG_PATH" ] || [ ! -f "$DATA_CONFIG_PATH" ]; then
+    echo "[ERROR] Data config file is missing or invalid."
+    exit 1
+fi
+
+export PYTHONPATH="$TREEMORT_REPO_PATH"
+export PYTHONNOUSERSITE=1
+
+echo "[INFO] Starting creator..."
+srun singularity exec "\${SIF}" \\
+    "$TREEMORT_VENV_PATH/bin/python3" \\
+    -m dataset.creator \\
+    "$DATA_CONFIG_PATH" \\
+    --num-workers "\${SLURM_CPUS_PER_TASK}"
+
+EXIT_STATUS=\$?
+if [ \$EXIT_STATUS -ne 0 ]; then
+    echo "[ERROR] Job failed with exit status \$EXIT_STATUS"
+else
+    echo "[INFO] Job completed successfully"
+fi
+
+exit \$EXIT_STATUS
+EOT
+
+else
+    # Puhti / default: module + venv approach
+    cat <<EOT > $SBATCH_SCRIPT
+#!/bin/bash
+#SBATCH --job-name=treemort-creator
+#SBATCH --account=$PROJECT_NAME
+#SBATCH --output=output/stdout/%A_%a.out
+#SBATCH --error=output/stderr/%A_%a.err
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=6
+#SBATCH --time=05:00:00
+#SBATCH --partition=$PARTITION_NAME
+#SBATCH --mem-per-cpu=6000
+
+module load pytorch/2.5
 
 if [ -d "$TREEMORT_VENV_PATH" ]; then
     echo "[INFO] Activating virtual environment at $TREEMORT_VENV_PATH"
@@ -28,29 +84,30 @@ else
     exit 1
 fi
 
-if [ -z "$CONFIG_PATH" ]; then
-    echo "[ERROR] CONFIG_PATH variable is not set. Please provide a config path using --export."
+if [ -z "$DATA_CONFIG_PATH" ] || [ ! -f "$DATA_CONFIG_PATH" ]; then
+    echo "[ERROR] Data config file is missing or invalid."
     exit 1
 fi
 
-if [ ! -f "$CONFIG_PATH" ]; then
-    echo "[ERROR] Config file not found at $CONFIG_PATH"
-    exit 1
-fi
+export PYTHONPATH="$TREEMORT_REPO_PATH:\${PYTHONPATH:-}"
 
-echo "[INFO] Starting dataset creation with the following settings:"
-echo "       Config file: $CONFIG_PATH"
-echo "       CPUs per task: $SLURM_CPUS_PER_TASK"
-echo "       Memory per CPU: $SLURM_MEM_PER_CPU MB"
-echo "       Job time limit: $SLURM_TIMELIMIT"
+echo "[INFO] Starting creator..."
+srun python3 -m dataset.creator "$DATA_CONFIG_PATH" --num-workers \$SLURM_CPUS_PER_TASK
 
-srun python3 -m dataset.creator "$CONFIG_PATH" --num-workers "$SLURM_CPUS_PER_TASK"
-
-EXIT_STATUS=$?
-if [ $EXIT_STATUS -ne 0 ]; then
-    echo "[ERROR] Dataset creation failed with exit status $EXIT_STATUS"
+EXIT_STATUS=\$?
+if [ \$EXIT_STATUS -ne 0 ]; then
+    echo "[ERROR] Job failed with exit status \$EXIT_STATUS"
 else
-    echo "[INFO] Dataset creation completed successfully"
+    echo "[INFO] Job completed successfully"
 fi
 
-exit $EXIT_STATUS
+exit \$EXIT_STATUS
+EOT
+
+fi
+
+echo "Generated SBATCH script:"
+cat $SBATCH_SCRIPT
+
+# Submit SLURM Job
+sbatch --export=ALL $SBATCH_SCRIPT "$@"

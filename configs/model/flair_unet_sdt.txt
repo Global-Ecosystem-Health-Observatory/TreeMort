@@ -1,0 +1,11 @@
+# settings for TreeMort-3T-UNet (self attention unet with flair backbone)
+
+include = base_config.txt
+
+model = flair_unet_sdt
+
+resume = False
+
+run-id = sdt_v1
+
+output-channels = 3

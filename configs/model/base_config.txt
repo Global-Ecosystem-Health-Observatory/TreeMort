@@ -1,0 +1,43 @@
+# Common settings for all models
+
+include = {data_config}
+
+data-config = {data_config}
+
+# Output root; allow overriding via TREEMORT_OUTPUT_DIR env (set in submit scripts)
+output-dir = $TREEMORT_OUTPUT_DIR
+
+model = test
+
+run-id = ""
+
+train-crop-size = 256
+val-crop-size = 256
+test-crop-size = 256
+
+input-channels = 4
+output-channels = 3
+
+train-batch-size = 8
+val-batch-size = 8
+test-batch-size = 8
+
+epochs = 200
+
+class-weights = [0.1, 0.9]
+
+model-weights = best # available options [best, latest]
+
+learning-rate = 2e-4
+
+segment-threshold = 0.5
+
+loss = hybrid # available options [mse, hybrid]
+
+activation = sigmoid
+
+val-size = 0.2
+test-size = 0.1
+
+freeze-epochs = 0
+keep-first-encoder-blocks = 0
