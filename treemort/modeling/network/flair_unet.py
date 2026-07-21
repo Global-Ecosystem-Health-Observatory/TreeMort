@@ -220,4 +220,4 @@ class CombinedModel(nn.Module):
             mode="bilinear",
             align_corners=False
         )
-        return upsampled_output
+        return upsampled_output, encoder_features

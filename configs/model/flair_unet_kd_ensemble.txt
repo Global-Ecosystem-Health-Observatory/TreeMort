@@ -1,0 +1,8 @@
+include = base_config.txt
+model = flair_unet
+resume = False
+distillation-method = ensemble
+distillation-alpha = 0.5
+distillation-temperature = 2.0
+teacher-model-names = flair_unet
+teacher-model-file-names = ${TREEMORT_TEACHER_PATH}

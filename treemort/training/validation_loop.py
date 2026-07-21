@@ -18,7 +18,7 @@ def validate_one_epoch(model, criterion, metrics, val_loader, conf, device, is_m
         for batch_idx, (images, labels) in enumerate(val_progress_bar):
             images, labels = images.to(device), labels.to(device)
 
-            logits = process_model_output(model, images, conf.model)
+            logits, _ = process_model_output(model, images, conf.model)
             _, _, h, w = labels.shape
             preds, targets, buffer = prepare_pred_and_target(logits, labels, (h, w))
 

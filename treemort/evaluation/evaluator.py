@@ -23,7 +23,7 @@ def evaluator(model, dataloader, num_samples, metrics, conf):
                 buffer_mask = labels[:, 3, :, :].unsqueeze(1)  # [B, 1, H, W]
                 _, _, h, w = buffer_mask.shape
 
-                logits = process_model_output(model, images, conf.model)
+                logits, _ = process_model_output(model, images, conf.model)
 
                 target_mask = labels[:, 0, :, :].unsqueeze(1)  # [B, 1, h, w]
                 target_centroid = labels[:, 1, :, :].unsqueeze(1)  # [B, 1, h, w]

@@ -116,6 +116,17 @@ def build_parser(config_files):
     model_group.add("--hybrid-threshold", type=float, default=-0.5, help="Threshold for filtering contours based on the hybrid map.")
     model_group.add("--class-weights", type=float, nargs="+", default=[0.5, 0.5], help="class weights for imbalanced classes")
 
+    kd_group = parser.add_argument_group('KD')
+    kd_group.add("--teacher-model-names",      type=str,   default="flair_unet", help="teacher neural network model name for training")
+    kd_group.add("--teacher-model-file-names", type=str,   default=None,         help="weight file of pre-trained teacher model")
+    kd_group.add("--teacher-backbones",        type=str,   default=None,         help="backbone of pre-trained teacher model")
+    kd_group.add("--distillation-alpha",       type=float, default=0.5,          help="alpha value for blending distillation and standard loss")
+    kd_group.add("--distillation-temperature", type=float, default=2.0,          help="temperature for softening logits during distillation")
+    kd_group.add("--distillation-beta",        type=float, default=0.999,        help="beta value for decay factor for EMA update")
+    kd_group.add("--distillation-lambda",      type=float, default=0.2,          help="lambda value for weight for feature distillation loss")
+    kd_group.add("--distillation-method",      type=str,   default="basic",      help="distillation method to use (basic/self/feature/ensemble)")
+    kd_group.add("--distillation-sharpen-temperature", type=float, default=None, help="sharpening temperature applied to teacher probs during distillation")
+
     train_group = parser.add_argument_group('Training')
     train_group.add("--epochs", type=int, required=True, help="number of epochs for training")
     train_group.add("--train-batch-size", type=int, required=True, help="batch size for training")
@@ -352,6 +363,21 @@ def setup(config_file_path, model_config=None, data_config=None, cli_args=None):
     if conf.run_id:
         base_run_dir = os.path.join(base_run_dir, conf.run_id)
     conf.run_dir = base_run_dir
+
+    if hasattr(conf, 'teacher_model_names') and conf.teacher_model_names:
+        if isinstance(conf.teacher_model_names, str):
+            teacher_models = [x.strip() for x in conf.teacher_model_names.split(',')]
+            conf.teacher_model_names = teacher_models[0] if len(teacher_models) == 1 else teacher_models
+
+    if hasattr(conf, 'teacher_model_file_names') and conf.teacher_model_file_names:
+        if isinstance(conf.teacher_model_file_names, str):
+            teacher_model_file_names = [x.strip() for x in conf.teacher_model_file_names.split(',')]
+            conf.teacher_model_file_names = teacher_model_file_names[0] if len(teacher_model_file_names) == 1 else teacher_model_file_names
+
+    if hasattr(conf, 'teacher_backbones') and conf.teacher_backbones:
+        if isinstance(conf.teacher_backbones, str):
+            teacher_backbones = [x.strip() for x in conf.teacher_backbones.split(',')]
+            conf.teacher_backbones = teacher_backbones[0] if len(teacher_backbones) == 1 else teacher_backbones
 
     conf.min_area_pixels = conf.min_area / 0.0625
 

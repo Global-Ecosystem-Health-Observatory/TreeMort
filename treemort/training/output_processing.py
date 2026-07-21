@@ -11,22 +11,29 @@ def process_model_output(model, images, model_name):
         combined_logits = torch.max(query_logits, dim=1).values
         interpolated_logits = F.interpolate(combined_logits.unsqueeze(1), size=(h, w), mode='bilinear', align_corners=False)
         logits = interpolated_logits
-    
+        features = None
+
     elif model_name == "detr":
         outputs = model(images)
         query_logits = outputs['pred_masks']
         combined_logits = torch.max(query_logits, dim=1).values
         interpolated_logits = F.interpolate(combined_logits.unsqueeze(1), size=(h, w), mode='bilinear', align_corners=False)
         logits = interpolated_logits
+        features = None
 
     elif model_name in ["dinov2", "beit"]:
         outputs = model(images)
         logits = outputs.logits[:, 1:2, :, :]
-    
+        features = None
+
+    elif model_name == "flair_unet":
+        logits, features = model(images)
+
     else:
         logits = model(images)
-    
-    return logits
+        features = None
+
+    return logits, features
 
 
 def prepare_pred_and_target(logits, labels, target_hw):
