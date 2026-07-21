@@ -62,10 +62,6 @@ def run(conf, eval_only):
         if is_main:
             logger.info("Evaluation requested; forcing resume to load saved weights.")
         conf.resume = True
-    if eval_only and getattr(conf, "resume_from", None):
-        if is_main:
-            logger.info("Eval-only run: ignoring 'resume_from' override to use run_dir checkpoint.")
-        conf.resume_from = None
 
     if is_main:
         logger.info("Loading or resuming model...")

@@ -28,7 +28,7 @@ def resume_or_load(conf, id2label, n_batches, device, is_main=True):
         is_main=is_main,
     )
 
-    if conf.resume:
+    if conf.resume or getattr(conf, 'resume_from', None):
         load_checkpoint_if_available(model, conf, run_dir)
     else:
         logger.info("Training model from scratch.")
