@@ -172,7 +172,7 @@ def loss_fn_self(
     ) * (temperature ** 2)
 
     loss = alpha * loss_distillation + (1 - alpha) * loss_standard
-    return loss.detach(), student_logits.detach(), teacher_logits.detach()
+    return loss, student_logits.detach(), teacher_logits.detach()
 
 
 def loss_fn_feature(
@@ -255,6 +255,9 @@ def loss_fn_ensemble(
     **kwargs,
 ):
     student_logits, _ = process_model_output(student_model, images, model_name)
+
+    if isinstance(teacher_model_names, str):
+        teacher_model_names = [teacher_model_names] * len(teacher_models)
 
     teacher_predictions = []
     for teacher, teacher_name in zip(teacher_models, teacher_model_names):
