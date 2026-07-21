@@ -26,6 +26,9 @@ def _load_teacher(conf, id2label, device, model_name=None, model_file=None):
     if model_name is not None:
         teacher_conf.model = model_name
 
+    if model_file:
+        model_file = os.path.expandvars(model_file)
+
     teacher = configure_model(teacher_conf, id2label)
     teacher.to(device)
     teacher.load_state_dict(
