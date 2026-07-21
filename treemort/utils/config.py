@@ -333,7 +333,12 @@ def setup(config_file_path, model_config=None, data_config=None, cli_args=None):
     conf.output_dir = os.path.abspath(out_dir)
     resume_path = getattr(conf, "resume_from", None)
     if resume_path:
-        conf.resume_from = os.path.abspath(expand_path(resume_path))
+        expanded = expand_path(resume_path)
+        if "$" in expanded:
+            logger.warning(f"resume_from contains unresolved variable: {expanded!r} — ignoring.")
+            conf.resume_from = None
+        else:
+            conf.resume_from = os.path.abspath(expanded)
 
     run_id = (getattr(conf, "run_id", "") or "").strip()
     if not run_id:
