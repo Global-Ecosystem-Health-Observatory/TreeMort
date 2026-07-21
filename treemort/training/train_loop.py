@@ -370,7 +370,7 @@ def _train_one_epoch_kd(
         for key, value in batch_metrics.items():
             if key not in train_metrics:
                 train_metrics[key] = 0.0
-            train_metrics[key] += value.item()
+            train_metrics[key] += float(value)
 
         train_progress_bar.set_postfix({"Train Loss": train_loss / (batch_idx + 1)})
 
