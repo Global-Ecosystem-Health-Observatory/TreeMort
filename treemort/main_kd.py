@@ -1,6 +1,7 @@
 import os
 import copy
 import torch
+import torch.distributed as dist
 import argparse
 
 from treemort.data.loader import prepare_datasets
@@ -41,22 +42,39 @@ def _load_teacher(conf, id2label, device, model_name=None, model_file=None):
 
 
 def run(conf, eval_only):
+    local_rank = int(os.environ.get("LOCAL_RANK", 0))
+    rank       = int(os.environ.get("RANK", 0))
+    world_size = int(os.environ.get("WORLD_SIZE", 1))
+    is_distributed = world_size > 1
+    is_main = rank == 0
+
+    # ROCR_VISIBLE_DEVICES restricts each process to one GPU exposed as device 0
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+    if is_distributed:
+        dist.init_process_group(backend="nccl", init_method="env://", device_id=device)
+        torch.cuda.set_device(0)
+    if is_main:
+        logger.info(f"Using device: {device}  |  world_size={world_size}")
+
     assert os.path.exists(conf.data_folder), (
         f"[ERROR] Data folder {conf.data_folder} does not exist."
     )
 
-    os.makedirs(conf.output_dir, exist_ok=True)
+    if is_main:
+        os.makedirs(conf.output_dir, exist_ok=True)
     run_dir = getattr(conf, "run_dir", os.path.join(conf.output_dir, conf.model))
-    os.makedirs(run_dir, exist_ok=True)
-    logger.info(f"Run directory: {run_dir}")
+    if is_main:
+        os.makedirs(run_dir, exist_ok=True)
+        logger.info(f"Run directory: {run_dir}")
 
-    # Set default distillation method if not provided
+    if is_distributed:
+        dist.barrier()
+
     if not hasattr(conf, 'distillation_method') or not conf.distillation_method:
         conf.distillation_method = 'basic'
-    logger.info(f"Distillation method: {conf.distillation_method}")
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    logger.info(f"Using device: {device}")
+    if is_main:
+        logger.info(f"Distillation method: {conf.distillation_method}")
 
     id2label = {0: "alive", 1: "dead"}
 
@@ -64,96 +82,96 @@ def run(conf, eval_only):
         conf.resume = True
         conf.best_model = f"best.weights.{conf.distillation_method}.pth"
 
-    logger.info("Preparing datasets...")
-    train_loader, val_loader, test_loader = prepare_datasets(conf)
+    if is_main:
+        logger.info("Preparing datasets...")
+    train_loader, val_loader, test_loader = prepare_datasets(conf, rank=rank, world_size=world_size)
     train_len = len(train_loader) if train_loader is not None else 0
-    val_len = len(val_loader) if val_loader is not None else 0
-    test_len = len(test_loader) if test_loader is not None else 0
-    logger.info(f"Datasets prepared: Train({train_len}), Val({val_len}), Test({test_len})")
+    val_len   = len(val_loader)   if val_loader   is not None else 0
+    test_len  = len(test_loader)  if test_loader  is not None else 0
+    if is_main:
+        logger.info(f"Datasets prepared: Train({train_len}), Val({val_len}), Test({test_len})")
 
-    # Load student model via resume_or_load
-    logger.info("Loading student model...")
+    if is_main:
+        logger.info("Loading student model...")
     num_steps = train_len if train_len > 0 else test_len
     student_model, optimizer, scheduler, criterion, metrics, callbacks = resume_or_load(
-        conf, id2label, num_steps, device
+        conf, id2label, num_steps, device, is_main=is_main
     )
-    logger.info("Student model loaded.")
+    if is_main:
+        logger.info("Student model loaded.")
 
     if eval_only:
         if test_loader is None or test_len == 0:
             raise RuntimeError("Evaluation requested but no test_loader is available.")
-        logger.info("Evaluation-only mode started.")
+        if is_main:
+            logger.info("Evaluation-only mode started.")
         evaluator(student_model, test_loader, test_len, metrics, conf)
-        logger.info("Evaluation completed.")
+        if is_main:
+            logger.info("Evaluation completed.")
+        if is_distributed:
+            dist.destroy_process_group()
         return
 
-    # Load teacher model(s)
-    teacher_model_names = getattr(conf, 'teacher_model_names', conf.model)
+    # Load teacher model(s) — not DDP-wrapped (frozen, inference-only)
+    teacher_model_names     = getattr(conf, 'teacher_model_names', conf.model)
     teacher_model_file_names = getattr(conf, 'teacher_model_file_names', None)
 
     if teacher_model_file_names is None:
         raise ValueError("--teacher-model-file-names must be set for KD training.")
 
-    logger.info("Loading teacher model(s)...")
+    if is_main:
+        logger.info("Loading teacher model(s)...")
     if conf.distillation_method == 'ensemble':
-        # Multiple teachers
-        if isinstance(teacher_model_names, list):
-            names = teacher_model_names
-        else:
-            names = [teacher_model_names]
-        if isinstance(teacher_model_file_names, list):
-            files = teacher_model_file_names
-        else:
-            files = [teacher_model_file_names]
+        names = teacher_model_names     if isinstance(teacher_model_names, list)      else [teacher_model_names]
+        files = teacher_model_file_names if isinstance(teacher_model_file_names, list) else [teacher_model_file_names]
         teacher_model = [
             _load_teacher(conf, id2label, device, model_name=n, model_file=f)
             for n, f in zip(names, files)
         ]
-        logger.info(f"Loaded {len(teacher_model)} teacher model(s) for ensemble distillation.")
+        if is_main:
+            logger.info(f"Loaded {len(teacher_model)} teacher model(s) for ensemble distillation.")
     else:
-        # Single teacher
-        t_name = teacher_model_names if isinstance(teacher_model_names, str) else teacher_model_names[0]
+        t_name = teacher_model_names      if isinstance(teacher_model_names, str)      else teacher_model_names[0]
         t_file = teacher_model_file_names if isinstance(teacher_model_file_names, str) else teacher_model_file_names[0]
 
         if conf.distillation_method == 'self':
-            # EMA model initialised as a copy of the student
-            teacher_model = copy.deepcopy(student_model)
+            raw_student = student_model.module if hasattr(student_model, 'module') else student_model
+            teacher_model = copy.deepcopy(raw_student)
             teacher_model.to(device)
             teacher_model.eval()
             for p in teacher_model.parameters():
                 p.requires_grad = False
-            logger.info("EMA teacher initialised from student weights (self-distillation).")
+            if is_main:
+                logger.info("EMA teacher initialised from student weights (self-distillation).")
         else:
             teacher_model = _load_teacher(conf, id2label, device, model_name=t_name, model_file=t_file)
-            logger.info(f"Teacher loaded from: {t_file}")
+            if is_main:
+                logger.info(f"Teacher loaded from: {t_file}")
 
     kd_criterion = torch.nn.KLDivLoss()
 
-    alpha       = getattr(conf, 'distillation_alpha',       0.5)
-    temperature = getattr(conf, 'distillation_temperature', 2.0)
-    beta        = getattr(conf, 'distillation_beta',        0.999)
-    lambda_feat = getattr(conf, 'distillation_lambda',      0.2)
+    alpha       = getattr(conf, 'distillation_alpha',              0.5)
+    temperature = getattr(conf, 'distillation_temperature',        2.0)
+    beta        = getattr(conf, 'distillation_beta',               0.999)
+    lambda_feat = getattr(conf, 'distillation_lambda',             0.2)
     sharpen_t   = getattr(conf, 'distillation_sharpen_temperature', None)
 
-    # Shared kwargs forwarded to every loss_fn
-    kd_kwargs = dict(
-        alpha=alpha,
-        temperature=temperature,
-    )
+    kd_kwargs = dict(alpha=alpha, temperature=temperature)
     if sharpen_t is not None:
         kd_kwargs['sharpen_temperature'] = sharpen_t
 
     teacher_name = (
         teacher_model_names
         if isinstance(teacher_model_names, str)
-        else (teacher_model_names[0] if not isinstance(teacher_model_names, list) or conf.distillation_method != 'ensemble' else teacher_model_names)
+        else (teacher_model_names if conf.distillation_method == 'ensemble' else teacher_model_names[0])
     )
 
     best_val_iou = float('-inf')
     best_ckpt = os.path.join(run_dir, f"best.weights.{conf.distillation_method}.pth")
 
     for epoch in range(conf.epochs):
-        logger.info(f"Epoch {epoch + 1}/{conf.epochs}")
+        if is_main:
+            logger.info(f"Epoch {epoch + 1}/{conf.epochs}")
 
         if conf.distillation_method == 'basic':
             train_loss, train_metrics = train_one_epoch_distillation(
@@ -216,7 +234,7 @@ def run(conf, eval_only):
                 metrics=metrics,
                 train_loader=train_loader,
                 model_name=conf.model,
-                teacher_model_names=teacher_model_names,
+                teacher_model_names=teacher_name,
                 device=device,
                 **kd_kwargs,
             )
@@ -228,18 +246,27 @@ def run(conf, eval_only):
             student_model, criterion, metrics, val_loader, conf, device
         )
 
-        val_iou = val_metrics.get('iou_segments', float('-inf'))
-        logger.info(
-            f"Epoch {epoch + 1}: train_loss={train_loss:.4f}  "
-            f"val_loss={val_loss:.4f}  val_iou={val_iou:.4f}"
-        )
+        if is_main:
+            val_iou = val_metrics.get('iou_segments', float('-inf'))
+            logger.info(
+                f"Epoch {epoch + 1}: train_loss={train_loss:.4f}  "
+                f"val_loss={val_loss:.4f}  val_iou={val_iou:.4f}"
+            )
 
-        if val_iou > best_val_iou:
-            best_val_iou = val_iou
-            torch.save(student_model.state_dict(), best_ckpt)
-            logger.info(f"Saved best model checkpoint → {best_ckpt}  (val_iou={val_iou:.4f})")
+            if val_iou > best_val_iou:
+                best_val_iou = val_iou
+                raw = student_model.module if hasattr(student_model, 'module') else student_model
+                torch.save(raw.state_dict(), best_ckpt)
+                logger.info(f"Saved best model → {best_ckpt}  (val_iou={val_iou:.4f})")
 
-    logger.info(f"KD training completed. Best val IoU: {best_val_iou:.4f}")
+        if is_distributed:
+            dist.barrier()
+
+    if is_main:
+        logger.info(f"KD training completed. Best val IoU: {best_val_iou:.4f}")
+
+    if is_distributed:
+        dist.destroy_process_group()
 
 
 if __name__ == "__main__":

@@ -69,7 +69,7 @@ if [ "$HPC_TYPE" == "lumi" ]; then
     PROJECT_NAME="project_462001070"
     PARTITION_NAME="small-g"
     TEST_PARTITION_NAME="dev-g"
-    GPUS_PER_NODE="${GPUS_PER_NODE:-1}"
+    GPUS_PER_NODE="${GPUS_PER_NODE:-8}"
     SCRATCH_OUTPUT_DIR="/scratch/$PROJECT_NAME/aurahman/output"
 else
     PROJECT_NAME="project_2004205"
@@ -122,15 +122,24 @@ fi
 
 export MIOPEN_USER_DB_PATH="$TREEMORT_REPO_PATH/.cache/miopen"
 mkdir -p "\$MIOPEN_USER_DB_PATH"
+echo "[INFO] MIOpen cache: \$MIOPEN_USER_DB_PATH"
 
 export TREEMORT_OUTPUT_DIR="\${TREEMORT_OUTPUT_DIR:-/users/aurahman/TreeMort/output}"
+mkdir -p "\$TREEMORT_OUTPUT_DIR"
 export TREEMORT_TEACHER_PATH="${TREEMORT_TEACHER_PATH}"
-export ROCR_VISIBLE_DEVICES=0
+export GPUS_PER_NODE=$GPUS_PER_NODE
 
-cd "${TREEMORT_REPO_PATH}"
+MASTER_ADDR=\$(scontrol show hostnames "\$SLURM_JOB_NODELIST" | head -n 1)
+MASTER_PORT="1\${SLURM_JOB_ID:0-4}"
+export MASTER_ADDR MASTER_PORT
 
-srun singularity run "\${SIF}" \\
-    "${TREEMORT_VENV_PATH}/bin/python3" -m treemort.main_kd $LAUNCHER_ARGS
+CPU_BIND_MASKS="0x00fe000000000000,0xfe00000000000000,0x0000000000fe0000,0x00000000fe000000,0x00000000000000fe,0x000000000000fe00,0x000000fe00000000,0x0000fe0000000000"
+
+echo "[INFO] Nodes=\$SLURM_JOB_NUM_NODES GPUs/node=\$GPUS_PER_NODE MASTER=\$MASTER_ADDR:\$MASTER_PORT"
+
+srun --cpu-bind="v,mask_cpu=\${CPU_BIND_MASKS}" \\
+    singularity run "\${SIF}" \\
+    bash "$TREEMORT_REPO_PATH/scripts/lumi_kd_launcher.sh" $LAUNCHER_ARGS
 EOT
 
 else
