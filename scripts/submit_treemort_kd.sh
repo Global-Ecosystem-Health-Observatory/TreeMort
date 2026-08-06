@@ -19,15 +19,15 @@ export HPC_TYPE="$1"
 export MODEL_TYPE="$2"
 export DATA_TYPE="$3"
 
-export TREEMORT_REPO_PATH="/users/aurahman/TreeMort"
+export TREEMORT_REPO_PATH="/users/anisrahm/TreeMort"
 
 # Set global environment variables based on HPC type.
 if [ "$HPC_TYPE" == "puhti" ]; then
-    export TREEMORT_VENV_PATH="/projappl/project_2004205/aurahman/venv"
-    export TREEMORT_DATA_PATH="/scratch/project_2008436/aurahman/dead_trees"
+    export TREEMORT_VENV_PATH="/projappl/project_2004205/anisrahm/venv"
+    export TREEMORT_DATA_PATH="/scratch/project_2008436/anisrahm/dead_trees"
 elif [ "$HPC_TYPE" == "lumi" ]; then
-    export TREEMORT_VENV_PATH="/projappl/project_462001070/aurahman/venv"
-    export TREEMORT_DATA_PATH="/scratch/project_462001070/aurahman/dead_trees"
+    export TREEMORT_VENV_PATH="/projappl/project_462001070/anisrahm/venv"
+    export TREEMORT_DATA_PATH="/scratch/project_462001070/anisrahm/dead_trees"
 else
     echo "Error: Unsupported HPC_TYPE '$HPC_TYPE'."
     exit 1
@@ -70,7 +70,7 @@ if [ "$HPC_TYPE" == "lumi" ]; then
     PARTITION_NAME="small-g"
     TEST_PARTITION_NAME="dev-g"
     GPUS_PER_NODE="${GPUS_PER_NODE:-8}"
-    SCRATCH_OUTPUT_DIR="/scratch/$PROJECT_NAME/aurahman/output"
+    SCRATCH_OUTPUT_DIR="/scratch/$PROJECT_NAME/anisrahm/output"
 else
     PROJECT_NAME="project_2004205"
     PARTITION_NAME="gpu"
@@ -124,7 +124,7 @@ export MIOPEN_USER_DB_PATH="$TREEMORT_REPO_PATH/.cache/miopen"
 mkdir -p "\$MIOPEN_USER_DB_PATH"
 echo "[INFO] MIOpen cache: \$MIOPEN_USER_DB_PATH"
 
-export TREEMORT_OUTPUT_DIR="\${TREEMORT_OUTPUT_DIR:-/users/aurahman/TreeMort/output}"
+export TREEMORT_OUTPUT_DIR="\${TREEMORT_OUTPUT_DIR:-/users/anisrahm/TreeMort/output}"
 mkdir -p "\$TREEMORT_OUTPUT_DIR"
 export TREEMORT_TEACHER_PATH="${TREEMORT_TEACHER_PATH}"
 export GPUS_PER_NODE=$GPUS_PER_NODE

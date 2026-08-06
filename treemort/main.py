@@ -141,7 +141,7 @@ Usage: ./submit_treemort.sh <hpc_type> <model config file> <data config file> [-
 
 Examples:
 
-export TREEMORT_REPO_PATH="/users/aurahman/TreeMort"
+export TREEMORT_REPO_PATH="/users/anisrahm/TreeMort"
 
 (train) bash $TREEMORT_REPO_PATH/scripts/submit_treemort.sh lumi unet finland
 (test)  bash $TREEMORT_REPO_PATH/scripts/submit_treemort.sh lumi unet finland --eval-only

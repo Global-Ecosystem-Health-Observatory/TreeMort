@@ -302,7 +302,7 @@ Usage: ./submit_treemort_kd.sh <hpc_type> <model config> <data config> [--eval-o
 
 Examples:
 
-export TREEMORT_REPO_PATH="/users/aurahman/TreeMort"
+export TREEMORT_REPO_PATH="/users/anisrahm/TreeMort"
 export TREEMORT_TEACHER_PATH="/path/to/best.weights.pth"
 
 (train) bash $TREEMORT_REPO_PATH/scripts/submit_treemort_kd.sh lumi flair_unet_kd_basic finland

@@ -19,15 +19,15 @@ export HPC_TYPE="$1"
 export MODEL_TYPE="$2"
 export DATA_TYPE="$3"
 
-export TREEMORT_REPO_PATH="/users/aurahman/TreeMort"
+export TREEMORT_REPO_PATH="/users/anisrahm/TreeMort"
 
 # Set global environment variables based on HPC type.
 if [ "$HPC_TYPE" == "puhti" ]; then
-    export TREEMORT_VENV_PATH="/projappl/project_2004205/aurahman/venv"
-    export TREEMORT_DATA_PATH="/scratch/project_2008436/aurahman/dead_trees"
+    export TREEMORT_VENV_PATH="/projappl/project_2004205/anisrahm/venv"
+    export TREEMORT_DATA_PATH="/scratch/project_2008436/anisrahm/dead_trees"
 elif [ "$HPC_TYPE" == "lumi" ]; then
-    export TREEMORT_VENV_PATH="/projappl/project_462001070/aurahman/venv"
-    export TREEMORT_DATA_PATH="/scratch/project_462001070/aurahman/dead_trees"
+    export TREEMORT_VENV_PATH="/projappl/project_462001070/anisrahm/venv"
+    export TREEMORT_DATA_PATH="/scratch/project_462001070/anisrahm/dead_trees"
 else
     echo "Error: Unsupported HPC_TYPE '$HPC_TYPE'."
     exit 1
@@ -77,7 +77,7 @@ done
 # For array jobs: discover images and split into CHUNKS list files.
 if [ "$CHUNKS" -gt 1 ]; then
     PROJECT_NAME="project_462001070"
-    LIST_DIR="/scratch/$PROJECT_NAME/aurahman/output/lists/infer_$(date +%s)"
+    LIST_DIR="/scratch/$PROJECT_NAME/anisrahm/output/lists/infer_$(date +%s)"
     mkdir -p "$LIST_DIR"
 
     find "$DATA_PATH" -type f \( -name "*.tif" -o -name "*.tiff" -o -name "*.jp2" \) \

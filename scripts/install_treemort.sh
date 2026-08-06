@@ -10,8 +10,8 @@ set -euo pipefail
 #   sh $TREEMORT_REPO_PATH/scripts/install_treemort.sh
 
 HPC_TYPE="${HPC_TYPE:-local}"
-TREEMORT_VENV_PATH="${TREEMORT_VENV_PATH:-/projappl/project_462001070/aurahman/venv}"
-TREEMORT_REPO_PATH="${TREEMORT_REPO_PATH:-/users/aurahman/TreeMort}"
+TREEMORT_VENV_PATH="${TREEMORT_VENV_PATH:-/projappl/project_462001070/anisrahm/venv}"
+TREEMORT_REPO_PATH="${TREEMORT_REPO_PATH:-/users/anisrahm/TreeMort}"
 
 if [ "$HPC_TYPE" == "lumi" ]; then
 

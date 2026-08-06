@@ -16,7 +16,7 @@ fi
 # Ensure TREEMORT_VENV_PATH is set (fallback to defaults if missing)
 if [ -z "${TREEMORT_VENV_PATH:-}" ]; then
     if [ "$HPC_TYPE" == "lumi" ]; then
-        TREEMORT_VENV_PATH="/projappl/project_462001070/aurahman/venv"
+        TREEMORT_VENV_PATH="/projappl/project_462001070/anisrahm/venv"
     elif [ "$HPC_TYPE" == "puhti" ]; then
         TREEMORT_VENV_PATH="/projappl/project_2004205/rahmanan/venv"
     fi
@@ -55,7 +55,7 @@ INFER_ARGS="$DATA_PATH --config $CONFIG_PATH --model-config $MODEL_CONFIG_PATH -
 # Create SBATCH script
 SBATCH_SCRIPT=$(mktemp)
 
-SCRATCH_OUTPUT_DIR="/scratch/$PROJECT_NAME/aurahman/output"
+SCRATCH_OUTPUT_DIR="/scratch/$PROJECT_NAME/anisrahm/output"
 mkdir -p "$SCRATCH_OUTPUT_DIR/stdout" "$SCRATCH_OUTPUT_DIR/stderr"
 
 if [ "$HPC_TYPE" == "lumi" ]; then
