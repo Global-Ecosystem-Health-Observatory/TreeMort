@@ -70,7 +70,7 @@ if [ "$HPC_TYPE" == "lumi" ]; then
     PARTITION_NAME="small-g"
     TEST_PARTITION_NAME="dev-g"
     GPUS_PER_NODE="${GPUS_PER_NODE:-8}"
-    SCRATCH_OUTPUT_DIR="/scratch/$PROJECT_NAME/anisrahm/output"
+    SCRATCH_OUTPUT_DIR="/scratch/$PROJECT_NAME/anisrahm/logs"
 else
     PROJECT_NAME="project_2004205"
     PARTITION_NAME="gpu"
