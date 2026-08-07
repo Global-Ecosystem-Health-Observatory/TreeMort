@@ -89,9 +89,11 @@ if [ ! -d "$TREEMORT_VENV_PATH" ]; then
     exit 1
 fi
 
-export MIOPEN_USER_DB_PATH="$TREEMORT_REPO_PATH/.cache/miopen"
-mkdir -p "\$MIOPEN_USER_DB_PATH"
-echo "[INFO] MIOpen cache: \$MIOPEN_USER_DB_PATH"
+MIOPEN_DIR="/scratch/$PROJECT_NAME/anisrahm/miopen/\${SLURM_JOB_ID}"
+mkdir -p "\$MIOPEN_DIR/cache" "\$MIOPEN_DIR/config"
+export MIOPEN_CUSTOM_CACHE_DIR="\$MIOPEN_DIR/cache"
+export MIOPEN_USER_DB="\$MIOPEN_DIR/config"
+echo "[INFO] MIOpen dirs: \$MIOPEN_DIR"
 
 export TREEMORT_OUTPUT_DIR="\${TREEMORT_OUTPUT_DIR:-./output}"
 mkdir -p "\$TREEMORT_OUTPUT_DIR"
