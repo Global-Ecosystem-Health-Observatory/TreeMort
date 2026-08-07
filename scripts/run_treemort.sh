@@ -89,8 +89,7 @@ if [ ! -d "$TREEMORT_VENV_PATH" ]; then
     exit 1
 fi
 
-MIOPEN_DIR="/scratch/$PROJECT_NAME/anisrahm/miopen/\${SLURM_JOB_ID}"
-mkdir -p "\$MIOPEN_DIR/cache" "\$MIOPEN_DIR/config"
+MIOPEN_DIR=\$(mktemp -d)
 export MIOPEN_CUSTOM_CACHE_DIR="\$MIOPEN_DIR/cache"
 export MIOPEN_USER_DB="\$MIOPEN_DIR/config"
 echo "[INFO] MIOpen dirs: \$MIOPEN_DIR"
