@@ -81,6 +81,24 @@ def run(conf, eval_only):
     if eval_only:
         conf.resume = True
         conf.best_model = f"best.weights.{conf.distillation_method}.pth"
+        # Only rank 0 evaluates the full (unsharded) test set
+        if not is_main:
+            if is_distributed:
+                dist.destroy_process_group()
+            return
+        train_loader, val_loader, test_loader = prepare_datasets(conf, rank=0, world_size=1)
+        test_len = len(test_loader) if test_loader is not None else 0
+        if test_len == 0:
+            raise RuntimeError("Evaluation requested but no test_loader is available.")
+        logger.info(f"Test set: {test_len} batches")
+        num_steps = test_len
+        student_model, optimizer, scheduler, criterion, metrics, callbacks = resume_or_load(
+            conf, id2label, num_steps, device, is_main=True
+        )
+        logger.info("Evaluation-only mode started.")
+        evaluator(student_model, test_loader, test_len, metrics, conf)
+        logger.info("Evaluation completed.")
+        return
 
     if is_main:
         logger.info("Preparing datasets...")
@@ -99,18 +117,6 @@ def run(conf, eval_only):
     )
     if is_main:
         logger.info("Student model loaded.")
-
-    if eval_only:
-        if test_loader is None or test_len == 0:
-            raise RuntimeError("Evaluation requested but no test_loader is available.")
-        if is_main:
-            logger.info("Evaluation-only mode started.")
-        evaluator(student_model, test_loader, test_len, metrics, conf)
-        if is_main:
-            logger.info("Evaluation completed.")
-        if is_distributed:
-            dist.destroy_process_group()
-        return
 
     # Load teacher model(s) — not DDP-wrapped (frozen, inference-only)
     teacher_model_names     = getattr(conf, 'teacher_model_names', conf.model)
