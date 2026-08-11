@@ -42,13 +42,15 @@ def _load_teacher(conf, id2label, device, model_name=None, model_file=None):
 
 
 def run(conf, eval_only):
-    local_rank = int(os.environ.get("LOCAL_RANK", 0))
     rank       = int(os.environ.get("RANK", 0))
     world_size = int(os.environ.get("WORLD_SIZE", 1))
-    is_distributed = world_size > 1
     is_main = rank == 0
 
-    # ROCR_VISIBLE_DEVICES restricts each process to one GPU exposed as device 0
+    # Eval runs single-process on rank 0 only — no DDP needed
+    if eval_only and not is_main:
+        return
+
+    is_distributed = world_size > 1 and not eval_only
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     if is_distributed:
@@ -81,11 +83,6 @@ def run(conf, eval_only):
     if eval_only:
         conf.resume = True
         conf.best_model = f"best.weights.{conf.distillation_method}.pth"
-        # Only rank 0 evaluates the full (unsharded) test set
-        if not is_main:
-            if is_distributed:
-                dist.destroy_process_group()
-            return
         train_loader, val_loader, test_loader = prepare_datasets(conf, rank=0, world_size=1)
         test_len = len(test_loader) if test_loader is not None else 0
         if test_len == 0:
