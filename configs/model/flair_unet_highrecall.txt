@@ -7,7 +7,6 @@ model = flair_unet
 
 resume = False
 
-run-id = high_recall
 
 centroid-weight = 5.0
 centroid-pos-weight = 20.0
