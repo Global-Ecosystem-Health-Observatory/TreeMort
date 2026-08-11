@@ -14,13 +14,15 @@ logger = get_logger(__name__)
 
 
 def run(conf, eval_only):
-    local_rank = int(os.environ.get("LOCAL_RANK", 0))
     rank = int(os.environ.get("RANK", 0))
     world_size = int(os.environ.get("WORLD_SIZE", 1))
-    is_distributed = world_size > 1
     is_main = rank == 0
 
-    # ROCR_VISIBLE_DEVICES restricts each process to a single GPU exposed as device 0
+    # Eval runs single-process on rank 0 only — no DDP needed
+    if eval_only and not is_main:
+        return
+
+    is_distributed = world_size > 1 and not eval_only
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     if is_distributed:
@@ -44,7 +46,9 @@ def run(conf, eval_only):
     id2label = {0: "alive", 1: "dead"}
 
     logger.info("Preparing datasets...")
-    train_loader, val_loader, test_loader = prepare_datasets(conf, rank=rank, world_size=world_size)
+    data_rank = 0 if eval_only else rank
+    data_world = 1 if eval_only else world_size
+    train_loader, val_loader, test_loader = prepare_datasets(conf, rank=data_rank, world_size=data_world)
 
     train_len = len(train_loader) if train_loader is not None else 0
     val_len = len(val_loader) if val_loader is not None else 0
