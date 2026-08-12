@@ -70,6 +70,7 @@ def run(conf, source_conf, eval_only):
 
     if eval_only:
         conf.resume = True
+        conf.best_model = "best.weights.dann.pth"
         if test_loader is None or test_len == 0:
             raise RuntimeError("No test_loader available for evaluation.")
         if is_main:
