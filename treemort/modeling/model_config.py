@@ -13,6 +13,7 @@ from treemort.modeling.network.sa_unet import SelfAttentionUNet
 from treemort.modeling.network.sa_unet_multiscale import MultiScaleAttentionUNet
 from treemort.modeling.network.dinov2 import Dinov2ForSemanticSegmentation
 from treemort.modeling.network.flair_unet import CombinedModel, PretrainedUNetModel
+from treemort.modeling.network.dann import FlairUNetDANN
 from treemort.modeling.network.custom_models import (
     CustomMaskFormer,
     CustomDetr,
@@ -36,6 +37,7 @@ def configure_model(conf, id2label):
         "beit": lambda: configure_beit(conf, id2label),
         "flair_unet": lambda: configure_flair_unet(conf),
         "flair_unet_sdt": lambda: configure_flair_unet(conf),
+        "flair_unet_dann": lambda: configure_flair_unet_dann(conf),
         "hcfnet": lambda: configure_hcfnet(conf),
     }
 
@@ -120,6 +122,21 @@ def configure_flair_unet(conf):
         n_classes=conf.output_channels,
     )
     return model
+
+
+def configure_flair_unet_dann(conf):
+    pretrained_model = PretrainedUNetModel(
+        repo_id="IGNF/FLAIR-INC_rgbi_15cl_resnet34-unet",
+        filename="FLAIR-INC_rgbi_15cl_resnet34-unet_weights.pth",
+        architecture="unet",
+        encoder="resnet34",
+        n_channels=conf.input_channels,
+        n_classes=15,
+        use_metadata=False,
+    ).get_model()
+
+    base_model = CombinedModel(pretrained_model=pretrained_model, n_classes=conf.output_channels)
+    return FlairUNetDANN(base_model, bottleneck_channels=512)
 
 
 def configure_hcfnet(conf):

@@ -1,0 +1,13 @@
+# DANN (Domain-Adversarial Neural Network) with flair_unet backbone
+# GRL-based domain alignment between Finland (source) and target country (target)
+
+include = base_config.txt
+
+model = flair_unet_dann
+
+resume = False
+
+centroid-weight = 5.0
+centroid-pos-weight = 20.0
+
+lambda-dann = 0.1

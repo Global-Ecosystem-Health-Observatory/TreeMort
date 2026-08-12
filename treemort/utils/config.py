@@ -126,6 +126,7 @@ def build_parser(config_files):
     kd_group.add("--distillation-lambda",      type=float, default=0.2,          help="lambda value for weight for feature distillation loss")
     kd_group.add("--distillation-method",      type=str,   default="basic",      help="distillation method to use (basic/self/feature/ensemble)")
     kd_group.add("--distillation-sharpen-temperature", type=float, default=None, help="sharpening temperature applied to teacher probs during distillation")
+    kd_group.add("--lambda-dann", type=float, default=0.1, help="weight for the DANN domain-adversarial loss term")
 
     train_group = parser.add_argument_group('Training')
     train_group.add("--epochs", type=int, required=True, help="number of epochs for training")
