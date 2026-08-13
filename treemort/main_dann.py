@@ -68,6 +68,13 @@ def run(conf, source_conf, eval_only):
         conf, id2label, num_steps, device, is_main=is_main
     )
 
+    # DDP wraps the model internally in resume_or_load. DANN calls discriminate() twice
+    # per step (source + target), which triggers two all-reduce firings per discriminator
+    # parameter. _set_static_graph() disables the duplicate-hook guard — safe because
+    # the computation graph is identical every iteration.
+    if is_distributed and hasattr(model, '_set_static_graph'):
+        model._set_static_graph()
+
     if eval_only:
         conf.resume = True
         conf.best_model = "best.weights.dann.pth"
