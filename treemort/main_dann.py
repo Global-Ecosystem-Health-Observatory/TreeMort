@@ -135,8 +135,9 @@ def run(conf, source_conf, eval_only):
             B_t = tgt_images.shape[0]
             B_s = src_images.shape[0]
 
-            dom_t = model.discriminate(feats_t, lambda_val=lam)
-            dom_s = model.discriminate(feats_s, lambda_val=lam)
+            raw_model = model.module if hasattr(model, "module") else model
+            dom_t = raw_model.discriminate(feats_t, lambda_val=lam)
+            dom_s = raw_model.discriminate(feats_s, lambda_val=lam)
 
             labels_t = torch.ones(B_t, 1, device=device)   # target domain = 1
             labels_s = torch.zeros(B_s, 1, device=device)  # source domain = 0
