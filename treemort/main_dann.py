@@ -120,38 +120,42 @@ def run(conf, source_conf, eval_only):
             src_images = src_images.to(device)
             src_labels = src_labels.to(device)
 
+            B_s, B_t = src_images.shape[0], tgt_images.shape[0]
             lam = _dann_lambda(epoch, conf.epochs, step, train_len)
 
             optimizer.zero_grad()
 
-            # --- Task loss: target domain ---
-            logits_t, feats_t = process_model_output(model, tgt_images, conf.model)
-            _, _, ht, wt = tgt_labels.shape
-            preds_t, targets_t, buf_t = prepare_pred_and_target(logits_t, tgt_labels, (ht, wt))
-            loss_task_t = criterion(preds_t, targets_t, buffer=buf_t)
+            # Single forward pass over source+target combined — avoids two sequential
+            # BN inplace updates (running_mean/var) that corrupt saved tensor versions.
+            combined_images = torch.cat([src_images, tgt_images], dim=0)
+            logits_combined, feats_combined = process_model_output(model, combined_images, conf.model)
 
-            # --- Task loss: source domain ---
-            logits_s, feats_s = process_model_output(model, src_images, conf.model)
+            logits_s = logits_combined[:B_s]
+            logits_t = logits_combined[B_s:]
+
+            # --- Task losses ---
             _, _, hs, ws = src_labels.shape
             preds_s, targets_s, buf_s = prepare_pred_and_target(logits_s, src_labels, (hs, ws))
             loss_task_s = criterion(preds_s, targets_s, buffer=buf_s)
 
-            loss_task = (loss_task_t + loss_task_s) * 0.5
+            _, _, ht, wt = tgt_labels.shape
+            preds_t, targets_t, buf_t = prepare_pred_and_target(logits_t, tgt_labels, (ht, wt))
+            loss_task_t = criterion(preds_t, targets_t, buffer=buf_t)
 
-            # --- Domain adversarial loss via GRL ---
-            B_t = tgt_images.shape[0]
-            B_s = src_images.shape[0]
+            loss_task = (loss_task_s + loss_task_t) * 0.5
 
+            # --- Domain adversarial loss: split bottleneck, apply GRL ---
+            bottleneck = feats_combined[-1]  # [B_s+B_t, 512, H', W']
             raw_model = model.module if hasattr(model, "module") else model
-            dom_t = raw_model.discriminate(feats_t, lambda_val=lam)
-            dom_s = raw_model.discriminate(feats_s, lambda_val=lam)
+            dom_s = raw_model.discriminator(bottleneck[:B_s], lambda_val=lam)
+            dom_t = raw_model.discriminator(bottleneck[B_s:], lambda_val=lam)
 
-            labels_t = torch.ones(B_t, 1, device=device)   # target domain = 1
-            labels_s = torch.zeros(B_s, 1, device=device)  # source domain = 0
+            labels_s = torch.zeros(B_s, 1, device=device)  # source = 0
+            labels_t = torch.ones(B_t, 1, device=device)   # target = 1
 
             loss_domain = (
-                F.binary_cross_entropy_with_logits(dom_t, labels_t) +
-                F.binary_cross_entropy_with_logits(dom_s, labels_s)
+                F.binary_cross_entropy_with_logits(dom_s, labels_s) +
+                F.binary_cross_entropy_with_logits(dom_t, labels_t)
             ) * 0.5
 
             loss = loss_task + lambda_dann * loss_domain
