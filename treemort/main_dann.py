@@ -64,11 +64,14 @@ def run(conf, source_conf, eval_only):
         logger.info(f"Target datasets: Train({train_len}), Val({val_len}), Test({test_len})")
 
     num_steps = train_len if train_len > 0 else test_len
+    if eval_only:
+        conf.resume = True
+        conf.best_model = "best.weights.dann.pth"
     model, optimizer, scheduler, criterion, metrics, callbacks = resume_or_load(
         conf, id2label, num_steps, device, is_main=is_main
     )
 
-    # DDP wraps the model internally in resume_or_load. DANN calls discriminate() twice
+    # DDP wraps the model internally in resume_or_load. DANN calls discriminator() twice
     # per step (source + target), which triggers two all-reduce firings per discriminator
     # parameter. _set_static_graph() disables the duplicate-hook guard — safe because
     # the computation graph is identical every iteration.
@@ -76,8 +79,6 @@ def run(conf, source_conf, eval_only):
         model._set_static_graph()
 
     if eval_only:
-        conf.resume = True
-        conf.best_model = "best.weights.dann.pth"
         if test_loader is None or test_len == 0:
             raise RuntimeError("No test_loader available for evaluation.")
         if is_main:
