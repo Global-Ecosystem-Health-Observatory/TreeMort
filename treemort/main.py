@@ -114,16 +114,19 @@ def run(conf, eval_only):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Configuration setup for network.")
-    parser.add_argument("config",        type=str, help="Path to the configuration file")
-    parser.add_argument("--data-config", type=str, required=True, help="Path to the additional data configuration file")
-    parser.add_argument('--verbosity',   type=str, default='info', choices=['info', 'debug', 'warning'])
-    parser.add_argument("--eval-only",   action="store_true", help="If set, only evaluate the model without training")
+    parser.add_argument("config",          type=str, help="Path to the configuration file")
+    parser.add_argument("--data-config",   type=str, required=True, help="Path to the additional data configuration file")
+    parser.add_argument('--verbosity',     type=str, default='info', choices=['info', 'debug', 'warning'])
+    parser.add_argument("--eval-only",     action="store_true", help="If set, only evaluate the model without training")
+    parser.add_argument("--resume-from",   type=str, default=None, help="Checkpoint path to load weights from (overrides config)")
 
     args = parser.parse_args()
 
     _ = configure_logger(verbosity=args.verbosity)
 
     conf = setup(args.config, data_config=args.data_config)
+    if args.resume_from:
+        conf.resume_from = args.resume_from
 
     run(conf, args.eval_only)
 
