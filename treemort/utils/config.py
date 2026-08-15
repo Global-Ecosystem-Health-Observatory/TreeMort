@@ -138,6 +138,7 @@ def build_parser(config_files):
     train_group.add("--test-crop-size", type=int, required=True, help="crop size for testing")
     train_group.add("--val-size", type=float, default=0.2, help="split for validation set")
     train_group.add("--test-size", type=float, default=0.1, help="split for test set")
+    train_group.add("--train-fraction", type=float, default=1.0, help="fraction of training images to use (0,1]; val/test splits unchanged")
     train_group.add("--resume", action="store_true", help="resume training using stored model weights")
     train_group.add("--freeze-epochs", type=int, default=0, help="Number of epochs to keep encoder blocks frozen during transfer learning (default: 0 disables freezing).")
     train_group.add("--keep-first-encoder-blocks", type=int, default=1, help="Number of initial encoder blocks to keep trainable during freeze phase.")

@@ -23,6 +23,12 @@ def prepare_datasets(conf, rank=0, world_size=1):
         test_ratio=conf.test_size
     )
 
+    train_fraction = getattr(conf, "train_fraction", 1.0)
+    if train_fraction < 1.0:
+        n = max(1, int(len(train_keys) * train_fraction))
+        random.seed(42)
+        train_keys = random.sample(train_keys, n)
+
     random.seed(None) # makes loader non-deterministic
 
     aug_kwargs = {
