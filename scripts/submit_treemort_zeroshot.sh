@@ -43,8 +43,9 @@ MODEL_CONFIG_PATH="$TREEMORT_REPO_PATH/configs/model/flair_unet_highrecall.txt"
 TARGET_DATA_CONFIG="$TREEMORT_REPO_PATH/configs/data/${DATA_TYPE}.txt"
 
 # Finnish teacher checkpoint — trained with flair_unet_highrecall on finland.txt
-# run_dir = TREEMORT_OUTPUT_DIR / flair_unet  (model = flair_unet in that config)
-FINNISH_CHECKPOINT="/users/anisrahm/TreeMort/output/flair_unet/best.weights.pth"
+# run_dir = TREEMORT_OUTPUT_DIR / flair_unet / high_recall  (run-id = high_recall was set
+# at training time, before it was removed from the config in commit 134d9580)
+FINNISH_CHECKPOINT="/users/anisrahm/TreeMort/output/flair_unet/high_recall/best.weights.pth"
 
 LAUNCHER_ARGS="\"$MODEL_CONFIG_PATH\" --data-config \"$TARGET_DATA_CONFIG\" --resume-from \"$FINNISH_CHECKPOINT\" --eval-only"
 
