@@ -277,13 +277,20 @@ if __name__ == "__main__":
     parser.add_argument("config",        type=str, help="Path to the model configuration file")
     parser.add_argument("--data-config", type=str, required=True, help="Path to the data configuration file")
     parser.add_argument('--verbosity',   type=str, default='info', choices=['info', 'debug', 'warning'])
-    parser.add_argument("--eval-only",   action="store_true", help="If set, only evaluate without training")
+    parser.add_argument("--eval-only",      action="store_true", help="If set, only evaluate without training")
+    parser.add_argument("--train-fraction", type=float, default=None, help="Fraction of training images to use (overrides config)")
+    parser.add_argument("--run-id",         type=str,   default=None, help="Run identifier for checkpoint isolation (overrides config)")
 
     args = parser.parse_args()
 
     _ = configure_logger(verbosity=args.verbosity)
 
     conf = setup(args.config, data_config=args.data_config)
+    if args.train_fraction is not None:
+        conf.train_fraction = args.train_fraction
+    if args.run_id is not None:
+        conf.run_id = args.run_id
+        conf.run_dir = os.path.join(conf.output_dir, conf.model, conf.run_id)
 
     run(conf, args.eval_only)
 

@@ -32,6 +32,7 @@ submit_job() {
     local FRACTION="$3"
     local EVAL_ONLY="$4"    # true | false
     local TRAIN_JOB_ID="$5" # dependency job id (empty = no dependency)
+    local MODULE="$6"       # treemort.main or treemort.main_kd
     local RUN_ID="dataeff_${LABEL}"
 
     local TIME_LIMIT="06:00:00"
@@ -80,10 +81,17 @@ export MASTER_ADDR MASTER_PORT
 
 CPU_BIND_MASKS="0x00fe000000000000,0xfe00000000000000,0x0000000000fe0000,0x00000000fe000000,0x00000000000000fe,0x000000000000fe00,0x000000fe00000000,0x0000fe0000000000"
 
-echo "[INFO] dataeff ${LABEL} eval=$EVAL_ONLY fraction=$FRACTION run_id=$RUN_ID"
+echo "[INFO] dataeff ${LABEL} module=$MODULE eval=$EVAL_ONLY fraction=$FRACTION run_id=$RUN_ID"
 srun --cpu-bind="v,mask_cpu=\${CPU_BIND_MASKS}" \\
     singularity run "\${SIF}" \\
-    bash "$TREEMORT_REPO_PATH/scripts/lumi_train_launcher.sh" $LAUNCHER_ARGS
+    bash -c "
+        export RANK=\\\${SLURM_PROCID}
+        export LOCAL_RANK=\\\${SLURM_LOCALID}
+        export WORLD_SIZE=\\\${SLURM_NTASKS}
+        export ROCR_VISIBLE_DEVICES=\\\${SLURM_LOCALID}
+        cd $TREEMORT_REPO_PATH
+        ${TREEMORT_VENV_PATH}/bin/python3 -m $MODULE $LAUNCHER_ARGS
+    "
 EOT
 
     local DEP_FLAG=""
@@ -109,15 +117,15 @@ for FRACTION in 1.0 0.75 0.5 0.25; do
     KD_CONFIG="$TREEMORT_REPO_PATH/configs/model/flair_unet_kd_feature.txt"
 
     echo "=== Fine-tuned $FRAC_TAG% ==="
-    TRAIN_ID=$(submit_job "ft_${FRAC_TAG}" "$FT_CONFIG" "$FRACTION" "false" "")
+    TRAIN_ID=$(submit_job "ft_${FRAC_TAG}" "$FT_CONFIG" "$FRACTION" "false" "" "treemort.main")
     echo "  train job: $TRAIN_ID"
-    EVAL_ID=$(submit_job "ft_${FRAC_TAG}" "$FT_CONFIG" "$FRACTION" "true" "$TRAIN_ID")
+    EVAL_ID=$(submit_job "ft_${FRAC_TAG}" "$FT_CONFIG" "$FRACTION" "true" "$TRAIN_ID" "treemort.main")
     echo "  eval  job: $EVAL_ID (depends on $TRAIN_ID)"
 
     echo "=== Feature KD $FRAC_TAG% ==="
-    TRAIN_ID=$(submit_job "kd_${FRAC_TAG}" "$KD_CONFIG" "$FRACTION" "false" "")
+    TRAIN_ID=$(submit_job "kd_${FRAC_TAG}" "$KD_CONFIG" "$FRACTION" "false" "" "treemort.main_kd")
     echo "  train job: $TRAIN_ID"
-    EVAL_ID=$(submit_job "kd_${FRAC_TAG}" "$KD_CONFIG" "$FRACTION" "true" "$TRAIN_ID")
+    EVAL_ID=$(submit_job "kd_${FRAC_TAG}" "$KD_CONFIG" "$FRACTION" "true" "$TRAIN_ID" "treemort.main_kd")
     echo "  eval  job: $EVAL_ID (depends on $TRAIN_ID)"
 
 done
