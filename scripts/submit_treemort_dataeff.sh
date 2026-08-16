@@ -56,6 +56,10 @@ SIF="/appl/local/laifs/containers/lumi-multitorch-latest.sif"
 MIOPEN_DIR=\$(mktemp -d)
 export MIOPEN_CUSTOM_CACHE_DIR="\$MIOPEN_DIR/cache"
 export MIOPEN_USER_DB="\$MIOPEN_DIR/config"
+# Redirect TMPDIR so HIP runtime writes gfx*.ufdb.txt to a per-job dir,
+# not /tmp — avoids permission collisions when multiple jobs share a node.
+export TMPDIR="\$MIOPEN_DIR/tmp"
+mkdir -p "\$MIOPEN_CUSTOM_CACHE_DIR" "\$MIOPEN_DIR/config" "\$TMPDIR"
 
 export TREEMORT_OUTPUT_DIR="\${TREEMORT_OUTPUT_DIR:-/users/anisrahm/TreeMort/output}"
 export TREEMORT_TEACHER_PATH="$TEACHER_CHECKPOINT"
@@ -107,6 +111,8 @@ SIF="/appl/local/laifs/containers/lumi-multitorch-latest.sif"
 MIOPEN_DIR=\$(mktemp -d)
 export MIOPEN_CUSTOM_CACHE_DIR="\$MIOPEN_DIR/cache"
 export MIOPEN_USER_DB="\$MIOPEN_DIR/config"
+export TMPDIR="\$MIOPEN_DIR/tmp"
+mkdir -p "\$MIOPEN_CUSTOM_CACHE_DIR" "\$MIOPEN_DIR/config" "\$TMPDIR"
 
 export TREEMORT_OUTPUT_DIR="\${TREEMORT_OUTPUT_DIR:-/users/anisrahm/TreeMort/output}"
 export TREEMORT_TEACHER_PATH="$TEACHER_CHECKPOINT"
