@@ -120,6 +120,7 @@ if __name__ == "__main__":
     parser.add_argument("--eval-only",       action="store_true", help="If set, only evaluate the model without training")
     parser.add_argument("--resume-from",     type=str,   default=None,  help="Checkpoint path to load weights from (overrides config)")
     parser.add_argument("--train-fraction",  type=float, default=None,  help="Fraction of training images to use (overrides config)")
+    parser.add_argument("--run-id",          type=str,   default=None,  help="Run identifier for checkpoint isolation (overrides config)")
 
     args = parser.parse_args()
 
@@ -130,6 +131,9 @@ if __name__ == "__main__":
         conf.resume_from = args.resume_from
     if args.train_fraction is not None:
         conf.train_fraction = args.train_fraction
+    if args.run_id is not None:
+        conf.run_id = args.run_id
+        conf.run_dir = os.path.join(conf.output_dir, conf.model, conf.run_id)
 
     run(conf, args.eval_only)
 
