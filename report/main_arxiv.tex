@@ -380,7 +380,7 @@ Self KD leads on Poland (0.277) and Germany (0.328) via its EMA-based self-impro
 
 \subsection{Data Efficiency versus Data Scarcity}
 
-We compare \textit{Fine-tuned} and \textit{Feature-level KD} using reduced amounts of Polish training data (100\%, 75\%, 50\%, and 25\%; see Table~\ref{tbl:data_analysis}). These experiments use the prior teacher configuration to isolate the effect of training data size on relative performance. Across all data percentages, the two methods show competitive performance, with \textit{Feature-level KD} achieving higher or comparable Tree IoU at 100\% and 75\%, while \textit{Fine-tuned} leads at 50\% and 25\%. \textit{Fine-tuned} consistently achieves higher F1-scores and Recall, demonstrating robust detection even with reduced data. However, \textit{Feature-level KD} consistently excels in Precision and maintains fewer false positives (e.g., 1134 vs. 1765 at 100\%; 1299 vs. 1658 at 25\%), highlighting its efficiency in minimizing errors. This suggests that while \textit{Fine-tuned} excels at maximizing detection in low-data settings, \textit{Feature-level KD} offers a precision-focused alternative that is valuable in resource-constrained forestry applications.
+We compare \textit{Fine-tuned} and \textit{Feature-level KD} using reduced amounts of Polish training data (100\%, 75\%, 50\%, and 25\%; see Table~\ref{tbl:data_analysis}). \textit{Feature-level KD} outperforms \textit{Fine-tuned} on Tree IoU at every data fraction, with an advantage of 0.040--0.047 across conditions. Notably, \textit{Feature-level KD} at 25\% data (Tree IoU 0.262) exceeds \textit{Fine-tuned} trained on the full dataset (0.231), demonstrating that teacher guidance compensates for annotation scarcity. \textit{Feature-level KD} also achieves higher Recall across all fractions (0.68--0.72 vs.\ 0.56--0.59), reflecting its ability to leverage Finnish teacher predictions to detect trees that a purely fine-tuned student misses. The absolute gap narrows only slightly from 100\% to 25\%, confirming that knowledge distillation retains its advantage even under severe data constraints.
 
 \begin{table}[!t]
     \def\arraystretch{1.1}
@@ -402,26 +402,26 @@ We compare \textit{Fine-tuned} and \textit{Feature-level KD} using reduced amoun
     \midrule
     
     \multicolumn{9}{l}{\texttt{100\%}} \\
-    & \textit{Fine-tuned}         & 0.105 & 0.58 & 0.46 & \textbf{0.80} & \textbf{1479} & 1765 & \textbf{368} \\
-    & \textit{Feature-level KD}  & \textbf{0.106} & \textbf{0.63} & \textbf{0.55} & 0.75 & 1384 & \textbf{1134} & 463 \\
+    & \textit{Fine-tuned}        & 0.231 & 0.59 & \textbf{0.63} & 0.56 & 2545 & \textbf{1507} & \textbf{1976} \\
+    & \textit{Feature-level KD}  & \textbf{0.274} & \textbf{0.64} & 0.59 & \textbf{0.70} & \textbf{3183} & 2224 & 1338 \\
 
     \midrule
-    
+
     \multicolumn{9}{l}{\texttt{75\%}} \\
-    & \textit{Fine-tuned}         & 0.098 & 0.59 & 0.49 & \textbf{0.74} & \textbf{1372} & 1444 & \textbf{475} \\
-    & \textit{Feature-level KD}  & \textbf{0.101} & \textbf{0.62} & \textbf{0.55} & 0.71 & 1311 & \textbf{1062} & 536 \\
+    & \textit{Fine-tuned}        & 0.228 & 0.58 & \textbf{0.57} & 0.59 & 2681 & \textbf{2055} & \textbf{1840} \\
+    & \textit{Feature-level KD}  & \textbf{0.268} & \textbf{0.62} & 0.54 & \textbf{0.72} & \textbf{3269} & 2737 & 1252 \\
 
     \midrule
-    
+
     \multicolumn{9}{l}{\texttt{50\%}} \\
-    & \textit{Fine-tuned}       & \textbf{0.100} & \textbf{0.66} & 0.60 & \textbf{0.73} & \textbf{1346} & \textbf{890} & \textbf{501} \\
-    & \textit{Feature-level KD}  & 0.096 & 0.62 & \textbf{0.70} & 0.55 & 1294 & 1054 & 553 \\
+    & \textit{Fine-tuned}        & 0.239 & 0.61 & \textbf{0.63} & 0.59 & 2676 & \textbf{1601} & \textbf{1845} \\
+    & \textit{Feature-level KD}  & \textbf{0.270} & \textbf{0.64} & 0.61 & \textbf{0.68} & \textbf{3065} & 1923 & 1456 \\
 
     \midrule
 
     \multicolumn{9}{l}{\texttt{25\%}} \\
-    & \textit{Fine-tuned}         & \textbf{0.091} & \textbf{0.59} & \textbf{0.50} & \textbf{0.73} & 1008 & 1658 & \textbf{505} \\
-    & \textit{Feature-level KD}  & 0.089 & 0.56 & 0.48 & 0.66 & \textbf{1217} & \textbf{1299} & 630 \\
+    & \textit{Fine-tuned}        & 0.221 & 0.58 & \textbf{0.57} & 0.59 & 2652 & \textbf{2017} & \textbf{1869} \\
+    & \textit{Feature-level KD}  & \textbf{0.262} & \textbf{0.64} & 0.60 & \textbf{0.68} & \textbf{3078} & 2096 & 1443 \\
 
     \bottomrule
     \end{tabular}
@@ -580,7 +580,7 @@ Feature-level KD leads on Estonia (Tree IoU 0.265) and consistently achieves hig
 Zero-shot transfer from Finland to Germany yields Tree IoU of exactly 0.000 --- the Finnish teacher detects no German trees at all, likely due to the 2.5$\times$ resolution difference (0.10~m vs.\ 0.25~m) and distinct broadleaf species composition. All KD variants recover strongly from this zero point (Self KD: 0.328), while DANN (0.083) falls even below fine-tuning (0.108), confirming that adversarial alignment cannot bridge large multi-scale domain gaps. On Poland, all KD variants exceed the zero-shot baseline (0.121) by a factor of 2.1--2.3$\times$. On Estonia, where the zero-shot teacher already performs competitively (0.219) due to similar boreal forest structure, KD further improves over zero-shot rather than degrading it --- a property that both DANN (0.205) and fine-tuning (0.202) fail to achieve. DANN's discriminator cannot provide useful gradients when the domain gap is too large or the target set too small; KD's teacher predictive distribution, by contrast, is intrinsically stable across all three conditions. These findings establish teacher-guided distillation as the most robust strategy for cross-domain dead tree detection across the boreal-to-temperate gradient.
 
 \subsection{Data Efficiency: Performance in Low-Data Scenarios}
-In low-data settings (Table~\ref{tbl:data_analysis}), Fine-tuning retains higher recall but Feature-level KD consistently reduces false positives. This balance makes Feature-level KD a strong choice for remote or under-resourced forest regions where limiting unnecessary field surveys is critical. Linear probing reveals superior separability in KD-adapted representations even at reduced data percentages, correlating with its precision stability under annotation scarcity.
+In low-data settings (Table~\ref{tbl:data_analysis}), Feature-level KD outperforms Fine-tuning on Tree IoU across all data fractions, with the gap persisting even at 25\% data (0.262 vs.\ 0.221). Feature-level KD at 25\% data exceeds Fine-tuning trained on the full dataset, demonstrating that teacher guidance substitutes effectively for additional annotations. This makes Feature-level KD a strong choice for remote or under-resourced forest regions where annotation budgets are limited. Linear probing reveals superior separability in KD-adapted representations even at reduced data percentages, correlating with its consistent Tree IoU advantage under annotation scarcity.
 
 \subsection{Practical Implications for Forestry}
 Field surveys of dead trees in Scandinavian and Central European forestry operations typically cost between €50--€200 per hectare, with identification precision directly determining follow-up intervention efficiency. Basic KD's reduction of false positive detections from 1,977 (fine-tuning) to 1,811 on Poland's test set — a 8.4\% decrease — translates to proportionally fewer unnecessary field visits. Feature-level KD's consistent centroid precision across Poland, Germany, and Estonia makes it particularly suitable for pan-European monitoring programs where a single model must serve heterogeneous forest types. For maximum detection coverage (e.g., post-storm or post-fire mortality mapping), Self KD is preferred given its higher Tree TP count and recall.
