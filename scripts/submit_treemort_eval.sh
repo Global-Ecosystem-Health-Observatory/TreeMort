@@ -79,7 +79,7 @@ srun --cpu-bind="v,mask_cpu=\${CPU_BIND_MASKS}" \\
         --eval-only
 SBATCH
 
-    JOB_ID=$(sbatch --export=NONE "$SBATCH_SCRIPT" | awk '{print $NF}')
+    JOB_ID=$(sbatch --export=ALL "$SBATCH_SCRIPT" | awk '{print $NF}')
     rm "$SBATCH_SCRIPT"
     echo "  eval ${RUN_ID}: ${JOB_ID}"
 done
