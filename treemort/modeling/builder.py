@@ -96,15 +96,22 @@ def _freeze_encoder_blocks(model, keep_first_n=1):
 def load_checkpoint_if_available(model, conf, run_dir):
     logger = get_logger()
 
-    checkpoint_path = getattr(conf, 'resume_from', None)
-    if checkpoint_path:
-        checkpoint_path = os.path.expandvars(checkpoint_path)
-    if not checkpoint_path:
-        checkpoint_path = get_checkpoint(
-            conf.model_weights,
-            run_dir,
-            getattr(conf, 'best_model', 'best.weights.pth')
-        )
+    best_model = getattr(conf, 'best_model', 'best.weights.pth')
+    trained_path = os.path.join(run_dir, best_model)
+
+    if os.path.exists(trained_path):
+        # Prefer a previously trained checkpoint over the initial resume_from source
+        checkpoint_path = trained_path
+    else:
+        checkpoint_path = getattr(conf, 'resume_from', None)
+        if checkpoint_path:
+            checkpoint_path = os.path.expandvars(checkpoint_path)
+        if not checkpoint_path:
+            checkpoint_path = get_checkpoint(
+                conf.model_weights,
+                run_dir,
+                best_model
+            )
 
     if checkpoint_path:
         device = next(model.parameters()).device
