@@ -19,8 +19,8 @@ SCRATCH_OUTPUT_DIR="/scratch/$PROJECT_NAME/anisrahm/logs"
 SCRATCH_FEAT_DIR="/scratch/$PROJECT_NAME/anisrahm/output"
 
 TEACHER_CKPT="$TREEMORT_REPO_PATH/output/flair_unet/high_recall/best.weights.pth"
-FT_CKPT="$TREEMORT_REPO_PATH/output/flair_unet/best.weights.pth"
-KD_FEAT_CKPT="$TREEMORT_REPO_PATH/output/flair_unet/best.weights.feature.pth"
+FT_CKPT="$TREEMORT_REPO_PATH/output/flair_unet/Poland_RGBNIR_25cm/best.weights.pth"
+KD_FEAT_CKPT="$TREEMORT_REPO_PATH/output/flair_unet/Poland_RGBNIR_25cm/best.weights.feature.pth"
 
 SIF="/appl/local/laifs/containers/lumi-multitorch-latest.sif"
 
