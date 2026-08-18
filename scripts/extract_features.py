@@ -30,6 +30,10 @@ LAYER_NAMES = ["layer1", "layer2", "layer3", "layer4"]
 
 
 def extract(conf, checkpoint_path, output_dir, max_patches):
+    rank = int(os.environ.get("RANK", 0))
+    if rank != 0:
+        return  # only rank 0 extracts features
+
     logger = get_logger()
     os.makedirs(output_dir, exist_ok=True)
 
