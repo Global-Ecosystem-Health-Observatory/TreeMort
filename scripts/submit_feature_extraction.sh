@@ -52,6 +52,8 @@ module use /appl/local/laifs/modules
 module load lumi-aif-singularity-bindings
 PATH=\$(echo "\$PATH" | tr ':' '\n' | grep -v '/appl/local/csc/soft/ai' | tr '\n' ':'); PATH="\${PATH%:}"; export PATH
 
+SIF="/appl/local/laifs/containers/lumi-multitorch-latest.sif"
+
 MIOPEN_DIR=\$(mktemp -d)
 export MIOPEN_CUSTOM_CACHE_DIR="\$MIOPEN_DIR/cache"
 export MIOPEN_USER_DB="\$MIOPEN_DIR/config"
