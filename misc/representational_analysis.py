@@ -144,6 +144,10 @@ def figure_inter_model(feature_root, out_path):
     metrics_fns = [("Mean Cosine", mean_cosine_similarity),
                    ("Linear CKA",  lambda a, b: linear_cka(a.float(), b.float()))]
 
+    print("\nInter-model Similarity Results:")
+    print(f"{'Dataset':<10} {'Metric':<14} {'Pair':<10} {'L1':>6} {'L2':>6} {'L3':>6} {'L4':>6}")
+    print("-" * 62)
+
     for row, (dataset, dir_base, dir_trans, dir_feat) in enumerate(configs):
         for col, (metric_name, metric_fn) in enumerate(metrics_fns):
             ax = axes[row, col]
@@ -163,6 +167,8 @@ def figure_inter_model(feature_root, out_path):
                     except FileNotFoundError:
                         vals.append(float("nan"))
                 ax.plot(LAYER_LABELS, vals, marker="o", label=label)
+                print(f"  {dataset:<8} {metric_name:<14} {label:<10} " +
+                      " ".join(f"{v:>6.3f}" for v in vals))
 
             ax.set_title(f"{dataset} — {metric_name}")
             ax.set_ylim(0, 1.05)
@@ -189,6 +195,10 @@ def figure_intra_model(feature_root, out_path):
 
     fig, axes = plt.subplots(1, 2, figsize=(11, 5))
 
+    print("\nIntra-model Domain Invariance (Finland vs Poland):")
+    print(f"{'Model':<20} {'Metric':<8} {'L1':>6} {'L2':>6} {'L3':>6} {'L4':>6}")
+    print("-" * 52)
+
     for model_label, fin_dir, pol_dir in models:
         cos_vals, ssim_vals = [], []
         for layer in LAYERS:
@@ -209,6 +219,9 @@ def figure_intra_model(feature_root, out_path):
                 ssim_vals.append(mean_spatial_ssim(fs_fin.float(), fs_pol.float()))
             except FileNotFoundError:
                 ssim_vals.append(float("nan"))
+
+        print(f"  {model_label:<18} {'Cosine':<8} " + " ".join(f"{v:>6.3f}" for v in cos_vals))
+        print(f"  {model_label:<18} {'SSIM':<8} " + " ".join(f"{v:>6.3f}" for v in ssim_vals))
 
         axes[0].plot(LAYER_LABELS, cos_vals, marker="o", label=model_label)
         axes[1].plot(LAYER_LABELS, ssim_vals, marker="o", label=model_label)
