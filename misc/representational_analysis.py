@@ -336,6 +336,10 @@ def figure_linear_probing(feature_root, out_path):
 
     fig, axes = plt.subplots(1, 3, figsize=(13, 4), sharey=False)
 
+    print(f"\nLinear Probing Results:")
+    print(f"{'Model':<25} {'Layer':<8} {'Acc':>6} {'F1':>6} {'AUC':>6}")
+    print("-" * 55)
+
     for (model_label, feat_dir), color in zip(model_configs, colors):
         labels = load_labels(os.path.join(feature_root, feat_dir))
         if labels is None:
@@ -343,7 +347,7 @@ def figure_linear_probing(feature_root, out_path):
             continue
 
         accs, f1s, aucs = [], [], []
-        for layer in LAYERS:
+        for layer, layer_label in zip(LAYERS, LAYER_LABELS):
             try:
                 feats = load_features(os.path.join(feature_root, feat_dir), layer).numpy()
                 n = min(len(feats), len(labels))
@@ -351,6 +355,7 @@ def figure_linear_probing(feature_root, out_path):
             except FileNotFoundError:
                 acc, f1, auc = float("nan"), float("nan"), float("nan")
             accs.append(acc); f1s.append(f1); aucs.append(auc)
+            print(f"  {model_label:<23} {layer_label:<8} {acc:>6.3f} {f1:>6.3f} {auc:>6.3f}")
 
         for ax, vals, mname in zip(axes, [accs, f1s, aucs], metrics_names):
             ax.plot(LAYER_LABELS, vals, marker="o", label=model_label, color=color)
