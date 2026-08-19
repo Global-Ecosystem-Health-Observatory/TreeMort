@@ -386,7 +386,7 @@ We compare \textit{Fine-tuned} and \textit{Feature-level KD} using reduced amoun
     \def\arraystretch{1.1}
     \centering
     \footnotesize
-    \caption{Data efficiency analysis of \textit{Fine-tuned} and \textit{Feature-level KD} on the Polish test set under varying training data percentages. The best performer is marked by \textbf{bold text}.}
+    \caption{Data efficiency analysis of \textit{Fine-tuned} and \textit{Feature-level KD} on the Polish test set under varying training data percentages. Mean Tree IoU is computed as the per-image average (differs from the aggregate Tree IoU in Table~\ref{tbl:metrics}). The best performer is marked by \textbf{bold text}.}
     \begin{adjustbox}{max width=0.8\columnwidth}
     \begin{tabular}{llcccccccccccc}
     \toprule
@@ -437,7 +437,7 @@ To evaluate the contribution of individual components in the proposed \textit{Fe
     \def\arraystretch{1.1}
     \centering
     \footnotesize
-    \caption{Ablation study on Polish dataset.}
+    \caption{Ablation study on Polish dataset using the prior teacher configuration (Tree IoU 0.105 on Finland) to isolate architectural effects; the updated teacher further amplifies each contribution.}
     \begin{adjustbox}{max width=0.7\columnwidth}
     \begin{tabular}{lccccc}
     \toprule
