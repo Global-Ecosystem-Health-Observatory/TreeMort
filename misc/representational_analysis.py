@@ -168,8 +168,9 @@ def mean_spatial_ssim(feat_a, feat_b):
 
 def tsne_cluster_metrics(feat_a, feat_b, n_samples=500):
     n = min(n_samples, len(feat_a), len(feat_b))
-    idx_a = torch.randperm(len(feat_a))[:n]
-    idx_b = torch.randperm(len(feat_b))[:n]
+    rng = torch.Generator().manual_seed(42)
+    idx_a = torch.randperm(len(feat_a), generator=rng)[:n]
+    idx_b = torch.randperm(len(feat_b), generator=rng)[:n]
     fa = feat_a[idx_a].numpy()
     fb = feat_b[idx_b].numpy()
 
