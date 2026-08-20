@@ -47,7 +47,7 @@ TARGET_DATA_CONFIG="$TREEMORT_REPO_PATH/configs/data/${DATA_TYPE}.txt"
 # at training time, before it was removed from the config in commit 134d9580)
 FINNISH_CHECKPOINT="/users/anisrahm/TreeMort/output/flair_unet/high_recall/best.weights.pth"
 
-LAUNCHER_ARGS="\"$MODEL_CONFIG_PATH\" --data-config \"$TARGET_DATA_CONFIG\" --resume-from \"$FINNISH_CHECKPOINT\" --eval-only"
+LAUNCHER_ARGS="\"$MODEL_CONFIG_PATH\" --data-config \"$TARGET_DATA_CONFIG\" --resume-from \"$FINNISH_CHECKPOINT\" --run-id \"zeroshot_${DATA_TYPE}\" --eval-only"
 
 SBATCH_SCRIPT=$(mktemp)
 
