@@ -318,7 +318,21 @@ All four KD variants substantially outperform both baselines. Self KD achieves t
 \label{tbl:metrics}
 \end{table*}
 
-These results reveal complementary operating points: Self KD maximizes Tree IoU; Basic KD offers the best centroid precision and fewest false positives; Ensemble KD yields the highest centroid recall and fewest misses. For precision-critical forestry applications where spurious detections trigger costly field visits, Basic KD's low false positive count (1,811 Tree FP vs.\ 1,977 for fine-tuning and 1,978 for DANN) represents a meaningful operational advantage.
+These results reveal complementary operating points: Self KD maximizes Tree IoU; Basic KD offers the best centroid precision and fewest false positives; Ensemble KD yields the highest centroid recall and fewest misses. For precision-critical forestry applications where spurious detections trigger costly field visits, Basic KD's low false positive count (1,811 Tree FP vs.\ 1,977 for fine-tuning and 1,978 for DANN) represents a meaningful operational advantage. For visual reference, Figure~\ref{fig:samples} presents sample aerial images with ground truth annotations and model predictions, illustrating how KD-adapted models detect dead trees with improved spatial accuracy compared to fine-tuning.
+
+\begin{figure*}[!t]
+    \centering
+    \subfloat{\includegraphics[width=\linewidth]{images/s1.png} \label{subfig:sample1}}
+
+    \subfloat{\includegraphics[width=\linewidth]{images/s2.png} \label{subfig:sample2}}
+
+    \subfloat{\includegraphics[width=\linewidth]{images/s3.png} \label{subfig:sample3}}
+
+    \subfloat{\includegraphics[width=\linewidth]{images/s4.png} \label{subfig:sample4}}
+
+    \caption{Visual comparison of ground truth annotations and model predictions for standing dead tree segmentation. Columns show (from left to right): (1) input composite image (NIR, red, green bands), (2) ground truth annotations (red), (3) baseline model prediction (blue), (4) fine-tuned student model prediction (green), and (5) feature-based knowledge distillation (KD) student model prediction (purple). Mask overlays are semi-transparent with corresponding contours to highlight detected regions.}
+    \label{fig:samples}
+\end{figure*}
 
 \subsection{Cross-Domain Generalization}
 
