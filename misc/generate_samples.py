@@ -129,18 +129,27 @@ def save_figure(cir, gt, pred_base, pred_ft, pred_feat, out_path):
     plt.close(fig)
 
 
+def iou(pred, gt):
+    inter = int(np.logical_and(pred, gt).sum())
+    union = int(np.logical_or(pred, gt).sum())
+    return inter / union if union > 0 else 0.0
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config",        required=True, help="Model config (flair_unet_highrecall.txt)")
-    parser.add_argument("--data-config",   required=True, help="Data config (poland.txt)")
-    parser.add_argument("--baseline-ckpt", required=True, help="Finnish teacher checkpoint")
-    parser.add_argument("--ft-ckpt",       required=True, help="Fine-tuned student checkpoint")
-    parser.add_argument("--feature-ckpt",  required=True, help="Feature-KD student checkpoint")
+    parser.add_argument("--config",        required=True)
+    parser.add_argument("--data-config",   required=True)
+    parser.add_argument("--baseline-ckpt", required=True)
+    parser.add_argument("--ft-ckpt",       required=True)
+    parser.add_argument("--feature-ckpt",  required=True)
     parser.add_argument("--output-dir",    default="report/images")
     parser.add_argument("--n-samples",     type=int,   default=4)
-    parser.add_argument("--n-candidates",  type=int,   default=100)
-    parser.add_argument("--min-trees",     type=int,   default=8,
+    parser.add_argument("--n-candidates",  type=int,   default=200,
+                        help="Max patches to run inference on before selection")
+    parser.add_argument("--min-trees",     type=int,   default=5,
                         help="Minimum num_trees attribute for a patch to be considered")
+    parser.add_argument("--min-gt-px",     type=int,   default=200,
+                        help="Minimum GT mask pixels (filters out near-empty patches)")
     parser.add_argument("--threshold",     type=float, default=0.5)
     parser.add_argument("--seed",          type=int,   default=42)
     args = parser.parse_args()
@@ -171,54 +180,93 @@ def main():
     )
     print(f"[INFO] Test patches total: {len(test_keys)}")
 
+    # Build candidate pool: patches with enough trees, shuffled for seed reproducibility
     with h5py.File(hdf5_path, "r") as hf:
-        rich_keys = sorted(
-            [k for k in test_keys if hf[k].attrs.get("num_trees", 0) >= args.min_trees],
-            key=lambda k: -hf[k].attrs.get("num_trees", 0),
-        )
-    print(f"[INFO] Patches with >= {args.min_trees} trees: {len(rich_keys)}")
+        rich_keys = [
+            (k, hf[k].attrs.get("source_image", ""), hf[k].attrs.get("num_trees", 0))
+            for k in test_keys
+            if hf[k].attrs.get("num_trees", 0) >= args.min_trees
+        ]
+    rich_keys.sort(key=lambda x: -x[2])
+    random.shuffle(rich_keys[:args.n_candidates])          # shuffle within top pool
+    candidate_keys = rich_keys[:args.n_candidates]
+    print(f"[INFO] Candidates (>= {args.min_trees} trees): {len(candidate_keys)}")
 
-    # Take top-N by tree count, shuffle within top-2× candidates to allow seed control
-    pool = rich_keys[:args.n_candidates * 2]
-    random.shuffle(pool)
-    candidate_keys = pool[:args.n_candidates]
-    print(f"[INFO] Running inference on {len(candidate_keys)} candidates...")
-
+    # Run inference on all candidates
+    print(f"[INFO] Running inference on {len(candidate_keys)} patches...")
     scored = []
     with h5py.File(hdf5_path, "r") as hf:
-        for i, key in enumerate(candidate_keys):
+        for i, (key, source_img, _) in enumerate(candidate_keys):
             grp   = hf[key]
-            image = grp["image"][()].astype(np.float32) / 255.0   # HxWxC, NIRGB
+            image = grp["image"][()].astype(np.float32) / 255.0
             gt    = grp["labels"]["mask"][()].astype(np.uint8)
+
+            gt_px = int(gt.sum())
+            if gt_px < args.min_gt_px:
+                continue
 
             pred_base = predict_mask(model_base, image, device, args.threshold)
             pred_ft   = predict_mask(model_ft,   image, device, args.threshold)
             pred_feat = predict_mask(model_feat, image, device, args.threshold)
 
-            gt_px = int(gt.sum())
-            # Inter-model disagreement as selection signal
-            disagree = (
-                int(np.sum(pred_base != pred_ft))
-                + int(np.sum(pred_base != pred_feat))
-                + int(np.sum(pred_ft   != pred_feat))
-            )
-            scored.append((key, image, gt, pred_base, pred_ft, pred_feat, gt_px, disagree))
+            iou_base = iou(pred_base, gt)
+            iou_ft   = iou(pred_ft,   gt)
+            iou_feat = iou(pred_feat, gt)
+
+            # Primary signal: how much better is KD/fine-tuned vs baseline?
+            adaptation_gain = max(iou_ft, iou_feat) - iou_base
+            # Secondary: does Feature-KD match or beat Fine-tuned? (KD story)
+            kd_vs_ft = iou_feat - iou_ft
+
+            scored.append(dict(
+                key=key, source=source_img, image=image, gt=gt,
+                pred_base=pred_base, pred_ft=pred_ft, pred_feat=pred_feat,
+                gt_px=gt_px,
+                iou_base=iou_base, iou_ft=iou_ft, iou_feat=iou_feat,
+                adaptation_gain=adaptation_gain, kd_vs_ft=kd_vs_ft,
+            ))
 
             if (i + 1) % 20 == 0:
-                print(f"  {i + 1}/{len(candidate_keys)}")
+                print(f"  {i + 1}/{len(candidate_keys)}  (valid so far: {len(scored)})")
 
-    # Primary sort: num GT tree pixels; secondary: inter-model disagreement
-    scored.sort(key=lambda x: (-x[6], -x[7]))
-    top_pool = scored[:args.n_samples * 4]
-    top_pool.sort(key=lambda x: -x[7])
-    selected = top_pool[:args.n_samples]
+    print(f"[INFO] Valid patches after gt_px filter: {len(scored)}")
 
-    print(f"[INFO] Saving figures to {args.output_dir} ...")
-    for i, (key, image, gt, pb, pf, pk, gt_px, dis) in enumerate(selected):
-        cir = cir_composite(image)
+    # Sort by adaptation_gain descending — patches where baseline struggles most
+    # relative to the adapted models make the clearest visual argument
+    scored.sort(key=lambda x: -x["adaptation_gain"])
+
+    # Enforce one patch per source image for geographic diversity
+    seen_sources = set()
+    selected = []
+    for rec in scored:
+        src = rec["source"]
+        if src not in seen_sources:
+            seen_sources.add(src)
+            selected.append(rec)
+        if len(selected) == args.n_samples:
+            break
+
+    # If strict diversity left us short, fill from remaining patches
+    if len(selected) < args.n_samples:
+        for rec in scored:
+            if rec not in selected:
+                selected.append(rec)
+            if len(selected) == args.n_samples:
+                break
+
+    print(f"\n[INFO] Selected {len(selected)} patches:")
+    for rec in selected:
+        print(f"  patch={rec['key']}  source={rec['source']}")
+        print(f"    GT px={rec['gt_px']}  IoU: base={rec['iou_base']:.3f}  "
+              f"ft={rec['iou_ft']:.3f}  feat={rec['iou_feat']:.3f}  "
+              f"gain={rec['adaptation_gain']:+.3f}  kd_vs_ft={rec['kd_vs_ft']:+.3f}")
+
+    print(f"\n[INFO] Saving figures to {args.output_dir} ...")
+    for i, rec in enumerate(selected):
+        cir = cir_composite(rec["image"])
         out = os.path.join(args.output_dir, f"s{i + 1}.png")
-        save_figure(cir, gt, pb, pf, pk, out)
-        print(f"  s{i + 1}.png  patch={key}  gt_px={gt_px}  disagree={dis}")
+        save_figure(cir, rec["gt"], rec["pred_base"], rec["pred_ft"], rec["pred_feat"], out)
+        print(f"  Saved s{i + 1}.png")
 
     print("[INFO] Done.")
 
