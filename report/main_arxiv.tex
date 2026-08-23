@@ -330,7 +330,7 @@ These results reveal complementary operating points: Self KD maximizes Tree IoU;
 
     \subfloat{\includegraphics[width=\linewidth]{images/s4.png} \label{subfig:sample4}}
 
-    \caption{Visual comparison of ground truth annotations and model predictions for standing dead tree segmentation. Columns show (from left to right): (1) input composite image (NIR, red, green bands), (2) ground truth annotations (red), (3) baseline model prediction (blue), (4) fine-tuned student model prediction (green), and (5) feature-based knowledge distillation (KD) student model prediction (purple). Mask overlays are semi-transparent with corresponding contours to highlight detected regions.}
+    \caption{Visual comparison of ground truth annotations and model predictions for standing dead tree segmentation across four Polish test patches from distinct image tiles. Columns show (from left to right): (1) NIR-R-G false-colour composite with ground truth dead tree annotations (red overlay), (2) baseline model prediction (blue), (3) fine-tuned student model prediction (green), and (4) Feature-level KD student model prediction (purple). Mask overlays are semi-transparent with corresponding contours to highlight detected regions. The baseline (Finnish teacher applied zero-shot) largely fails to detect Polish dead trees, while fine-tuning and Feature-level KD recover substantially; Feature-level KD consistently achieves higher IoU than fine-tuning on all four patches.}
     \label{fig:samples}
 \end{figure*}
 

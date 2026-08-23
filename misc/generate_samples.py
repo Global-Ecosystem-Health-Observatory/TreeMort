@@ -2,10 +2,10 @@
 Generate Figure 2 sample prediction comparison figures.
 
 Loads 3 checkpoints, runs inference on Polish test patches, selects
-patches with high tree density and inter-model disagreement, and saves
-4 five-column comparison figures.
+patches with high adaptation gain (baseline fails, KD/fine-tuned succeeds),
+enforcing one patch per source tile for geographic diversity.
 
-Columns: NIR-R-G composite | GT | Baseline | Fine-tuned | Feature-level KD
+Columns: NIR-R-G + GT overlay | Baseline | Fine-tuned | KD
 
 Usage on LUMI (via submit_generate_samples.sh), or locally:
   python3 misc/generate_samples.py \\
@@ -13,7 +13,7 @@ Usage on LUMI (via submit_generate_samples.sh), or locally:
     --data-config   configs/data/poland.txt \\
     --baseline-ckpt output/flair_unet/high_recall/best.weights.pth \\
     --ft-ckpt       output/flair_unet/Poland_RGBNIR_25cm/best.weights.pth \\
-    --feature-ckpt  output/flair_unet/Poland_RGBNIR_25cm/best.weights.feature.pth \\
+    --kd-ckpt       output/flair_unet/Poland_RGBNIR_25cm/best.weights.feature.pth \\
     --output-dir    report/images \\
     --n-samples     4
 """
@@ -40,22 +40,13 @@ from treemort.modeling.model_config import configure_model
 from treemort.utils.config import setup
 from treemort.utils.datautils import load_and_organize_data, stratify_images_by_region
 
-# Semi-transparent fill RGBA + contour hex per column
+# Semi-transparent fill RGBA + contour hex per role
 OVERLAY = {
-    "gt":      ((1.00, 0.10, 0.10, 0.40), "#ff2222"),
-    "base":    ((0.10, 0.35, 0.90, 0.40), "#1a5ae8"),
-    "ft":      ((0.10, 0.72, 0.20, 0.40), "#19b833"),
-    "feature": ((0.62, 0.08, 0.85, 0.40), "#9e14d9"),
+    "gt":   ((1.00, 0.10, 0.10, 0.40), "#ff2222"),
+    "base": ((0.10, 0.35, 0.90, 0.40), "#1a5ae8"),
+    "ft":   ((0.10, 0.72, 0.20, 0.40), "#19b833"),
+    "kd":   ((0.62, 0.08, 0.85, 0.40), "#9e14d9"),
 }
-
-COL_TITLES = [
-    "NIR-R-G Composite",
-    "Ground Truth",
-    "Baseline",
-    "Fine-tuned",
-    "Feature-level KD",
-]
-COL_COLORS = ["#222222", "#ff2222", "#1a5ae8", "#19b833", "#9e14d9"]
 
 
 def load_model(conf, checkpoint_path, device):
@@ -104,26 +95,18 @@ def draw_mask_overlay(ax, background, mask, fill_rgba, contour_hex, lw=0.8):
         spine.set_visible(False)
 
 
-def save_figure(cir, gt, pred_base, pred_ft, pred_feat, out_path):
-    masks = [gt, pred_base, pred_ft, pred_feat]
-    keys = ["gt", "base", "ft", "feature"]
-
-    fig, axes = plt.subplots(1, 5, figsize=(14.5, 3.0))
+def save_figure(cir, gt, pred_base, pred_ft, pred_kd, out_path):
+    """Four columns: NIR+GT overlay | Baseline | Fine-tuned | KD."""
+    fig, axes = plt.subplots(1, 4, figsize=(11.6, 3.0))
     fig.patch.set_facecolor("white")
-    plt.subplots_adjust(left=0.0, right=1.0, top=0.84, bottom=0.0, wspace=0.025)
+    plt.subplots_adjust(left=0.0, right=1.0, top=1.0, bottom=0.0, wspace=0.025)
 
-    axes[0].imshow(cir)
-    axes[0].set_xticks([])
-    axes[0].set_yticks([])
-    for spine in axes[0].spines.values():
-        spine.set_visible(False)
+    # Col 1: NIR composite with GT overlay
+    draw_mask_overlay(axes[0], cir, gt, *OVERLAY["gt"])
 
-    for ax, mask, key in zip(axes[1:], masks, keys):
-        fill, cont = OVERLAY[key]
-        draw_mask_overlay(ax, cir, mask, fill, cont)
-
-    for ax, title, color in zip(axes, COL_TITLES, COL_COLORS):
-        ax.set_title(title, fontsize=7.5, fontweight="bold", color=color, pad=3)
+    # Cols 2-4: model predictions on NIR composite background
+    for ax, mask, key in zip(axes[1:], [pred_base, pred_ft, pred_kd], ["base", "ft", "kd"]):
+        draw_mask_overlay(ax, cir, mask, *OVERLAY[key])
 
     fig.savefig(out_path, dpi=200, bbox_inches="tight", facecolor="white")
     plt.close(fig)
@@ -141,7 +124,8 @@ def main():
     parser.add_argument("--data-config",   required=True)
     parser.add_argument("--baseline-ckpt", required=True)
     parser.add_argument("--ft-ckpt",       required=True)
-    parser.add_argument("--feature-ckpt",  required=True)
+    parser.add_argument("--kd-ckpt",       required=True,
+                        help="KD checkpoint (e.g. best.weights.feature.pth or best.weights.self.pth)")
     parser.add_argument("--output-dir",    default="report/images")
     parser.add_argument("--n-samples",     type=int,   default=4)
     parser.add_argument("--n-candidates",  type=int,   default=200,
@@ -167,7 +151,7 @@ def main():
     print("[INFO] Loading models...")
     model_base = load_model(conf, args.baseline_ckpt, device)
     model_ft   = load_model(conf, args.ft_ckpt,       device)
-    model_feat = load_model(conf, args.feature_ckpt,  device)
+    model_kd   = load_model(conf, args.kd_ckpt,       device)
 
     hdf5_path = Path(conf.data_folder).parent / conf.hdf5_file
     print(f"[INFO] HDF5: {hdf5_path}")
@@ -207,22 +191,20 @@ def main():
 
             pred_base = predict_mask(model_base, image, device, args.threshold)
             pred_ft   = predict_mask(model_ft,   image, device, args.threshold)
-            pred_feat = predict_mask(model_feat, image, device, args.threshold)
+            pred_kd   = predict_mask(model_kd,   image, device, args.threshold)
 
             iou_base = iou(pred_base, gt)
             iou_ft   = iou(pred_ft,   gt)
-            iou_feat = iou(pred_feat, gt)
+            iou_kd   = iou(pred_kd,   gt)
 
-            # Primary signal: how much better is KD/fine-tuned vs baseline?
-            adaptation_gain = max(iou_ft, iou_feat) - iou_base
-            # Secondary: does Feature-KD match or beat Fine-tuned? (KD story)
-            kd_vs_ft = iou_feat - iou_ft
+            adaptation_gain = max(iou_ft, iou_kd) - iou_base
+            kd_vs_ft        = iou_kd - iou_ft
 
             scored.append(dict(
                 key=key, source=source_img, image=image, gt=gt,
-                pred_base=pred_base, pred_ft=pred_ft, pred_feat=pred_feat,
+                pred_base=pred_base, pred_ft=pred_ft, pred_kd=pred_kd,
                 gt_px=gt_px,
-                iou_base=iou_base, iou_ft=iou_ft, iou_feat=iou_feat,
+                iou_base=iou_base, iou_ft=iou_ft, iou_kd=iou_kd,
                 adaptation_gain=adaptation_gain, kd_vs_ft=kd_vs_ft,
             ))
 
@@ -258,14 +240,14 @@ def main():
     for rec in selected:
         print(f"  patch={rec['key']}  source={rec['source']}")
         print(f"    GT px={rec['gt_px']}  IoU: base={rec['iou_base']:.3f}  "
-              f"ft={rec['iou_ft']:.3f}  feat={rec['iou_feat']:.3f}  "
+              f"ft={rec['iou_ft']:.3f}  kd={rec['iou_kd']:.3f}  "
               f"gain={rec['adaptation_gain']:+.3f}  kd_vs_ft={rec['kd_vs_ft']:+.3f}")
 
     print(f"\n[INFO] Saving figures to {args.output_dir} ...")
     for i, rec in enumerate(selected):
         cir = cir_composite(rec["image"])
         out = os.path.join(args.output_dir, f"s{i + 1}.png")
-        save_figure(cir, rec["gt"], rec["pred_base"], rec["pred_ft"], rec["pred_feat"], out)
+        save_figure(cir, rec["gt"], rec["pred_base"], rec["pred_ft"], rec["pred_kd"], out)
         print(f"  Saved s{i + 1}.png")
 
     print("[INFO] Done.")
